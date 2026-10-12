@@ -38,5 +38,5 @@ Back it up with the server stopped, or with `sqlite3 beholder.db ".backup b.db"`
 
 | Container | Limit | Typical |
 |---|---|---|
-| server | 256 MB | ~10-20 MB idle, ~150-190 MB during a large image upload |
+| server | 256 MB | ~6 MB idle, ~157 MB peak while re-encoding a 40 MP photo |
 | caddy | 128 MB | ~30-50 MB |
