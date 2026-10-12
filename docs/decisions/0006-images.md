@@ -22,4 +22,4 @@ SPEC §2–3: covers are re-encoded to lossy WebP (thumbnail ~480 px wide, displ
 
 ## Consequences
 
-Peak server RSS during an upload at the pixel limit is roughly 150–190 MB. When handouts with DM-only images arrive (Phase 2), revisit whether hash-only access is enough.
+Measured peak server RSS while re-encoding a 39.9 MP JPEG: 157 MB (idle: 6 MB). When handouts with DM-only images arrive (Phase 2), revisit whether hash-only access is enough.
