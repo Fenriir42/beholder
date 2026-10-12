@@ -1,0 +1,16 @@
+{
+	# HTTP/1.1 and HTTP/2 only: QUIC/UDP is often throttled over VPNs (SPEC §3).
+	servers {
+		protocols h1 h2
+	}
+}
+
+{$BEHOLDER_DOMAIN} {
+	# Uploads are capped at 20 MB by the server; refuse bigger bodies here first.
+	request_body {
+		max_size 21MB
+	}
+	# Everything (including the /ws WebSocket upgrade) goes to the server.
+	# No `encode`: frames and images are already compressed.
+	reverse_proxy server:8080
+}
