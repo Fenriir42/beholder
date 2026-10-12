@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core"]
+members = ["crates/core", "crates/protocol"]
 
 [workspace.package]
 edition = "2024"
@@ -10,6 +10,9 @@ publish = false
 
 [workspace.dependencies]
 beholder-core = { path = "crates/core" }
+beholder-protocol = { path = "crates/protocol" }
+postcard = { version = "1.1.3", default-features = false, features = ["use-std"] }
+zstd = { version = "0.14.2", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
 thiserror = "2.0.21"
 uuid = { version = "1.28.0", default-features = false, features = ["serde"] }

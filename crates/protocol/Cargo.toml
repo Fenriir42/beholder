@@ -1,0 +1,28 @@
+[package]
+name = "beholder-protocol"
+description = "Beholder wire messages, protocol version and frame codec."
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[features]
+# The frame codec (postcard + zstd). Off by default so the message types build
+# for wasm32; the server and client-core turn it on.
+codec = ["dep:postcard", "dep:zstd"]
+
+[dependencies]
+beholder-core.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+postcard = { workspace = true, optional = true }
+zstd = { workspace = true, optional = true }
+
+[dev-dependencies]
+# Self-dependency so `cargo test -p beholder-protocol` always runs the codec tests.
+beholder-protocol = { path = ".", features = ["codec"] }
+uuid.workspace = true
+
+[lints]
+workspace = true
