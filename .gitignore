@@ -15,6 +15,7 @@ target
 
 # rustc will dump stack traces when hitting an internal compiler error to PWD
 rustc-ice-*.txt
+data/
 
 # RustRover
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
@@ -22,3 +23,12 @@ rustc-ice-*.txt
 #  and can be added to the global gitignore or merged into this file.  For a more nuclear
 #  option (not recommended) you can uncomment the following to ignore the entire idea folder.
 #.idea/
+
+# Local, user-supplied data (never committed or bundled; see docs/decisions/0001)
+/data/*
+!/data/srd-5.2/
+!/data/open5e/
+
+# Build outputs
+/apps/desktop/ui/dist/
+/apps/desktop/src-tauri/gen/
