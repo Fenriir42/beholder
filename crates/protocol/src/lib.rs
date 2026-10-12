@@ -27,6 +27,19 @@ pub const PROTOCOL_HEADER: &str = "x-beholder-protocol";
 #[serde(transparent)]
 pub struct SessionToken(pub [u8; 32]);
 
+impl SessionToken {
+    /// Hex form for `Authorization: Bearer` headers and the OS keyring.
+    pub fn to_hex(&self) -> String {
+        // Same 32-byte hex encoding as image hashes.
+        beholder_core::ImageHash(self.0).to_hex()
+    }
+
+    /// Parses the hex form.
+    pub fn from_hex(s: &str) -> Option<Self> {
+        beholder_core::ImageHash::from_hex(s).map(|h| Self(h.0))
+    }
+}
+
 impl fmt::Debug for SessionToken {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str("SessionToken(***)")
