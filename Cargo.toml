@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/protocol"]
+members = ["crates/core", "crates/protocol", "crates/server"]
 
 [workspace.package]
 edition = "2024"
@@ -11,6 +11,24 @@ publish = false
 [workspace.dependencies]
 beholder-core = { path = "crates/core" }
 beholder-protocol = { path = "crates/protocol" }
+beholder-server = { path = "crates/server" }
+beholder-client-core = { path = "crates/client-core" }
+anyhow = "1.0.104"
+argon2 = { version = "0.6.0", default-features = false, features = ["alloc", "password-hash"] }
+axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "ws"] }
+futures-util = { version = "0.3.34", default-features = false, features = ["sink"] }
+fastrand = "2.5.0"
+getrandom = { version = "0.4.3", default-features = false }
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "webp"] }
+rusqlite = { version = "0.40.2", default-features = false, features = ["bundled", "cache", "fallible_uint"] }
+sha2 = { version = "0.11.0", default-features = false }
+tempfile = "3"
+tokio = { version = "1.53.2", default-features = false }
+tokio-tungstenite = { version = "0.30.0", default-features = false, features = ["connect", "handshake"] }
+tracing = { version = "0.1.44", default-features = false, features = ["std"] }
+tracing-subscriber = { version = "0.3.23", default-features = false, features = ["fmt", "std", "ansi"] }
+ureq = { version = "3.4.2", default-features = false, features = ["native-tls"] }
+webp = { version = "0.3.1", default-features = false }
 postcard = { version = "1.1.3", default-features = false, features = ["use-std"] }
 zstd = { version = "0.14.2", default-features = false }
 serde = { version = "1.0.229", features = ["derive"] }
