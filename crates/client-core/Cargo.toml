@@ -1,0 +1,28 @@
+[package]
+name = "beholder-client-core"
+description = "Beholder client core: connection manager, outbox, local cache, sync. No Tauri dependency."
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+beholder-core.workspace = true
+beholder-protocol = { workspace = true, features = ["codec"] }
+fastrand.workspace = true
+futures-util.workspace = true
+postcard.workspace = true
+rusqlite.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "macros", "sync", "time", "net"] }
+tokio-tungstenite = { workspace = true, features = ["native-tls"] }
+ureq.workspace = true
+uuid = { workspace = true, features = ["v7", "std"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
