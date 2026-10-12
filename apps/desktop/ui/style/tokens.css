@@ -1,0 +1,85 @@
+/* Design tokens (SPEC §6). Components use only these variables. */
+
+@font-face {
+  font-family: "Manrope";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  src: url("fonts/manrope-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Manrope";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 200 800;
+  src: url("fonts/manrope-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+@font-face {
+  font-family: "Cinzel";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 900;
+  src: url("fonts/cinzel-latin-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+@font-face {
+  font-family: "Cinzel";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 400 900;
+  src: url("fonts/cinzel-latin-ext-wght-normal.woff2") format("woff2-variations");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+:root {
+  --bg: #121318;
+  --bg-chrome: #16171d;
+  --surface: #1a1c23;
+  --surface-raised: #1d1f27;
+  --border: #2c3039;
+  --border-strong: #343844;
+  --text: #ecebe6;
+  --text-2: #c9cbd2;
+  --text-muted: #a3a6b0;
+  --placeholder: #8a8e99;
+  --accent: #e3a94f;
+  --on-accent: #17130a;
+  --status-online: #4cc3a5;
+  --status-warning: #e3a94f;
+  --status-error: #e06c6c;
+  --chip-party-bg: #1d302b;
+  --chip-party-text: #93e2c9;
+  --chip-shared-bg: #1e2639;
+  --chip-shared-text: #adc6ff;
+  --chip-private-bg: #272932;
+  --chip-private-text: #c9cbd2;
+  --chip-dm-bg: #341f2a;
+  --chip-dm-text: #f4b9cb;
+
+  --font-display: "Cinzel", serif;
+  --font-body: "Manrope", system-ui, sans-serif;
+
+  --radius-control: 10px;
+  --radius-card: 12px;
+  --radius-character: 14px;
+
+  --touch: 44px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --topbar-h: 56px;
+  --sidebar-w: 248px;
+  --banner-h: 150px;
+  --card-min: 240px;
+  --text-sm: 13px;
+  --text-md: 15px;
+  --text-lg: 18px;
+  --text-xl: 24px;
+  --text-2xl: 30px;
+  --icon-stroke: 1.8;
+}

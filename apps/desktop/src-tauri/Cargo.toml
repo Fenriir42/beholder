@@ -1,0 +1,32 @@
+[package]
+name = "beholder-desktop"
+description = "Beholder desktop shell: bridges the UI to client-core through Tauri commands and events."
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[build-dependencies]
+tauri-build = { version = "2.7.2", default-features = false }
+
+[dependencies]
+beholder-client-core.workspace = true
+beholder-core.workspace = true
+beholder-ipc.workspace = true
+beholder-protocol.workspace = true
+keyring-core = "1.0.0"
+serde.workspace = true
+serde_json = "1.0.154"
+tauri = { version = "2.12.3", default-features = false, features = ["wry", "compression", "common-controls-v6", "x11"] }
+tokio = { workspace = true, features = ["sync"] }
+uuid = { workspace = true, features = ["v7", "std"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+dbus-secret-service-keyring-store = { version = "1.0.1", default-features = false, features = ["crypto-openssl"] }
+
+[target.'cfg(windows)'.dependencies]
+windows-native-keyring-store = { version = "1.1.0", default-features = false }
+
+[lints]
+workspace = true

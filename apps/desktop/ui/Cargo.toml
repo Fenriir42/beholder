@@ -1,0 +1,25 @@
+[package]
+name = "beholder-ui"
+description = "Beholder desktop UI: Leptos CSR, compiled to wasm32 and served by Tauri."
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+beholder-core.workspace = true
+beholder-ipc.workspace = true
+beholder-protocol.workspace = true
+fluent-bundle = "0.16.0"
+js-sys = "0.3.106"
+leptos = { version = "0.8.22", default-features = false, features = ["csr"] }
+serde.workspace = true
+serde-wasm-bindgen = "0.6.5"
+unic-langid = { version = "0.9.6", default-features = false }
+wasm-bindgen = "0.2.129"
+wasm-bindgen-futures = "0.4.79"
+web-sys = { version = "0.3.106", features = ["Blob", "Event", "EventTarget", "File", "FileList", "HtmlInputElement", "Navigator", "Window"] }
+
+[lints]
+workspace = true

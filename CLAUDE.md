@@ -39,7 +39,12 @@ The laptop is slow, so always run the narrowest command that verifies the change
 - WASM compatibility, required after touching core, protocol or ui: `cargo check -p beholder-core -p beholder-protocol -p beholder-ui --target wasm32-unknown-unknown`
 - Full check, only before a commit that touches several crates: `cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace`
 
-Add the real run, bundle and Docker commands here once Phase 1 creates them.
+- Run the server locally: `BEHOLDER_DATA_DIR=./data-dev cargo run -p beholder-server` (listens on `0.0.0.0:8080`)
+- Run the desktop app: `cd apps/desktop/src-tauri && cargo tauri dev` (starts `trunk serve` for the UI)
+- UI only: `cd apps/desktop/ui && trunk build --release` (WASM size: `ls -l dist/*.wasm`)
+- Bundle the desktop app: `cd apps/desktop/src-tauri && cargo tauri build --bundles deb,rpm` (Linux) or `--bundles nsis` (Windows)
+- Server image: `docker build -f deploy/Dockerfile -t beholder-server .`; deployment is in `deploy/README.md`
+- Tools: `trunk` 0.21.14 and `tauri-cli` 2.12.2, prebuilt via `cargo binstall`
 
 Don't run any of the following unless asked: release builds, `cargo tauri build` or other bundling, `cargo clean`, `cargo update`, or long-running processes (`cargo tauri dev`, `trunk serve`, the server). The user runs the app himself.
 

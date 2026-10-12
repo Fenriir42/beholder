@@ -1,6 +1,15 @@
 [workspace]
 resolver = "3"
-members = ["crates/core", "crates/protocol", "crates/server", "crates/client-core", "crates/e2e"]
+members = [
+    "crates/core",
+    "crates/protocol",
+    "crates/server",
+    "crates/client-core",
+    "crates/e2e",
+    "apps/desktop/ipc",
+    "apps/desktop/ui",
+    "apps/desktop/src-tauri",
+]
 
 [workspace.package]
 edition = "2024"
@@ -13,6 +22,7 @@ beholder-core = { path = "crates/core" }
 beholder-protocol = { path = "crates/protocol" }
 beholder-server = { path = "crates/server" }
 beholder-client-core = { path = "crates/client-core" }
+beholder-ipc = { path = "apps/desktop/ipc" }
 anyhow = "1.0.104"
 argon2 = { version = "0.6.0", default-features = false, features = ["alloc", "password-hash"] }
 axum = { version = "0.8.9", default-features = false, features = ["http1", "tokio", "ws"] }

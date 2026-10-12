@@ -1,0 +1,16 @@
+[package]
+name = "beholder-ipc"
+description = "Types shared by the Beholder UI (wasm32) and the Tauri shell."
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+beholder-core.workspace = true
+beholder-protocol.workspace = true
+serde.workspace = true
+
+[lints]
+workspace = true
