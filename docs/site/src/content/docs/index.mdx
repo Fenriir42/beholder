@@ -1,0 +1,38 @@
+---
+title: Beholder
+description: A light, offline-friendly companion app for D&D 5e (2024 rules) campaigns.
+template: splash
+hero:
+  tagline: A light, offline-friendly companion for your D&D 5e (2024) campaigns, built for small groups and shaky networks.
+  actions:
+    - text: I'm a player
+      link: /players/getting-started/
+      icon: right-arrow
+    - text: I run the server
+      link: /admin/install/
+      variant: secondary
+    - text: I work on the code
+      link: /dev/overview/
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid>
+  <Card title="Works on bad connections" icon="rocket">
+    Your changes are saved on your device first and sent when the connection allows. A VPN that drops every minute is fine.
+  </Card>
+  <Card title="The server decides what you see" icon="seti:lock">
+    Secrets stay on the server. A player never receives the DM's private data, not even hidden in the app.
+  </Card>
+  <Card title="English and French" icon="translate">
+    Switch language at any time from the top bar.
+  </Card>
+  <Card title="Your group, your server" icon="laptop">
+    One small server per group, on a 1 GB VPS. Nothing goes through third-party services.
+  </Card>
+</CardGrid>
+
+:::note[Phase 1]
+This version covers accounts, campaigns, invite codes, campaign settings and live presence. Notes, the compendium, character sheets, dice and the combat tracker arrive in later updates.
+:::

@@ -32,3 +32,11 @@ data/
 # Build outputs
 /apps/desktop/ui/dist/
 /apps/desktop/src-tauri/gen/
+
+# Local server data from `cargo run -p beholder-server`
+/data-dev/
+
+# Docs site (Astro)
+/docs/site/node_modules/
+/docs/site/dist/
+/docs/site/.astro/

@@ -1,0 +1,15 @@
+/* Match the app's look (SPEC §6): dark surfaces, amber accent. System fonts
+   only; the docs load nothing from external services. */
+:root {
+  --sl-color-accent-low: #3a2a12;
+  --sl-color-accent: #e3a94f;
+  --sl-color-accent-high: #f3d6a6;
+  --sl-color-black: #121318;
+  --sl-color-gray-6: #1a1c23;
+  --sl-color-gray-5: #2c3039;
+}
+:root[data-theme='light'] {
+  --sl-color-accent-low: #f6e5c8;
+  --sl-color-accent: #9a6614;
+  --sl-color-accent-high: #4a3008;
+}

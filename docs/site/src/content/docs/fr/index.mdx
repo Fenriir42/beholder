@@ -1,0 +1,38 @@
+---
+title: Beholder
+description: Une application compagnon légère, utilisable hors ligne, pour vos campagnes D&D 5e (règles 2024).
+template: splash
+hero:
+  tagline: Une application compagnon légère et utilisable hors ligne pour vos campagnes D&D 5e (2024), pensée pour les petits groupes et les connexions instables.
+  actions:
+    - text: Je suis joueur
+      link: /fr/players/getting-started/
+      icon: right-arrow
+    - text: J'héberge le serveur
+      link: /fr/admin/install/
+      variant: secondary
+    - text: Je travaille sur le code
+      link: /fr/dev/overview/
+      variant: minimal
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+<CardGrid>
+  <Card title="Fonctionne avec une mauvaise connexion" icon="rocket">
+    Vos modifications sont d'abord enregistrées sur votre appareil, puis envoyées dès que la connexion le permet. Un VPN qui coupe toutes les minutes, ce n'est pas un problème.
+  </Card>
+  <Card title="Le serveur décide de ce que vous voyez" icon="seti:lock">
+    Les secrets restent sur le serveur. Un joueur ne reçoit jamais les données privées du MJ, même cachées dans l'application.
+  </Card>
+  <Card title="Français et anglais" icon="translate">
+    Changez de langue à tout moment depuis la barre du haut.
+  </Card>
+  <Card title="Votre groupe, votre serveur" icon="laptop">
+    Un petit serveur par groupe, sur un VPS de 1 Go. Rien ne passe par des services tiers.
+  </Card>
+</CardGrid>
+
+:::note[Phase 1]
+Cette version couvre les comptes, les campagnes, les codes d'invitation, les règles de campagne et la présence en direct. Les notes, le compendium, les fiches de personnage, les dés et le suivi de combat arrivent dans de prochaines versions.
+:::
