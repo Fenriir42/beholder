@@ -1,0 +1,39 @@
+# Production stack for a 1 GB VPS: the Beholder server behind Caddy (TLS).
+# Usage: see deploy/README.md. Set BEHOLDER_DOMAIN and GHCR_OWNER in deploy/.env.
+services:
+  server:
+    image: ghcr.io/${GHCR_OWNER:?set GHCR_OWNER in .env}/beholder-server:${BEHOLDER_TAG:-latest}
+    restart: unless-stopped
+    environment:
+      BEHOLDER_LOG: ${BEHOLDER_LOG:-info}
+    volumes:
+      - beholder-data:/data
+    expose:
+      - "8080"
+    # Idle ~10-20 MB; peak ~150-190 MB while re-encoding a 40 MP upload.
+    mem_limit: 256m
+    memswap_limit: 384m
+    stop_grace_period: 10s
+
+  caddy:
+    image: caddy:2.11.7-alpine
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      BEHOLDER_DOMAIN: ${BEHOLDER_DOMAIN:?set BEHOLDER_DOMAIN in .env}
+      # Keeps the Go runtime's heap well under the container limit.
+      GOMEMLIMIT: 96MiB
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    mem_limit: 128m
+
+volumes:
+  beholder-data:
+  caddy-data:
+  caddy-config:

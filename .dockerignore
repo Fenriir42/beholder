@@ -1,0 +1,7 @@
+.git
+target
+data
+data-dev
+apps/desktop/ui/dist
+apps/desktop/src-tauri/gen
+**/*.sqlite
