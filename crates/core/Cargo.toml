@@ -1,0 +1,16 @@
+[package]
+name = "beholder-core"
+description = "Domain types and pure rules for Beholder. No IO, builds for wasm32."
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+serde.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
