@@ -18,6 +18,8 @@ pub enum DbError {
     Corrupt(&'static str),
     #[error("database task failed")]
     Task,
+    #[error("io: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 impl From<postcard::Error> for DbError {

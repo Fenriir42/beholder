@@ -1023,6 +1023,64 @@ mod tests {
     }
 
     #[test]
+    fn library_batches_are_all_or_nothing_and_stream_to_disk() {
+        let (mut c, _, player) = setup();
+        let many = |drafts| CommandKind::Library {
+            op: beholder_core::library::LibraryOp::SaveMany { drafts },
+        };
+        let ids: Vec<LibraryId> = (0..3).map(|_| LibraryId(Uuid::now_v7())).collect();
+        let mut drafts: Vec<_> = ids.iter().map(|id| draft(*id, "Batch entry")).collect();
+        drafts[2].facets = beholder_core::compendium::Facets::Feature {
+            class: "Wizard".into(),
+            level: 0,
+        };
+        assert!(matches!(
+            run(&mut c, &player, many(drafts.clone())).reply,
+            Reply::Reject(RejectReason::Invalid(_))
+        ));
+        assert!(
+            crate::library::bundle(&c).unwrap().entries.is_empty(),
+            "nothing was saved"
+        );
+        drafts[2] = draft(ids[1], "Duplicate id");
+        assert_eq!(
+            run(&mut c, &player, many(drafts.clone())).reply,
+            Reply::Reject(RejectReason::IdConflict)
+        );
+        drafts[2] = draft(ids[2], "Third");
+        assert_eq!(
+            run(&mut c, &player, many(drafts.clone())).reply,
+            Reply::Ack(Some(Seq(3)))
+        );
+        assert_eq!(
+            run(&mut c, &player, many(vec![draft(ids[0], "Again")])).reply,
+            Reply::Reject(RejectReason::IdConflict),
+            "a batch only creates"
+        );
+        let oversized = (0..=beholder_core::library::MAX_BATCH)
+            .map(|_| draft(LibraryId(Uuid::now_v7()), "Too many"))
+            .collect();
+        assert!(matches!(
+            run(&mut c, &player, many(oversized)).reply,
+            Reply::Reject(RejectReason::Invalid(_))
+        ));
+
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("library.bundle");
+        let w = crate::library::write_bundle(&c, &path).unwrap();
+        let file = std::fs::read(&path).unwrap();
+        assert_eq!(w.bytes, file.len() as u64);
+        assert_eq!(w.sha256, crate::compendium::sha256_hex(&file));
+        assert_eq!(w.seq, 3);
+        let raw = zstd::bulk::decompress(&file, 64 << 20).unwrap();
+        assert_eq!(
+            raw,
+            postcard::to_stdvec(&crate::library::bundle(&c).unwrap()).unwrap(),
+            "the streamed bundle is byte-identical to the in-memory one"
+        );
+    }
+
+    #[test]
     fn catch_up_snapshots_across_visibility_changes() {
         let (mut c, dm, _) = setup();
         let id = create(&mut c, &dm);

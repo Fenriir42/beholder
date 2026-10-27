@@ -19,6 +19,7 @@ pub struct View {
     pub campaigns: Vec<CampaignView>,
     pub pending_joins: usize,
     pub pending_library: Vec<LibraryId>,
+    pub pending_import: usize,
 }
 
 pub fn compute(
@@ -39,6 +40,7 @@ pub fn compute(
         .collect();
     let mut pending_joins = 0;
     let mut pending_library = Vec::new();
+    let mut pending_import = 0;
     for cmd in outbox {
         match &cmd.kind {
             CommandKind::CreateCampaign { campaign_id, title } => {
@@ -60,10 +62,11 @@ pub fn compute(
                 });
             }
             CommandKind::JoinCampaign { .. } => pending_joins += 1,
-            CommandKind::Library { op } => pending_library.push(match op {
-                LibraryOp::Save { draft, .. } => draft.id,
-                LibraryOp::Delete { id } => *id,
-            }),
+            CommandKind::Library { op } => match op {
+                LibraryOp::Save { draft, .. } => pending_library.push(draft.id),
+                LibraryOp::Delete { id } => pending_library.push(*id),
+                LibraryOp::SaveMany { drafts } => pending_import += drafts.len(),
+            },
             CommandKind::Campaign { campaign_id, op } => {
                 let Some(view) = campaigns.iter_mut().find(|c| c.campaign.id == *campaign_id)
                 else {
@@ -108,6 +111,7 @@ pub fn compute(
         campaigns,
         pending_joins,
         pending_library,
+        pending_import,
     }
 }
 

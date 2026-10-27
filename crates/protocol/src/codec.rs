@@ -282,6 +282,7 @@ mod tests {
                 base_version: 1,
             },
             library::LibraryOp::Delete { id: lid(1) },
+            library::LibraryOp::SaveMany { drafts: Vec::new() },
         ];
         msgs.extend(library_ops.into_iter().map(|op| {
             ClientMsg::Command(Command {

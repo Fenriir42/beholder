@@ -9,6 +9,8 @@ const MAX_FACET_CHARS: usize = 80;
 
 const MAX_CLASSES: usize = 32;
 
+pub const MAX_BATCH: usize = 500;
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct LibraryDraft {
     pub id: LibraryId,
@@ -96,6 +98,9 @@ pub enum LibraryOp {
     },
     Delete {
         id: LibraryId,
+    },
+    SaveMany {
+        drafts: Vec<LibraryDraft>,
     },
 }
 

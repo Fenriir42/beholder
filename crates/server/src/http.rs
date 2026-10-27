@@ -292,36 +292,50 @@ async fn signed_in(state: &AppState, headers: &HeaderMap) -> Result<User, Respon
     }
 }
 
-async fn library_bundle(state: &AppState) -> Result<(SourceInfo, Bytes), Response> {
+async fn library_bundle(state: &AppState) -> Result<SourceInfo, Response> {
     let head = state
         .db
         .call(|c| crate::library::head(c))
         .await
         .map_err(internal)?;
-    if let Some(c) = state
-        .library_cache
-        .lock()
-        .unwrap_or_else(|p| p.into_inner())
-        .as_ref()
-        .filter(|c| c.seq == head)
+    let mut cache = state.library_cache.lock().await;
+    if let Some(c) = cache.as_ref()
+        && c.seq <= head
+        && head - c.seq <= crate::library::MAX_REPLAY
+        && c.path.exists()
     {
-        return Ok((c.info.clone(), c.bytes.clone()));
+        return Ok(c.info.clone());
     }
-    let bundle = state
+    let dir = state.data_dir.join("library");
+    tokio::fs::create_dir_all(&dir).await.map_err(internal)?;
+    let path = dir.join(format!("library-{head}.bundle"));
+    let target = path.clone();
+    let written = state
         .db
-        .call(|c| crate::library::bundle(c))
+        .call(move |c| crate::library::write_bundle(c, &target))
         .await
         .map_err(internal)?;
-    let built = tokio::task::spawn_blocking(move || compendium::describe_library(&bundle))
-        .await
-        .map_err(internal)?
-        .map_err(internal)?;
-    let out = (built.info.clone(), built.bytes.clone());
-    *state
-        .library_cache
-        .lock()
-        .unwrap_or_else(|p| p.into_inner()) = Some(built);
-    Ok(out)
+    let meta = crate::library::source_meta();
+    let info = SourceInfo {
+        id: meta.id,
+        name: meta.name,
+        publisher: meta.publisher,
+        system: meta.system,
+        rules: meta.rules,
+        sha256: written.sha256,
+        bytes: written.bytes,
+    };
+    if let Some(old) = cache.take()
+        && old.path != path
+    {
+        let _ = tokio::fs::remove_file(&old.path).await;
+    }
+    *cache = Some(compendium::CachedBundle {
+        info: info.clone(),
+        seq: written.seq,
+        path,
+    });
+    Ok(info)
 }
 
 pub async fn compendium_index(State(state): State<AppState>, headers: HeaderMap) -> Response {
@@ -330,7 +344,7 @@ pub async fn compendium_index(State(state): State<AppState>, headers: HeaderMap)
     }
     let mut index = state.compendium.index();
     match library_bundle(&state).await {
-        Ok((info, _)) => index.insert(0, info),
+        Ok(info) => index.insert(0, info),
         Err(r) => return r,
     }
     reply(StatusCode::OK, &index)
@@ -362,15 +376,22 @@ pub async fn compendium_bundle(
     if let Err(r) = signed_in(&state, &headers).await {
         return r;
     }
-    let library = state
+    let library_path = state
         .library_cache
         .lock()
-        .unwrap_or_else(|p| p.into_inner())
+        .await
         .as_ref()
         .filter(|c| c.info.sha256 == sha256)
-        .map(|c| c.bytes.clone());
-    let Some(bytes) = library.or_else(|| state.compendium.bundle(&sha256)) else {
-        return StatusCode::NOT_FOUND.into_response();
+        .map(|c| c.path.clone());
+    let bytes = match library_path {
+        Some(p) => match tokio::fs::read(&p).await {
+            Ok(b) => Bytes::from(b),
+            Err(_) => return StatusCode::NOT_FOUND.into_response(),
+        },
+        None => match state.compendium.bundle(&sha256) {
+            Some(b) => b,
+            None => return StatusCode::NOT_FOUND.into_response(),
+        },
     };
     let len = bytes.len();
     let range = headers.get(header::RANGE).and_then(|v| v.to_str().ok());

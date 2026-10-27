@@ -250,7 +250,7 @@ async fn library_entries_sync_fold_hide_and_import() {
     );
 
     let file = "format: beholder-library\nversion: 1\nentries:\n  - kind: condition\n    name: Dazed\n    text: Can't take reactions.\n  - kind: spell\n    name: Fireball\n    book: Table rules\n    level: 3\n    school: Evocation\n    text: dup\n  - kind: monster\n    name: Broken\n    text: no cr\n";
-    let summary = a.library_import(file, FileFormat::Yaml).unwrap();
+    let summary = a.library_import(file.as_bytes(), FileFormat::Yaml).unwrap();
     assert_eq!(summary.added, 1);
     assert_eq!(
         summary.skipped, 1,
@@ -265,6 +265,118 @@ async fn library_entries_sync_fold_hide_and_import() {
     .await;
     let exported = b.library_export(FileFormat::Json).unwrap();
     assert!(exported.contains("\"Dazed\"") && exported.contains("sparks"));
+    a.shutdown();
+    b.shutdown();
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn large_imports_are_batched_and_reach_late_clients() {
+    use beholder_client_core::library_file::FileFormat;
+
+    let dir = tempfile::tempdir().unwrap();
+    let state = Server::with_db(
+        Db::open_in_memory().unwrap(),
+        dir.path().to_path_buf(),
+        Library::builtin().unwrap(),
+    );
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}", listener.local_addr().unwrap());
+    tokio::spawn(serve(listener, state.clone(), std::future::pending()));
+    let session = |name: &'static str| {
+        let state = state.clone();
+        async move {
+            state
+                .db
+                .call(move |c| {
+                    let u = auth::create_user(
+                        c,
+                        &Username::new(name.into()).unwrap(),
+                        &DisplayName::new(name).unwrap(),
+                        "phc",
+                        UnixMillis(0),
+                    )?
+                    .unwrap();
+                    auth::create_session(c, u.id, beholder_server::now())
+                })
+                .await
+                .unwrap()
+        }
+    };
+    let count_library = |c: &Client| {
+        c.search(
+            &SearchQuery {
+                kind: Some(Kind::Condition),
+                sources: vec!["library".into()],
+                ..SearchQuery::default()
+            },
+            10_000,
+        )
+        .unwrap()
+        .len()
+    };
+    let (a, _ea) = Client::start(
+        &url,
+        Cache::open_in_memory().unwrap(),
+        session("alice").await,
+    );
+    a.submit(CommandKind::CreateCampaign {
+        campaign_id: CampaignId(uuid::Uuid::now_v7()),
+        title: CampaignTitle::new("Big").unwrap(),
+    })
+    .unwrap();
+    wait_for("alice has the library source", || {
+        a.compendium_sources()
+            .unwrap()
+            .iter()
+            .any(|s| s.id == "library")
+    })
+    .await;
+
+    let mut file = String::from("{\"format\":\"beholder-library\",\"version\":1,\"entries\":[");
+    for i in 0..1200 {
+        if i > 0 {
+            file.push(',');
+        }
+        file.push_str(&format!(
+            "{{\"kind\":\"condition\",\"name\":\"Condition {i}\",\"text\":\"Effect number {i}.\"}}"
+        ));
+    }
+    file.push_str("]}");
+    let summary = a.library_import(file.as_bytes(), FileFormat::Json).unwrap();
+    assert_eq!(summary.added, 1200);
+    wait_for("alice receives the whole import", || {
+        count_library(&a) == 1200
+    })
+    .await;
+
+    let (b, _eb) = Client::start(&url, Cache::open_in_memory().unwrap(), session("bob").await);
+    b.submit(CommandKind::CreateCampaign {
+        campaign_id: CampaignId(uuid::Uuid::now_v7()),
+        title: CampaignTitle::new("Late").unwrap(),
+    })
+    .unwrap();
+    wait_for("a late client gets everything from the bundle", || {
+        count_library(&b) == 1200
+    })
+    .await;
+
+    let built = state.library_cache.lock().await.as_ref().map(|c| c.seq);
+    let summary = a
+        .library_import(
+            b"{\"format\":\"beholder-library\",\"version\":1,\"entries\":[{\"kind\":\"condition\",\"name\":\"One more\",\"text\":\"x\"}]}",
+            FileFormat::Json,
+        )
+        .unwrap();
+    assert_eq!(summary.added, 1);
+    wait_for("both clients get the small change", || {
+        count_library(&a) == 1201 && count_library(&b) == 1201
+    })
+    .await;
+    assert_eq!(
+        state.library_cache.lock().await.as_ref().map(|c| c.seq),
+        built,
+        "a small change doesn't rebuild the bundle"
+    );
     a.shutdown();
     b.shutdown();
 }

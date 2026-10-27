@@ -195,7 +195,8 @@ async fn session(
                     }
                 };
                 deadline = Instant::now() + IDLE_TIMEOUT;
-                let Ok(msg) = codec::decode::<ServerMsg>(&frame) else { return online };                let sources_may_change = match &msg {
+                let Ok(msg) = codec::decode::<ServerMsg>(&frame) else { return online };
+                let sources_may_change = match &msg {
                     ServerMsg::Snapshot { .. }
                     | ServerMsg::CampaignRemoved { .. }
                     | ServerMsg::LibraryChanged { .. } => true,

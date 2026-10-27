@@ -1,7 +1,11 @@
 use beholder_core::compendium::{
-    BUNDLE_FORMAT, Bundle, Entry, GameSystem, LIBRARY, RulesVersion, SourceMeta,
+    BUNDLE_FORMAT, Bundle, Entry, GameSystem, LIBRARY, LicenseText, RulesVersion, SourceMeta,
 };
-use beholder_core::library::{LibraryEntry, LibraryEvent, LibraryOp};
+use sha2::{Digest, Sha256};
+use std::collections::HashSet;
+use std::path::Path;
+
+use beholder_core::library::{LibraryEntry, LibraryEvent, LibraryOp, MAX_BATCH};
 use beholder_core::{CommandId, LibraryId, UnixMillis, UserId, ValidationError};
 use beholder_protocol::RejectReason;
 use beholder_protocol::http::{LibraryChange, LibraryChanges};
@@ -19,7 +23,7 @@ pub(crate) fn decide(
     op: &LibraryOp,
     now: UnixMillis,
 ) -> Result<Result<u64, RejectReason>, DbError> {
-    let event = match op {
+    let events = match op {
         LibraryOp::Save {
             draft,
             base_version,
@@ -66,7 +70,36 @@ pub(crate) fn decide(
                     }
                 }
             };
-            LibraryEvent::Saved { entry }
+            vec![LibraryEvent::Saved { entry }]
+        }
+        LibraryOp::SaveMany { drafts } => {
+            if drafts.is_empty() || drafts.len() > MAX_BATCH {
+                return Ok(Err(RejectReason::Invalid(ValidationError::Length)));
+            }
+            let mut ids = HashSet::with_capacity(drafts.len());
+            for d in drafts {
+                if let Err(e) = d.check_facets() {
+                    return Ok(Err(RejectReason::Invalid(e)));
+                }
+                if !ids.insert(d.id) || load(tx, d.id)?.is_some() {
+                    return Ok(Err(RejectReason::IdConflict));
+                }
+            }
+            drafts
+                .iter()
+                .map(|d| LibraryEvent::Saved {
+                    entry: LibraryEntry {
+                        id: d.id,
+                        author: actor,
+                        name: d.name.clone(),
+                        facets: d.facets.clone(),
+                        text: d.text.clone(),
+                        book: d.book.clone(),
+                        rules: d.rules,
+                        version: 1,
+                    },
+                })
+                .collect()
         }
         LibraryOp::Delete { id } => {
             let Some((current, false)) = load(tx, *id)? else {
@@ -75,20 +108,34 @@ pub(crate) fn decide(
             if !permissions::can_edit_library(actor, current.author, is_dm_anywhere(tx, actor)?) {
                 return Ok(Err(RejectReason::Forbidden));
             }
-            LibraryEvent::Deleted { id: *id }
+            vec![LibraryEvent::Deleted { id: *id }]
         }
     };
+    let mut last = 0;
+    for event in &events {
+        last = emit(tx, actor, cmd_id, event, now)?;
+    }
+    Ok(Ok(last))
+}
+
+fn emit(
+    tx: &Transaction<'_>,
+    actor: UserId,
+    cmd_id: CommandId,
+    event: &LibraryEvent,
+    now: UnixMillis,
+) -> Result<u64, DbError> {
     let seq: u64 = tx.query_row(
         "INSERT INTO library_log (ts, actor, command_id, body) VALUES (?1, ?2, ?3, ?4) RETURNING seq",
         params![
             now.0,
             actor.as_bytes(),
             cmd_id.as_bytes(),
-            postcard::to_stdvec(&event)?
+            postcard::to_stdvec(event)?
         ],
         |r| r.get(0),
     )?;
-    match &event {
+    match event {
         LibraryEvent::Saved { entry } => {
             tx.execute(
                 "INSERT INTO library_entries (id, body, deleted, seq) VALUES (?1, ?2, 0, ?3)
@@ -103,7 +150,7 @@ pub(crate) fn decide(
             )?;
         }
     }
-    Ok(Ok(seq))
+    Ok(seq)
 }
 
 fn load(conn: &Connection, id: LibraryId) -> Result<Option<(LibraryEntry, bool)>, DbError> {
@@ -191,5 +238,76 @@ pub fn bundle(conn: &Connection) -> Result<Bundle, DbError> {
         source: source_meta(),
         licenses: Vec::new(),
         entries,
+    })
+}
+
+struct Hashing<W> {
+    inner: W,
+    sha: Sha256,
+    bytes: u64,
+}
+
+impl<W: std::io::Write> std::io::Write for Hashing<W> {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let n = self.inner.write(buf)?;
+        self.sha.update(&buf[..n]);
+        self.bytes += n as u64;
+        Ok(n)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.inner.flush()
+    }
+}
+
+pub struct Written {
+    pub seq: u64,
+    pub bytes: u64,
+    pub sha256: String,
+}
+
+// Byte-identical to postcard(Bundle): header fields, then varint(count), then each entry.
+pub fn write_bundle(conn: &Connection, path: &Path) -> Result<Written, DbError> {
+    use std::io::Write;
+    let seq = head(conn)?;
+    let count: u64 = conn.query_row(
+        "SELECT COUNT(*) FROM library_entries WHERE deleted = 0",
+        [],
+        |r| r.get(0),
+    )?;
+    let tmp = path.with_extension("tmp");
+    let file = std::io::BufWriter::new(std::fs::File::create(&tmp)?);
+    let mut z = zstd::stream::write::Encoder::new(
+        Hashing {
+            inner: file,
+            sha: Sha256::new(),
+            bytes: 0,
+        },
+        3,
+    )?;
+    z.write_all(&postcard::to_stdvec(&(
+        BUNDLE_FORMAT,
+        seq,
+        source_meta(),
+        Vec::<LicenseText>::new(),
+    ))?)?;
+    z.write_all(&postcard::to_stdvec(&(count as usize))?)?;
+    let mut stmt =
+        conn.prepare_cached("SELECT body FROM library_entries WHERE deleted = 0 ORDER BY id")?;
+    let mut rows = stmt.query([])?;
+    while let Some(row) = rows.next()? {
+        let entry: LibraryEntry = postcard::from_bytes(&row.get::<_, Vec<u8>>(0)?)?;
+        z.write_all(&postcard::to_stdvec(&entry.to_entry())?)?;
+    }
+    let mut out = z.finish()?;
+    out.flush()?;
+    let Hashing { inner, sha, bytes } = out;
+    drop(inner);
+    let digest = sha.finalize();
+    std::fs::rename(&tmp, path)?;
+    Ok(Written {
+        seq,
+        bytes,
+        sha256: digest.iter().map(|b| format!("{b:02x}")).collect(),
     })
 }

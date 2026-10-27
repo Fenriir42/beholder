@@ -11,7 +11,6 @@ use beholder_protocol::http::SourceInfo;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use wasm_bindgen::JsCast;
-use wasm_bindgen_futures::JsFuture;
 
 use crate::app::{error_key, use_app};
 use crate::i18n::{I18n, use_i18n};
@@ -52,12 +51,6 @@ struct HideArgs {
 #[derive(serde::Serialize)]
 struct ExportArgs {
     yaml: bool,
-}
-
-#[derive(serde::Serialize)]
-struct ImportArgs {
-    file_name: String,
-    text: String,
 }
 
 #[derive(serde::Serialize)]
@@ -455,16 +448,9 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
             return;
         };
         input.set_value("");
+        message.set(Some(i18n.t("lib-reading")));
         spawn_local(async move {
-            let Ok(text) = JsFuture::from(file.text()).await else {
-                ctx.notify("err-bad-file");
-                return;
-            };
-            let args = ImportArgs {
-                file_name: file.name(),
-                text: text.as_string().unwrap_or_default(),
-            };
-            match ipc::call::<ImportSummary>("library_import", args).await {
+            match ipc::import_library::<ImportSummary>(file).await {
                 Ok(s) => {
                     message.set(Some(i18n.tr(
                         "lib-imported",
@@ -677,8 +663,15 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
                     </label>
                     <button type="button" on:click=move |_| export(false)>{move || i18n.t("lib-export-json")}</button>
                     <button type="button" on:click=move |_| export(true)>{move || i18n.t("lib-export-yaml")}</button>
-                </div>
-                {move || message.get().map(|m| view! { <p class="notice" role="status">{m}</p> })}
+                </div>                {move || message.get().map(|m| view! { <p class="notice" role="status">{m}</p> })}
+                {move || {
+                    let n = ctx.view.with(|v| v.pending_import);
+                    (n > 0).then(|| view! {
+                        <p class="notice" role="status">
+                            {icons::refresh()}{move || i18n.tr("lib-importing", &[("count", n.into())])}
+                        </p>
+                    })
+                }}
                 {move || (!invalid.with(Vec::is_empty)).then(|| view! {
                     <details class="license">
                         <summary>{move || i18n.t("lib-invalid-title")}</summary>

@@ -44,7 +44,7 @@ pub enum StartError {
 pub struct Server {
     pub db: Db,
     pub compendium: Library,
-    pub library_cache: std::sync::Mutex<Option<compendium::CachedBundle>>,
+    pub library_cache: tokio::sync::Mutex<Option<compendium::CachedBundle>>,
     pub hub: Hub,
     pub data_dir: PathBuf,
     pub hashing: Semaphore,
@@ -68,7 +68,7 @@ impl Server {
         Arc::new(Self {
             db,
             compendium,
-            library_cache: std::sync::Mutex::new(None),
+            library_cache: tokio::sync::Mutex::new(None),
             hub: Hub::default(),
             data_dir,
             hashing: Semaphore::new(2),

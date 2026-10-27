@@ -117,6 +117,7 @@ pub fn view_data(client: &Client) -> Result<ViewData, IpcError> {
             .collect(),
         pending_joins: v.pending_joins,
         pending_library: v.pending_library,
+        pending_import: v.pending_import,
     })
 }
 

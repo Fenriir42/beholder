@@ -13,7 +13,7 @@ use beholder_core::compendium::{
     Alternative, Entry, FacetOptions, Hit, LicenseText, SearchQuery, SourceMeta,
 };
 use beholder_core::compendium::{Kind, RulesVersion};
-use beholder_core::library::{ImportSummary, LibraryDraft, LibraryOp};
+use beholder_core::library::{ImportSummary, LibraryDraft, LibraryOp, MAX_BATCH};
 use beholder_core::{CampaignId, CommandId, LibraryId, UserId};
 use beholder_protocol::{Command, CommandKind, RejectReason, ServerMsg, SessionToken};
 use library_file::{FileError, FileFormat};
@@ -30,6 +30,8 @@ pub enum ConnectionState {
     Reconnecting { queued: usize },
     Offline { queued: usize },
 }
+
+const BATCH_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, thiserror::Error)]
 pub enum ClientError {
@@ -262,13 +264,15 @@ impl Client {
         let entries = self.shared.with_cache(|c| c.library_entries())?;
         Ok(library_file::export(&entries, format)?)
     }
-
     pub fn library_import(
         &self,
-        text: &str,
+        bytes: &[u8],
         format: FileFormat,
     ) -> Result<ImportSummary, ClientError> {
+        let text = std::str::from_utf8(bytes).map_err(|_| FileError::NotLibrary)?;
         let file = library_file::read(text, format)?;
+        let mut batch: Vec<LibraryDraft> = Vec::new();
+        let mut batch_bytes = 0;
         let existing = self.shared.with_cache(|c| c.library_entries())?;
         let key = |kind: Kind, name: &str, book: Option<&str>, rules: Option<RulesVersion>| {
             (
@@ -315,10 +319,26 @@ impl Client {
                 summary.invalid.push(format!("#{} {}: {e}", i + 1, f.name));
                 continue;
             }
-            self.library_save(draft, 0)?;
+            let size = draft.text.as_str().len() + draft.name.as_str().len() + 256;
+            if !batch.is_empty() && (batch.len() == MAX_BATCH || batch_bytes + size > BATCH_BYTES) {
+                self.submit_batch(std::mem::take(&mut batch))?;
+                batch_bytes = 0;
+            }
+            batch.push(draft);
+            batch_bytes += size;
             summary.added += 1;
         }
+        if !batch.is_empty() {
+            self.submit_batch(batch)?;
+        }
         Ok(summary)
+    }
+
+    fn submit_batch(&self, drafts: Vec<LibraryDraft>) -> Result<(), CacheError> {
+        self.submit(CommandKind::Library {
+            op: LibraryOp::SaveMany { drafts },
+        })
+        .map(|_| ())
     }
 
     pub fn state(&self) -> ConnectionState {

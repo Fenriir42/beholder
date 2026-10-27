@@ -471,14 +471,25 @@ pub fn library_export(
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub fn library_import(
+pub async fn library_import(
     shell: State<'_, Shell>,
-    file_name: String,
-    text: String,
+    request: Request<'_>,
 ) -> Result<ImportSummary, IpcError> {
-    shell
-        .session()?
-        .client
-        .library_import(&text, FileFormat::from_name(&file_name))
+    let InvokeBody::Raw(bytes) = request.body() else {
+        return Err(IpcError::BadFile);
+    };
+    let format = match request
+        .headers()
+        .get("file-format")
+        .and_then(|v| v.to_str().ok())
+    {
+        Some("yaml") => FileFormat::Yaml,
+        _ => FileFormat::Json,
+    };
+    let client = shell.session()?.client;
+    let bytes = bytes.clone();
+    tauri::async_runtime::spawn_blocking(move || client.library_import(&bytes, format))
+        .await
+        .map_err(|_| IpcError::Server)?
         .map_err(client_error)
 }

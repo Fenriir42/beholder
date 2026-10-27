@@ -31,9 +31,9 @@ struct Head {
 }
 
 pub struct CachedBundle {
-    pub seq: u64,
     pub info: SourceInfo,
-    pub bytes: Bytes,
+    pub seq: u64,
+    pub path: std::path::PathBuf,
 }
 
 pub fn sha256_hex(bytes: &[u8]) -> String {
@@ -41,27 +41,6 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
         .iter()
         .map(|b| format!("{b:02x}"))
         .collect()
-}
-
-pub fn describe_library(
-    bundle: &beholder_core::compendium::Bundle,
-) -> Result<CachedBundle, BundleError> {
-    let raw = postcard::to_stdvec(bundle)?;
-    let bytes = Bytes::from(zstd::bulk::compress(&raw, 3)?);
-    let info = SourceInfo {
-        id: bundle.source.id.clone(),
-        name: bundle.source.name.clone(),
-        publisher: bundle.source.publisher.clone(),
-        system: bundle.source.system,
-        rules: bundle.source.rules,
-        sha256: sha256_hex(&bytes),
-        bytes: bytes.len() as u64,
-    };
-    Ok(CachedBundle {
-        seq: bundle.seq,
-        info,
-        bytes,
-    })
 }
 
 pub struct Library {

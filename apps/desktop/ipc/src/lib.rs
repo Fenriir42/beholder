@@ -43,6 +43,7 @@ pub struct ViewData {
     pub campaigns: Vec<CampaignView>,
     pub pending_joins: usize,
     pub pending_library: Vec<LibraryId>,
+    pub pending_import: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

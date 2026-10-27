@@ -117,7 +117,10 @@ mod tests {
                 let mut errors = Vec::new();
                 let text = b.format_pattern(msg, None, &mut errors);
                 assert!(errors.is_empty(), "{lang} {key}: {errors:?}");
-                assert!(text.starts_with('*') && text.contains("\n\n"), "{lang} {key}: {text}");
+                assert!(
+                    text.starts_with('*') && text.contains("\n\n"),
+                    "{lang} {key}: {text}"
+                );
             }
         }
     }

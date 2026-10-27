@@ -87,13 +87,7 @@ fn sync(
     };
     shared.library_dirty.store(false, Ordering::Release);
     for src in &index {
-        if shared
-            .with_cache(|c| c.compendium_sha256(&src.id))?
-            .as_deref()
-            == Some(&src.sha256)
-        {
-            continue;
-        }
+        // The library bundle isn't rebuilt for every change, so its position decides, not its hash.
         if src.id == LIBRARY
             && let Some(seq) = shared.with_cache(|c| c.compendium_seq(LIBRARY))?
         {
@@ -102,10 +96,22 @@ fn sync(
                 shared.with_cache(|c| c.apply_library(&changes, delta.head))?;
                 continue;
             }
+        } else if shared
+            .with_cache(|c| c.compendium_sha256(&src.id))?
+            .as_deref()
+            == Some(&src.sha256)
+        {
+            continue;
         }
         let bytes = download(http, token, &src.sha256)?;
         let bundle = verify(&src.sha256, &bytes)?;
         shared.with_cache(|c| c.put_bundle(&src.sha256, &bundle))?;
+        if src.id == LIBRARY {
+            let delta = http.library_changes(token, bundle.seq)?;
+            if let Some(changes) = delta.changes {
+                shared.with_cache(|c| c.apply_library(&changes, delta.head))?;
+            }
+        }
     }
     let ids: Vec<String> = index.into_iter().map(|s| s.id).collect();
     shared.with_cache(|c| c.retain_sources(&ids))?;

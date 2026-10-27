@@ -68,6 +68,16 @@ pub async fn upload_cover(campaign_id: &str, file: web_sys::File) -> Result<(), 
     upload("upload_cover", &[("campaign-id", campaign_id)], file).await
 }
 
+pub async fn import_library<R: DeserializeOwned>(file: web_sys::File) -> Result<R, IpcError> {
+    let name = file.name().to_lowercase();
+    let format = if name.ends_with(".yaml") || name.ends_with(".yml") {
+        "yaml"
+    } else {
+        "json"
+    };
+    upload("library_import", &[("file-format", format)], file).await
+}
+
 pub async fn upload_image(file: web_sys::File) -> Result<String, IpcError> {
     upload("upload_image", &[], file).await
 }
