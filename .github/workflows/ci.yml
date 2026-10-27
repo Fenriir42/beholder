@@ -27,6 +27,8 @@ jobs:
         run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - name: test
         run: cargo test --workspace --locked
+      - name: SRD bundle matches vendored data
+        run: cargo run --locked -q -p beholder-xtask -- srd --check
       - name: wasm32 compatibility
         run: cargo check --locked -p beholder-core -p beholder-protocol -p beholder-ui --target wasm32-unknown-unknown
 

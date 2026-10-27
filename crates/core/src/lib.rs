@@ -1,4 +1,5 @@
 pub mod campaign;
+pub mod compendium;
 pub mod ids;
 pub mod note;
 pub mod user;

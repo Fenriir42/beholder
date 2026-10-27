@@ -6,6 +6,7 @@ members = [
     "crates/server",
     "crates/client-core",
     "crates/e2e",
+    "crates/xtask",
     "apps/desktop/ipc",
     "apps/desktop/ui",
     "apps/desktop/src-tauri",

@@ -1,0 +1,18 @@
+[package]
+name = "beholder-xtask"
+description = "Dev-only tasks: converts vendored data into Beholder bundles."
+version = "0.1.0"
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+beholder-core.workspace = true
+postcard.workspace = true
+serde_json = "1.0.154"
+zstd.workspace = true
+
+[lints]
+workspace = true
