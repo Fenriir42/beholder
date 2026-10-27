@@ -26,7 +26,7 @@ fn main() -> anyhow::Result<()> {
         .enable_all()
         .build()?;
     rt.block_on(async {
-        let state = Server::open(data_dir).context("opening database")?;
+        let state = Server::open(data_dir).context("starting server")?;
         let listener = tokio::net::TcpListener::bind(bind)
             .await
             .context("binding")?;

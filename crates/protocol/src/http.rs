@@ -1,3 +1,4 @@
+use beholder_core::compendium::RulesVersion;
 use beholder_core::{DisplayName, ImageHash, Password, User, Username};
 use serde::{Deserialize, Serialize};
 
@@ -43,6 +44,17 @@ pub enum ImageError {
     Unauthorized,
     RateLimited,
 }
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceInfo {
+    pub id: String,
+    pub name: String,
+    pub rules: RulesVersion,
+    pub sha256: String,
+    pub bytes: u64,
+}
+
+pub const MAX_BUNDLE_BYTES: usize = 64 * 1024 * 1024;
 
 pub const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 

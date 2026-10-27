@@ -8,6 +8,7 @@ use axum::extract::{ConnectInfo, Path, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use beholder_core::ImageHash;
+use beholder_core::User;
 use beholder_protocol::http::{
     AuthError, AuthResponse, ImageError, ImageUploaded, LoginRequest, MAX_IMAGE_BYTES,
     RegisterRequest,
@@ -17,6 +18,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use crate::auth::{self, AuthError as InternalAuthError};
+use crate::compendium;
 use crate::images::{self, Variant};
 use crate::{AppState, now};
 
@@ -274,4 +276,72 @@ pub async fn get_image(
         }
         Err(_) => StatusCode::NOT_FOUND.into_response(),
     }
+}
+
+async fn signed_in(state: &AppState, headers: &HeaderMap) -> Result<User, Response> {
+    check_version(headers)?;
+    let token = bearer(headers).ok_or_else(|| StatusCode::UNAUTHORIZED.into_response())?;
+    match state
+        .db
+        .call(move |c| auth::validate_session(c, &token, now(), false))
+        .await
+    {
+        Ok(Some(s)) => Ok(s.user),
+        Ok(None) => Err(StatusCode::UNAUTHORIZED.into_response()),
+        Err(e) => Err(internal(e)),
+    }
+}
+
+pub async fn compendium_index(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(r) = signed_in(&state, &headers).await {
+        return r;
+    }
+    reply(StatusCode::OK, &state.compendium.index())
+}
+
+pub async fn compendium_bundle(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(sha256): Path<String>,
+) -> Response {
+    if let Err(r) = signed_in(&state, &headers).await {
+        return r;
+    }
+    let Some(bytes) = state.compendium.bundle(&sha256) else {
+        return StatusCode::NOT_FOUND.into_response();
+    };
+    let len = bytes.len();
+    let range = headers.get(header::RANGE).and_then(|v| v.to_str().ok());
+    let (status, body, content_range) = match range {
+        None => (StatusCode::OK, bytes, None),
+        Some(r) => match compendium::parse_range(r, len) {
+            Some(start) => (
+                StatusCode::PARTIAL_CONTENT,
+                bytes.slice(start..),
+                Some(format!("bytes {start}-{}/{len}", len - 1)),
+            ),
+            None => {
+                let mut resp = StatusCode::RANGE_NOT_SATISFIABLE.into_response();
+                if let Ok(v) = HeaderValue::from_str(&format!("bytes */{len}")) {
+                    resp.headers_mut().insert(header::CONTENT_RANGE, v);
+                }
+                return resp;
+            }
+        },
+    };
+    let mut resp = (status, body).into_response();
+    let h = resp.headers_mut();
+    h.insert(
+        header::CONTENT_TYPE,
+        HeaderValue::from_static("application/octet-stream"),
+    );
+    h.insert(header::ACCEPT_RANGES, HeaderValue::from_static("bytes"));
+    h.insert(
+        header::CACHE_CONTROL,
+        HeaderValue::from_static("private, max-age=31536000, immutable"),
+    );
+    if let Some(v) = content_range.and_then(|v| HeaderValue::from_str(&v).ok()) {
+        h.insert(header::CONTENT_RANGE, v);
+    }
+    resp
 }

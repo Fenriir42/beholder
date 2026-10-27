@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod campaigns;
+pub mod compendium;
 pub mod db;
 pub mod http;
 pub mod hub;
@@ -24,14 +25,24 @@ use beholder_protocol::codec::MAX_FRAME_BYTES;
 use tokio::net::TcpListener;
 use tokio::sync::Semaphore;
 
+use crate::compendium::Library;
 use crate::db::Db;
 use crate::hub::Hub;
 use crate::rate_limit::RateLimiter;
 
 pub type AppState = Arc<Server>;
 
+#[derive(Debug, thiserror::Error)]
+pub enum StartError {
+    #[error("database: {0}")]
+    Db(#[from] db::DbError),
+    #[error("compendium: {0}")]
+    Bundle(#[from] compendium::BundleError),
+}
+
 pub struct Server {
     pub db: Db,
+    pub compendium: Library,
     pub hub: Hub,
     pub data_dir: PathBuf,
     pub hashing: Semaphore,
@@ -45,15 +56,16 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn open(data_dir: PathBuf) -> Result<AppState, db::DbError> {
+    pub fn open(data_dir: PathBuf) -> Result<AppState, StartError> {
         let db = Db::open(&data_dir.join("beholder.db"))?;
-        Ok(Self::with_db(db, data_dir))
+        Ok(Self::with_db(db, data_dir, Library::builtin()?))
     }
 
-    pub fn with_db(db: Db, data_dir: PathBuf) -> AppState {
+    pub fn with_db(db: Db, data_dir: PathBuf, compendium: Library) -> AppState {
         let minute = Duration::from_secs(60);
         Arc::new(Self {
             db,
+            compendium,
             hub: Hub::default(),
             data_dir,
             hashing: Semaphore::new(2),
@@ -77,6 +89,8 @@ pub fn router(state: AppState) -> Router {
         .route("/api/logout", post(http::logout).layer(small))
         .route("/api/images", post(http::upload_image))
         .route("/img/{hash}/{file}", get(http::get_image))
+        .route("/api/compendium", get(http::compendium_index))
+        .route("/api/compendium/{sha256}", get(http::compendium_bundle))
         .with_state(state)
 }
 

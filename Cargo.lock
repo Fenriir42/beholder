@@ -348,6 +348,7 @@ dependencies = [
  "tracing-subscriber",
  "uuid",
  "webp",
+ "zstd",
 ]
 
 [[package]]

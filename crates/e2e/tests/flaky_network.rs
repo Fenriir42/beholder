@@ -135,7 +135,11 @@ fn settled(v: &View, campaign_id: CampaignId) -> bool {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn no_lost_or_duplicated_commands_and_clients_converge() {
     let dir = tempfile::tempdir().unwrap();
-    let state = Server::with_db(Db::open_in_memory().unwrap(), dir.path().to_path_buf());
+    let state = Server::with_db(
+        Db::open_in_memory().unwrap(),
+        dir.path().to_path_buf(),
+        beholder_server::compendium::Library::builtin().unwrap(),
+    );
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let server_addr = listener.local_addr().unwrap();
     tokio::spawn(serve(listener, state.clone(), std::future::pending()));

@@ -29,7 +29,11 @@ struct Harness {
 async fn start() -> Harness {
     let _ = tracing_subscriber::fmt().with_test_writer().try_init();
     let dir = tempfile::tempdir().unwrap();
-    let state = Server::with_db(Db::open_in_memory().unwrap(), dir.path().to_path_buf());
+    let state = Server::with_db(
+        Db::open_in_memory().unwrap(),
+        dir.path().to_path_buf(),
+        beholder_server::compendium::Library::builtin().unwrap(),
+    );
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
     tokio::spawn(serve(listener, state.clone(), std::future::pending()));
@@ -537,4 +541,69 @@ async fn notes_reach_only_their_audience() {
     })
     .await;
     assert!(!p2.saw("SECRET-ALICE"));
+}
+
+async fn http_get(addr: SocketAddr, path: &str, headers: &[(&str, String)]) -> (u16, Vec<u8>) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut s = TcpStream::connect(addr).await.unwrap();
+    let mut req = format!("GET {path} HTTP/1.1\r\nHost: test\r\nConnection: close\r\n");
+    for (k, v) in headers {
+        req.push_str(&format!("{k}: {v}\r\n"));
+    }
+    req.push_str("\r\n");
+    s.write_all(req.as_bytes()).await.unwrap();
+    let mut raw = Vec::new();
+    s.read_to_end(&mut raw).await.unwrap();
+    let split = raw.windows(4).position(|w| w == b"\r\n\r\n").unwrap();
+    let head = String::from_utf8_lossy(&raw[..split]).to_string();
+    let status = head[9..12].parse().unwrap();
+    (status, raw[split + 4..].to_vec())
+}
+
+#[tokio::test]
+async fn compendium_bundles_download_with_auth_and_resume() {
+    use beholder_protocol::http::SourceInfo;
+    use sha2::{Digest, Sha256};
+    let h = start().await;
+    let token = h.user("reader").await;
+    let auth = vec![
+        ("Authorization", format!("Bearer {}", token.to_hex())),
+        ("x-beholder-protocol", PROTOCOL_VERSION.to_string()),
+    ];
+    let (status, _) = http_get(h.addr, "/api/compendium", &auth[1..]).await;
+    assert_eq!(status, 401, "the index needs a session");
+
+    let (status, body) = http_get(h.addr, "/api/compendium", &auth).await;
+    assert_eq!(status, 200);
+    let index: Vec<SourceInfo> = postcard::from_bytes(&body).unwrap();
+    let srd = index.iter().find(|s| s.id == "srd-5.2").unwrap();
+
+    let path = format!("/api/compendium/{}", srd.sha256);
+    let (status, full) = http_get(h.addr, &path, &auth).await;
+    assert_eq!(status, 200);
+    assert_eq!(full.len() as u64, srd.bytes);
+    let digest: String = Sha256::digest(&full)
+        .iter()
+        .map(|b| format!("{b:02x}"))
+        .collect();
+    assert_eq!(digest, srd.sha256);
+
+    let mut resume = auth.clone();
+    resume.push(("Range", "bytes=1000-".into()));
+    let (status, tail) = http_get(h.addr, &path, &resume).await;
+    assert_eq!(status, 206);
+    assert_eq!(tail, full[1000..]);
+    resume.pop();
+    resume.push(("Range", format!("bytes={}-", full.len())));
+    assert_eq!(http_get(h.addr, &path, &resume).await.0, 416);
+    assert_eq!(
+        http_get(
+            h.addr,
+            &format!("/api/compendium/{}", "0".repeat(64)),
+            &auth
+        )
+        .await
+        .0,
+        404
+    );
 }

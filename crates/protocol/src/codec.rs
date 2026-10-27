@@ -387,6 +387,13 @@ mod tests {
         ] {
             round_trip(&e);
         }
+        round_trip(&vec![SourceInfo {
+            id: "srd-5.2".into(),
+            name: "System Reference Document 5.2.1".into(),
+            rules: beholder_core::compendium::RulesVersion::R2024,
+            sha256: "ab".repeat(32),
+            bytes: 200_759,
+        }]);
         round_trip(&ImageUploaded {
             hash: ImageHash([5; 32]),
         });
