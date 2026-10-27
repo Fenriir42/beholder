@@ -379,6 +379,7 @@ name = "beholder-xtask"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "beholder-client-core",
  "beholder-core",
  "postcard",
  "serde_json",

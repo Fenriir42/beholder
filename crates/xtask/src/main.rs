@@ -1,3 +1,4 @@
+mod dnd_data;
 mod open5e;
 mod srd;
 
@@ -84,6 +85,37 @@ fn main() -> Result<()> {
             println!("data/open5e is up to date ({} bundles)", built.len());
             Ok(())
         }
+        ["dnd-data"] => {
+            use beholder_client_core::library_file::{FileFormat, parse_entry, read};
+            let out_dir = root().join("data/converted");
+            std::fs::create_dir_all(&out_dir)?;
+            let converted = dnd_data::convert_all(&root().join("data"))?;
+            if converted.is_empty() {
+                bail!("no dnd-data files found in data/");
+            }
+            for c in converted {
+                let entries = read(&c.json, FileFormat::Json)?;
+                let mut reasons: BTreeMap<String, usize> = BTreeMap::new();
+                for e in &entries {
+                    if let Err(r) = parse_entry(e) {
+                        *reasons.entry(r).or_default() += 1;
+                    }
+                }
+                std::fs::write(out_dir.join(&c.file), &c.json)?;
+                let invalid: usize = reasons.values().sum();
+                println!(
+                    "data/converted/{}: {} entries, {} would be rejected ({} bytes)",
+                    c.file,
+                    c.entries,
+                    invalid,
+                    c.json.len()
+                );
+                for (r, n) in reasons {
+                    println!("    {n} × {r}");
+                }
+            }
+            Ok(())
+        }
         ["show", bundle, keys @ ..] => {
             let path = if *bundle == "srd" {
                 root().join("data/srd-5.2/srd.bundle")
@@ -103,7 +135,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         _ => bail!(
-            "usage: cargo xtask srd [--check] | open5e [--check] | show <srd|bundle-id> [key...]"
+            "usage: cargo xtask srd [--check] | open5e [--check] | dnd-data | show <srd|bundle-id> [key...]"
         ),
     }
 }

@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+beholder-client-core.workspace = true
 beholder-core.workspace = true
 postcard.workspace = true
 serde_json = "1.0.154"
