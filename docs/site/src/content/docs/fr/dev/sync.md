@@ -46,6 +46,10 @@ Chaque campagne a un journal en ajout seul, avec un `seq` strictement croissant.
 
 Le contenu des règles ne passe pas par le WebSocket. Chaque source est un paquet préconstruit, identifié par son empreinte (postcard + zstd, ADR-0012). Après la connexion, le client lit `GET /api/compendium` (la liste des sources et leur SHA-256), télécharge les paquets qu'il n'a pas depuis `GET /api/compendium/{sha256}` (immuable, reprise possible avec `Range`), vérifie l'empreinte et indexe les entrées dans sa base SQLite locale avec FTS5. La recherche ne touche jamais le réseau.
 
+## Bibliothèque du serveur
+
+La bibliothèque a son propre journal et sa propre séquence, hors de toute campagne. Ses commandes passent par la file d'envoi et la déduplication habituelles. Chaque modification diffuse `LibraryChanged { seq }` à toutes les connexions ; la tâche compendium du client appelle alors `GET /api/library/changes/{after}`, qui renvoie les modifications depuis cette position ou, au-delà d'une fenêtre de 1 000 modifications, rien : le client télécharge alors le paquet de la bibliothèque depuis l'index du compendium. Seule cette tâche écrit les données de la bibliothèque côté client. Voir l'ADR-0014.
+
 ## Garanties d'ordre
 
 Tout accès à la base passe par une seule connexion (`Db::call`). Le commit d'une commande et sa diffusion se font dans le même appel, de même que le rattrapage et l'abonnement d'une nouvelle connexion. Un client ne peut donc ni manquer un événement ni le recevoir dans le désordre.

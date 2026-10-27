@@ -46,6 +46,10 @@ Each campaign has an append-only log with a monotonically increasing `seq`. A co
 
 Rules content doesn't travel over the WebSocket. Each source is a prebuilt, content-hashed bundle (postcard + zstd, ADR-0012). After connecting, the client fetches `GET /api/compendium` (the list of sources and their SHA-256), downloads any bundle it doesn't have from `GET /api/compendium/{sha256}` (immutable, resumable with `Range`), verifies the hash, and indexes the entries in its local SQLite with FTS5. Search never touches the network.
 
+## Server library
+
+The library has its own log and sequence, outside any campaign. Library commands go through the normal outbox and dedupe. Each change broadcasts `LibraryChanged { seq }` to every connection; the client's compendium task then calls `GET /api/library/changes/{after}`, which returns the changes since that position or, beyond a 1,000-change window, nothing, in which case the client downloads the library bundle from the compendium index. Only that task writes library data on the client. See ADR-0014.
+
 ## Ordering guarantees
 
 All database work goes through one connection (`Db::call`). A command's commit and its fan-out happen in the same call, and so do a new connection's catch-up and subscription. So a client can't miss an event or receive one out of order.

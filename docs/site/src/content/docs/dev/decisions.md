@@ -22,3 +22,4 @@ The full records are in `docs/decisions/`. Each one covers context, decision, al
 | 0011 | Notes: per-user filtering and frame sharing, reveal as upsert/removal, snapshot catch-up across visibility changes, conflict copies, protocol v2, sanitized Markdown with pulldown-cmark. |
 | 0012 | Compendium: SRD vendored from 5e-srd-api (5e-database is archived), dev-only `beholder-xtask` converter, committed reproducible bundle, served immutable with Range, FTS5 search on the client. |
 | 0013 | Open5e: per-book bundles converted from a pinned commit (raw data not vendored), generated OGL notices, per-campaign sources (SRD included), game-system tag, name-clash priority with 'Also in', protocol v3. |
+| 0014 | Server library: author or any DM edits, stale saves refused, notice over WebSocket and changes over HTTP, library as top-priority source, per-campaign hidden entries (protocol v4), JSON/YAML files with serde_norway. |

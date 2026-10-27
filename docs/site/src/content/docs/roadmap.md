@@ -28,16 +28,16 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 - The DM chooses the rules sources per campaign; players download only those.
 - Same name in several sources: shown once by priority, with the other versions under "Also in".
 - Credits screen with every licence notice.
+- **Server library:** your group's own entries (homebrew and content from books you own), shared on your server, with an editor per entry type, JSON and YAML import and export, and priority over other sources. The DM can hide single entries from a campaign's players.
 
 ## In progress
 
 ### Phase 3, continued
-- **Server library:** your group's own entries (homebrew and content from books you own), with a form editor and JSON/YAML import and export. Library entries win name clashes.
+- **Paste import:** paste a stat block or a whole chapter, review the parsed entries, accept some or all.
 
 ## Planned
 
 ### Phase 3, remaining
-- **Paste import:** paste a stat block or a whole chapter, review the parsed entries, accept some or all.
 - **Bulk import:** large JSON files with mapping profiles, undoable as a batch; the setup-time import from an external repository.
 
 ### Phase 4: Character sheets
@@ -68,6 +68,8 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 - Rules glossary entries (weapon properties, masteries, skills) aren't in the compendium yet.
 - The OGL notices of Open5e books are generated from their metadata, not copied from the books.
 - Updating the app can reset its local cache, dropping changes still queued offline at that moment.
+- Library export saves to the Downloads folder; there's no save dialog yet.
+- Hiding single entries works for the server library only, not for the SRD or Open5e books.
 
 ## Sizes
 
@@ -75,7 +77,8 @@ Measured on Linux, release builds.
 
 | Artifact | Size |
 |---|---:|
-| Interface (WASM, after `wasm-opt -Oz`) | 940 KB (384 KB gzipped) |
+| Interface (WASM, after `wasm-opt -Oz`) | 1.05 MB (426 KB gzipped) |
+| Desktop app binary (Linux) | 5.7 MB |
 | SRD 5.2 download | 200 KB |
 | All 20 Open5e books | 1.6 MB |
 | Server RAM, idle / peak (40 MP image upload) | 6 MB / 157 MB |

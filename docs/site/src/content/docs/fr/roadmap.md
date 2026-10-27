@@ -28,16 +28,16 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 - Le MJ choisit les sources de règles par campagne ; les joueurs ne téléchargent que celles-là.
 - Même nom dans plusieurs sources : affiché une fois selon la priorité, les autres versions sous « Aussi dans ».
 - Écran de crédits avec toutes les mentions de licence.
+- **Bibliothèque du serveur :** les entrées propres à votre groupe (création maison et contenu des livres que vous possédez), partagées sur votre serveur, avec un éditeur par type d'entrée, l'import/export JSON et YAML et la priorité sur les autres sources. Le MJ peut masquer une entrée aux joueurs d'une campagne.
 
 ## En cours
 
 ### Phase 3, suite
-- **Bibliothèque du serveur :** les entrées propres à votre groupe (création maison et contenu des livres que vous possédez), avec un éditeur à formulaires et l'import/export JSON et YAML. Les entrées de la bibliothèque passent en priorité en cas de nom en double.
+- **Import par collage :** coller un profil ou un chapitre entier, relire les entrées détectées, en accepter tout ou partie.
 
 ## Prévu
 
 ### Phase 3, reste
-- **Import par collage :** coller un profil ou un chapitre entier, relire les entrées détectées, en accepter tout ou partie.
 - **Import en masse :** gros fichiers JSON avec profils de correspondance, annulables d'un bloc ; import depuis un dépôt externe à l'installation du serveur.
 
 ### Phase 4 : fiches de personnage
@@ -68,6 +68,8 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 - Les entrées du glossaire des règles (propriétés d'armes, bottes d'armes, compétences) ne sont pas encore dans le compendium.
 - Les mentions OGL des livres Open5e sont générées à partir de leurs métadonnées, pas copiées des livres.
 - Une mise à jour de l'application peut réinitialiser son cache local et perdre les modifications encore en attente hors ligne à ce moment.
+- L'export de la bibliothèque enregistre dans le dossier Téléchargements ; il n'y a pas encore de fenêtre d'enregistrement.
+- Masquer une entrée ne fonctionne que pour la bibliothèque du serveur, pas pour le SRD ni les livres Open5e.
 
 ## Tailles
 
@@ -75,7 +77,8 @@ Mesurées sous Linux, compilations de production.
 
 | Élément | Taille |
 |---|---:|
-| Interface (WASM, après `wasm-opt -Oz`) | 940 Ko (384 Ko compressé) |
+| Interface (WASM, après `wasm-opt -Oz`) | 1,05 Mo (426 Ko compressé) |
+| Application de bureau (binaire Linux) | 5,7 Mo |
 | Téléchargement du SRD 5.2 | 200 Ko |
 | Les 20 livres Open5e | 1,6 Mo |
 | RAM du serveur, au repos / en pointe (envoi d'une image de 40 MP) | 6 Mo / 157 Mo |
