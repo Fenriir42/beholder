@@ -19,17 +19,17 @@ export default defineConfig({
         {
           label: 'Players',
           translations: { fr: 'Joueurs' },
-          autogenerate: { directory: 'players' },
+          items: [{ autogenerate: { directory: 'players' } }],
         },
         {
           label: 'Server admin',
           translations: { fr: 'Administration du serveur' },
-          autogenerate: { directory: 'admin' },
+          items: [{ autogenerate: { directory: 'admin' } }],
         },
         {
           label: 'Developers',
           translations: { fr: 'Développement' },
-          autogenerate: { directory: 'dev' },
+          items: [{ autogenerate: { directory: 'dev' } }],
         },
       ],
     }),
