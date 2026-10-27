@@ -2,6 +2,7 @@ pub mod cache;
 pub mod compendium;
 pub mod connection;
 pub mod http;
+pub mod library_file;
 pub mod view;
 
 use std::collections::{HashMap, HashSet};
@@ -11,8 +12,11 @@ use std::sync::{Arc, Mutex, MutexGuard};
 use beholder_core::compendium::{
     Alternative, Entry, FacetOptions, Hit, LicenseText, SearchQuery, SourceMeta,
 };
-use beholder_core::{CampaignId, CommandId, UserId};
+use beholder_core::compendium::{Kind, RulesVersion};
+use beholder_core::library::{ImportSummary, LibraryDraft, LibraryOp};
+use beholder_core::{CampaignId, CommandId, LibraryId, UserId};
 use beholder_protocol::{Command, CommandKind, RejectReason, ServerMsg, SessionToken};
+use library_file::{FileError, FileFormat};
 use tokio::sync::mpsc;
 
 use crate::cache::{Cache, CacheError};
@@ -25,6 +29,14 @@ pub enum ConnectionState {
     Online,
     Reconnecting { queued: usize },
     Offline { queued: usize },
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum ClientError {
+    #[error("cache: {0}")]
+    Cache(#[from] CacheError),
+    #[error("file: {0}")]
+    File(#[from] FileError),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -53,6 +65,7 @@ pub(crate) struct Shared {
     server_url: String,
     compendium_busy: AtomicBool,
     compendium_synced: Mutex<Option<Vec<String>>>,
+    library_dirty: AtomicBool,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -128,6 +141,11 @@ impl Shared {
                     set.remove(&user_id);
                 }
             }
+            ServerMsg::LibraryChanged { .. } => {
+                self.library_dirty
+                    .store(true, std::sync::atomic::Ordering::Release);
+                return Ok(());
+            }
             ServerMsg::Pong { .. } | ServerMsg::HelloOk(_) | ServerMsg::HelloErr(_) => {
                 return Ok(());
             }
@@ -159,6 +177,7 @@ impl Client {
             server_url: server_url.to_owned(),
             compendium_busy: AtomicBool::new(false),
             compendium_synced: Mutex::new(None),
+            library_dirty: AtomicBool::new(false),
         });
         tokio::spawn(connection::run(
             Arc::clone(&shared),
@@ -221,6 +240,85 @@ impl Client {
 
     pub fn facet_options(&self) -> Result<FacetOptions, CacheError> {
         self.shared.with_cache(|c| c.facet_options())
+    }
+    pub fn library_save(&self, draft: LibraryDraft, base_version: u32) -> Result<(), CacheError> {
+        self.submit(CommandKind::Library {
+            op: LibraryOp::Save {
+                draft,
+                base_version,
+            },
+        })
+        .map(|_| ())
+    }
+
+    pub fn library_delete(&self, id: LibraryId) -> Result<(), CacheError> {
+        self.submit(CommandKind::Library {
+            op: LibraryOp::Delete { id },
+        })
+        .map(|_| ())
+    }
+
+    pub fn library_export(&self, format: FileFormat) -> Result<String, ClientError> {
+        let entries = self.shared.with_cache(|c| c.library_entries())?;
+        Ok(library_file::export(&entries, format)?)
+    }
+
+    pub fn library_import(
+        &self,
+        text: &str,
+        format: FileFormat,
+    ) -> Result<ImportSummary, ClientError> {
+        let file = library_file::read(text, format)?;
+        let existing = self.shared.with_cache(|c| c.library_entries())?;
+        let key = |kind: Kind, name: &str, book: Option<&str>, rules: Option<RulesVersion>| {
+            (
+                kind,
+                name.to_lowercase(),
+                book.map(str::to_lowercase),
+                rules,
+            )
+        };
+        let mut seen: HashSet<_> = existing
+            .iter()
+            .map(|e| key(e.facets.kind(), &e.name, e.book.as_deref(), e.rules))
+            .collect();
+        let mut summary = ImportSummary::default();
+        for (i, f) in file.iter().enumerate() {
+            let p = match library_file::parse_entry(f) {
+                Ok(p) => p,
+                Err(reason) => {
+                    summary
+                        .invalid
+                        .push(format!("#{} {}: {reason}", i + 1, f.name));
+                    continue;
+                }
+            };
+            let k = key(
+                p.facets.kind(),
+                p.name.as_str(),
+                p.book.as_ref().map(|b| b.as_str()),
+                Some(p.rules),
+            );
+            if !seen.insert(k) {
+                summary.skipped += 1;
+                continue;
+            }
+            let draft = LibraryDraft {
+                id: LibraryId(uuid::Uuid::now_v7()),
+                name: p.name,
+                facets: p.facets,
+                text: p.text,
+                book: p.book,
+                rules: p.rules,
+            };
+            if let Err(e) = draft.check_facets() {
+                summary.invalid.push(format!("#{} {}: {e}", i + 1, f.name));
+                continue;
+            }
+            self.library_save(draft, 0)?;
+            summary.added += 1;
+        }
+        Ok(summary)
     }
 
     pub fn state(&self) -> ConnectionState {

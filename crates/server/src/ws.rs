@@ -227,7 +227,9 @@ async fn handle_command(
         op: CampaignOp::SetSources { sources },
         ..
     } = &cmd.kind
-        && sources.iter().any(|s| !state.compendium.has(s))
+        && sources
+            .iter()
+            .any(|s| s != beholder_core::compendium::LIBRARY && !state.compendium.has(s))
     {
         send_reply(Reply::Reject(RejectReason::NotFound));
         return Ok(());
@@ -254,6 +256,11 @@ fn publish(
     handled: &Handled,
     actor: UserId,
 ) -> Result<(), DbError> {
+    if let Some(seq) = handled.library_seq
+        && let Some(out) = Outgoing::control(ServerMsg::LibraryChanged { seq })
+    {
+        state.hub.broadcast_all(&out);
+    }
     let Some(campaign_id) = handled.campaign_id else {
         return Ok(());
     };

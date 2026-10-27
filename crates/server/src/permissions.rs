@@ -18,7 +18,8 @@ pub fn can_apply(role: Role, op: &CampaignOp) -> bool {
         | CampaignOp::SetCover { .. }
         | CampaignOp::RegenerateInvite
         | CampaignOp::UpdateSettings(_)
-        | CampaignOp::SetSources { .. } => role == Role::Dm,
+        | CampaignOp::SetSources { .. }
+        | CampaignOp::HideEntry { .. } => role == Role::Dm,
     }
 }
 
@@ -60,7 +61,8 @@ pub fn event_for(
         | CampaignEvent::CoverChanged { .. }
         | CampaignEvent::MemberJoined { .. }
         | CampaignEvent::SettingsChanged { .. }
-        | CampaignEvent::SourcesChanged { .. } => Some(event.clone()),
+        | CampaignEvent::SourcesChanged { .. }
+        | CampaignEvent::EntryHidden { .. } => Some(event.clone()),
         CampaignEvent::NoteCreated { note } => {
             can_read_note(viewer, settings, note).then(|| event.clone())
         }
@@ -106,7 +108,12 @@ pub fn campaign_for(viewer: Viewer, campaign: &Campaign) -> Campaign {
             .cloned()
             .collect(),
         sources: campaign.sources.clone(),
+        hidden: campaign.hidden.clone(),
     }
+}
+
+pub fn can_edit_library(actor: UserId, author: UserId, actor_is_dm_somewhere: bool) -> bool {
+    actor == author || actor_is_dm_somewhere
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -153,7 +160,8 @@ impl Outgoing {
             | ServerMsg::CampaignRemoved { .. }
             | ServerMsg::Presence { .. }
             | ServerMsg::PresenceChanged { .. }
-            | ServerMsg::Pong { .. } => Some(Self(msg)),
+            | ServerMsg::Pong { .. }
+            | ServerMsg::LibraryChanged { .. } => Some(Self(msg)),
         }
     }
 
@@ -311,6 +319,19 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn library_edit_matrix() {
+        let (author, other) = (uid(P1), uid(P2));
+        assert!(
+            can_edit_library(author, author, false),
+            "authors edit their entries"
+        );
+        assert!(
+            !can_edit_library(other, author, false),
+            "other players can't"
+        );
+        assert!(can_edit_library(other, author, true), "any DM can tidy up");
+    }
 
     #[test]
     fn note_edit_and_manage_matrix() {
@@ -441,6 +462,14 @@ mod tests {
                 true,
                 false,
             ),
+            (
+                CampaignOp::HideEntry {
+                    id: beholder_core::LibraryId(Uuid::from_bytes([7; 16])),
+                    hidden: true,
+                },
+                true,
+                false,
+            ),
         ]
     }
 
@@ -493,6 +522,14 @@ mod tests {
             (
                 CampaignEvent::SourcesChanged {
                     sources: vec!["tob3".into()],
+                },
+                true,
+                true,
+            ),
+            (
+                CampaignEvent::EntryHidden {
+                    id: beholder_core::LibraryId(Uuid::from_bytes([7; 16])),
+                    hidden: true,
                 },
                 true,
                 true,

@@ -110,6 +110,26 @@ mod tests {
         c.apply(&CampaignEvent::NoteCreated { note: note() });
         c
     }
+    fn lid(n: u8) -> LibraryId {
+        LibraryId(Uuid::from_bytes([n; 16]))
+    }
+
+    fn library_entry() -> library::LibraryEntry {
+        library::LibraryEntry {
+            id: lid(1),
+            author: uid(1),
+            name: NoteTitle::new("Ember Imp").unwrap(),
+            facets: compendium::Facets::Monster {
+                cr: compendium::ChallengeRating::from_eighths(4),
+                creature_type: "Fiend".into(),
+                size: "Tiny".into(),
+            },
+            text: NoteBody::new("**AC** 13".into()).unwrap(),
+            book: Some(NoteTitle::new("Homebrew").unwrap()),
+            rules: compendium::RulesVersion::R2024,
+            version: 2,
+        }
+    }
 
     fn nid(n: u8) -> NoteId {
         NoteId(Uuid::from_bytes([n; 16]))
@@ -165,6 +185,10 @@ mod tests {
             CampaignEvent::SourcesChanged {
                 sources: vec!["srd-5.2".into(), "tob3".into()],
             },
+            CampaignEvent::EntryHidden {
+                id: lid(1),
+                hidden: false,
+            },
         ]
     }
 
@@ -180,6 +204,10 @@ mod tests {
             CampaignOp::UpdateSettings(CampaignSettings::default()),
             CampaignOp::SetSources {
                 sources: vec!["srd-5.2".into(), "tob3".into()],
+            },
+            CampaignOp::HideEntry {
+                id: lid(1),
+                hidden: true,
             },
         ];
         let mut msgs = vec![
@@ -240,6 +268,27 @@ mod tests {
                 },
             })
         }));
+        let e = library_entry();
+        let library_ops = vec![
+            library::LibraryOp::Save {
+                draft: library::LibraryDraft {
+                    id: e.id,
+                    name: e.name,
+                    facets: e.facets,
+                    text: e.text,
+                    book: e.book,
+                    rules: e.rules,
+                },
+                base_version: 1,
+            },
+            library::LibraryOp::Delete { id: lid(1) },
+        ];
+        msgs.extend(library_ops.into_iter().map(|op| {
+            ClientMsg::Command(Command {
+                id: cmd_id(9),
+                kind: CommandKind::Library { op },
+            })
+        }));
         msgs
     }
 
@@ -253,6 +302,7 @@ mod tests {
             RejectReason::IdConflict,
             RejectReason::Expired,
             RejectReason::RateLimited,
+            RejectReason::Stale,
         ];
         let mut msgs = vec![
             ServerMsg::HelloOk(HelloOk {
@@ -300,6 +350,7 @@ mod tests {
                 online: false,
             },
             ServerMsg::Pong { t: 0 },
+            ServerMsg::LibraryChanged { seq: 41 },
         ];
         msgs.extend(reasons.map(|reason| ServerMsg::Reject {
             id: cmd_id(2),
@@ -317,7 +368,8 @@ mod tests {
             CommandKind::CreateCampaign { .. }
             | CommandKind::JoinCampaign { .. }
             | CommandKind::Campaign { .. }
-            | CommandKind::Note { .. } => {}
+            | CommandKind::Note { .. }
+            | CommandKind::Library { .. } => {}
         }
         match e {
             CampaignEvent::Created { .. }
@@ -330,7 +382,8 @@ mod tests {
             | CampaignEvent::NoteEdited { .. }
             | CampaignEvent::NoteAudienceChanged { .. }
             | CampaignEvent::NoteDeleted { .. }
-            | CampaignEvent::SourcesChanged { .. } => {}
+            | CampaignEvent::SourcesChanged { .. }
+            | CampaignEvent::EntryHidden { .. } => {}
         }
         match n {
             NoteOp::Create { .. }
@@ -348,7 +401,8 @@ mod tests {
             | ServerMsg::CampaignRemoved { .. }
             | ServerMsg::Presence { .. }
             | ServerMsg::PresenceChanged { .. }
-            | ServerMsg::Pong { .. } => {}
+            | ServerMsg::Pong { .. }
+            | ServerMsg::LibraryChanged { .. } => {}
         }
     }
 
@@ -403,6 +457,25 @@ mod tests {
             sha256: "ab".repeat(32),
             bytes: 200_759,
         }]);
+        round_trip(&LibraryChanges {
+            head: 7,
+            changes: Some(vec![
+                LibraryChange {
+                    seq: 6,
+                    event: library::LibraryEvent::Saved {
+                        entry: library_entry(),
+                    },
+                },
+                LibraryChange {
+                    seq: 7,
+                    event: library::LibraryEvent::Deleted { id: lid(1) },
+                },
+            ]),
+        });
+        round_trip(&LibraryChanges {
+            head: 9000,
+            changes: None,
+        });
         round_trip(&ImageUploaded {
             hash: ImageHash([5; 32]),
         });

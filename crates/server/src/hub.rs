@@ -117,6 +117,14 @@ impl Hub {
             }
         }
     }
+    pub fn broadcast_all(&self, out: &Outgoing) {
+        let mut inner = self.lock();
+        let Some(frame) = encode(out) else { return };
+        let targets: Vec<ConnId> = inner.conns.keys().copied().collect();
+        for id in targets {
+            push(&mut inner, id, frame.clone());
+        }
+    }
 
     pub fn broadcast(&self, campaign: CampaignId, out: &Outgoing) {
         let mut inner = self.lock();

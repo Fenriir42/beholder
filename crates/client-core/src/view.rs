@@ -1,6 +1,7 @@
 use std::collections::{HashMap, HashSet};
 
-use beholder_core::{Campaign, CampaignId, Member, NoteId, Role, Seq, User, UserId};
+use beholder_core::library::LibraryOp;
+use beholder_core::{Campaign, CampaignId, LibraryId, Member, NoteId, Role, Seq, User, UserId};
 use beholder_protocol::{Command, CommandKind};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -17,6 +18,7 @@ pub struct View {
     pub user: Option<User>,
     pub campaigns: Vec<CampaignView>,
     pub pending_joins: usize,
+    pub pending_library: Vec<LibraryId>,
 }
 
 pub fn compute(
@@ -36,6 +38,7 @@ pub fn compute(
         })
         .collect();
     let mut pending_joins = 0;
+    let mut pending_library = Vec::new();
     for cmd in outbox {
         match &cmd.kind {
             CommandKind::CreateCampaign { campaign_id, title } => {
@@ -57,6 +60,10 @@ pub fn compute(
                 });
             }
             CommandKind::JoinCampaign { .. } => pending_joins += 1,
+            CommandKind::Library { op } => pending_library.push(match op {
+                LibraryOp::Save { draft, .. } => draft.id,
+                LibraryOp::Delete { id } => *id,
+            }),
             CommandKind::Campaign { campaign_id, op } => {
                 let Some(view) = campaigns.iter_mut().find(|c| c.campaign.id == *campaign_id)
                 else {
@@ -100,6 +107,7 @@ pub fn compute(
         user,
         campaigns,
         pending_joins,
+        pending_library,
     }
 }
 

@@ -2,9 +2,13 @@ use core::fmt;
 
 use serde::{Deserialize, Serialize};
 
-pub const BUNDLE_FORMAT: u16 = 2;
+use crate::ids::UserId;
+
+pub const BUNDLE_FORMAT: u16 = 3;
 
 pub const SRD: &str = "srd-5.2";
+
+pub const LIBRARY: &str = "library";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RulesVersion {
@@ -32,6 +36,9 @@ pub struct SourceMeta {
 
 impl SourceMeta {
     pub fn priority(&self) -> u8 {
+        if self.id == LIBRARY {
+            return 0;
+        }
         if self.id == SRD {
             return 1;
         }
@@ -53,6 +60,7 @@ pub struct LicenseText {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Bundle {
     pub format: u16,
+    pub seq: u64,
     pub source: SourceMeta,
     pub licenses: Vec<LicenseText>,
     pub entries: Vec<Entry>,
@@ -64,6 +72,15 @@ pub struct Entry {
     pub name: String,
     pub facets: Facets,
     pub text: String,
+    pub book: Option<String>,
+    pub rules: Option<RulesVersion>,
+    pub library: Option<LibraryMeta>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LibraryMeta {
+    pub author: UserId,
+    pub version: u32,
 }
 
 #[derive(
@@ -218,6 +235,7 @@ pub struct SearchQuery {
     pub rarity: Option<String>,
     pub source: Option<String>,
     pub sources: Vec<String>,
+    pub hidden: Vec<String>,
 }
 
 impl SearchQuery {

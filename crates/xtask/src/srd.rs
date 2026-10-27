@@ -33,6 +33,7 @@ const EXPECTED: [(Kind, usize); 12] = [
 pub fn bundle(dir: &Path) -> Result<Vec<u8>> {
     let entries = convert(dir)?;
     let bundle = Bundle {
+        seq: 0,
         format: BUNDLE_FORMAT,
         source: SourceMeta {
             id: SRD.into(),
@@ -269,6 +270,9 @@ fn spell(v: &Value) -> Result<Entry> {
         write!(t, "\n\n**{label}** {}", paragraphs(h))?;
     }
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Spell, v)?,
         name: s(v, "name")?.to_owned(),
         facets: Facets::Spell {
@@ -487,6 +491,9 @@ fn monster(v: &Value) -> Result<Entry> {
     }
 
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Monster, v)?,
         name: s(v, "name")?.to_owned(),
         facets: Facets::Monster {
@@ -555,6 +562,9 @@ fn magic_item(v: &Value) -> Result<Entry> {
         write!(t, "\n\n*Variants:* {}", variants.join(", "))?;
     }
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::MagicItem, v)?,
         name: s(v, "name")?.to_owned(),
         facets: Facets::MagicItem {
@@ -685,6 +695,9 @@ fn equipment(v: &Value) -> Result<Entry> {
         write!(t, "\n\n**Contains** {}", contents.join(", "))?;
     }
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Equipment, v)?,
         name: s(v, "name")?.to_owned(),
         facets: Facets::Equipment { category },
@@ -819,6 +832,9 @@ fn class(v: &Value, features: &[Value], levels: &[Value]) -> Result<Entry> {
         write!(t, "\n\n**Subclasses** {}", subclasses.join(", "))?;
     }
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Class, v)?,
         name: name.to_owned(),
         facets: Facets::Class,
@@ -857,6 +873,9 @@ fn subclass(v: &Value) -> Result<Entry> {
         write!(t, "\n\n### Level {lv}: {n}\n\n{d}")?;
     }
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Subclass, v)?,
         name: s(v, "name")?.to_owned(),
         facets: Facets::Subclass { class },
@@ -907,6 +926,9 @@ fn species(v: &Value, traits: &[Value]) -> Result<Entry> {
         write!(t, "\n\n**Options** {}", sub.join(", "))?;
     }
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Species, v)?,
         name: s(v, "name")?.to_owned(),
         facets: Facets::Species,
@@ -922,6 +944,9 @@ fn species_trait(v: &Value) -> Result<Entry> {
     }
     t.push_str(&text_of(v, "description"));
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Trait, v)?,
         name: s(v, "name")?.to_owned(),
         facets: Facets::Trait,
@@ -957,6 +982,9 @@ fn background(v: &Value) -> Result<Entry> {
         }
     }
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Background, v)?,
         name: s(v, "name")?.to_owned(),
         facets: Facets::Background,
@@ -986,6 +1014,9 @@ fn feat(v: &Value) -> Result<Entry> {
     }
     write!(t, "\n\n{}", text_of(v, "description"))?;
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Feat, v)?,
         name: s(v, "name")?.to_owned(),
         facets: Facets::Feat { category },
@@ -1005,6 +1036,9 @@ fn feature(v: &Value) -> Result<Entry> {
         None => format!("*{class} feature, level {level}*"),
     };
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Feature, v)?,
         name: s(v, "name")?.to_owned(),
         facets: Facets::Feature { class, level },
@@ -1014,6 +1048,9 @@ fn feature(v: &Value) -> Result<Entry> {
 
 fn condition(v: &Value) -> Result<Entry> {
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Condition, v)?,
         name: s(v, "name")?.to_owned(),
         facets: Facets::Condition,

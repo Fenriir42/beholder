@@ -1,4 +1,5 @@
 use beholder_core::compendium::{GameSystem, RulesVersion};
+use beholder_core::library::LibraryEvent;
 use beholder_core::{DisplayName, ImageHash, Password, User, Username};
 use serde::{Deserialize, Serialize};
 
@@ -54,6 +55,18 @@ pub struct SourceInfo {
     pub rules: RulesVersion,
     pub sha256: String,
     pub bytes: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LibraryChange {
+    pub seq: u64,
+    pub event: LibraryEvent,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LibraryChanges {
+    pub head: u64,
+    pub changes: Option<Vec<LibraryChange>>,
 }
 
 pub const MAX_BUNDLE_BYTES: usize = 64 * 1024 * 1024;

@@ -157,7 +157,8 @@ pub(crate) fn project(
         | CampaignEvent::MemberJoined { .. }
         | CampaignEvent::InviteRegenerated { .. }
         | CampaignEvent::SettingsChanged { .. }
-        | CampaignEvent::SourcesChanged { .. } => {}
+        | CampaignEvent::SourcesChanged { .. }
+        | CampaignEvent::EntryHidden { .. } => {}
     }
     Ok(())
 }

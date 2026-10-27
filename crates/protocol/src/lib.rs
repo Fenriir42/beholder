@@ -6,13 +6,14 @@ pub mod http;
 
 use core::fmt;
 
+use beholder_core::library::LibraryOp;
 use beholder_core::{
     Campaign, CampaignEvent, CampaignId, CampaignOp, CampaignTitle, CommandId, InviteCode, NoteOp,
     Seq, UnixMillis, User, UserId, ValidationError,
 };
 use serde::{Deserialize, Serialize};
 
-pub const PROTOCOL_VERSION: u16 = 3;
+pub const PROTOCOL_VERSION: u16 = 4;
 
 pub const PROTOCOL_HEADER: &str = "x-beholder-protocol";
 
@@ -73,6 +74,9 @@ pub enum CommandKind {
         campaign_id: CampaignId,
         op: NoteOp,
     },
+    Library {
+        op: LibraryOp,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -110,6 +114,9 @@ pub enum ServerMsg {
     Pong {
         t: u64,
     },
+    LibraryChanged {
+        seq: u64,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -135,6 +142,7 @@ pub enum RejectReason {
     IdConflict,
     Expired,
     RateLimited,
+    Stale,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

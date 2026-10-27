@@ -2,8 +2,8 @@ use core::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::compendium::SRD;
-use crate::ids::{CampaignId, ImageHash, NoteId, UserId};
+use crate::compendium::{LIBRARY, SRD};
+use crate::ids::{CampaignId, ImageHash, LibraryId, NoteId, UserId};
 use crate::note::{Audience, Note, NoteBody, NoteTitle};
 use crate::user::{DisplayName, ValidationError, clean_text};
 
@@ -143,9 +143,20 @@ pub enum CampaignOp {
     RegenerateInvite,
     UpdateSettings(CampaignSettings),
     SetSources { sources: Vec<String> },
+    HideEntry { id: LibraryId, hidden: bool },
 }
 
 pub const MAX_SOURCES: usize = 64;
+
+pub fn set_hidden(list: &mut Vec<LibraryId>, id: LibraryId, hidden: bool) {
+    match list.binary_search(&id) {
+        Ok(i) if !hidden => {
+            list.remove(i);
+        }
+        Err(i) if hidden => list.insert(i, id),
+        _ => {}
+    }
+}
 
 impl CampaignOp {
     pub fn predicted_event(&self) -> Option<CampaignEvent> {
@@ -166,6 +177,10 @@ impl CampaignOp {
                 (unique.len() <= MAX_SOURCES)
                     .then_some(CampaignEvent::SourcesChanged { sources: unique })
             }
+            Self::HideEntry { id, hidden } => Some(CampaignEvent::EntryHidden {
+                id: *id,
+                hidden: *hidden,
+            }),
         }
     }
 }
@@ -212,6 +227,10 @@ pub enum CampaignEvent {
     SourcesChanged {
         sources: Vec<String>,
     },
+    EntryHidden {
+        id: LibraryId,
+        hidden: bool,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -224,6 +243,7 @@ pub struct Campaign {
     pub members: Vec<Member>,
     pub notes: Vec<Note>,
     pub sources: Vec<String>,
+    pub hidden: Vec<LibraryId>,
 }
 
 impl Campaign {
@@ -236,7 +256,8 @@ impl Campaign {
             invite_code: None,
             members: vec![dm],
             notes: Vec::new(),
-            sources: vec![SRD.to_owned()],
+            sources: vec![SRD.to_owned(), LIBRARY.to_owned()],
+            hidden: Vec::new(),
         }
     }
 
@@ -288,6 +309,7 @@ impl Campaign {
                 }
             }
             CampaignEvent::SourcesChanged { sources } => self.sources = sources.clone(),
+            CampaignEvent::EntryHidden { id, hidden } => set_hidden(&mut self.hidden, *id, *hidden),
         }
     }
 

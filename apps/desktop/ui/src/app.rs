@@ -107,8 +107,8 @@ fn reject_key(r: RejectReason) -> &'static str {
         RejectReason::Invalid(_) => "reject-invalid",
         RejectReason::UnknownImage => "reject-image",
         RejectReason::IdConflict => "reject-conflict",
-        RejectReason::Expired => "reject-expired",
-        RejectReason::RateLimited => "err-rate-limited",
+        RejectReason::Expired => "reject-expired",        RejectReason::RateLimited => "err-rate-limited",
+        RejectReason::Stale => "reject-stale",
     }
 }
 

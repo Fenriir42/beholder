@@ -113,6 +113,7 @@ reject-invalid = The server refused an invalid value.
 reject-image = The image wasn't uploaded. Try again.
 reject-conflict = That change conflicted with another one.
 reject-expired = A change waited too long offline and was dropped.
+reject-stale = Someone else changed this in the meantime. Reload it and make your change again.
 
 ## Notes
 notes-title = Notes

@@ -112,6 +112,7 @@ reject-invite = Aucune campagne n'utilise ce code d'invitation.
 reject-invalid = Le serveur a refusé une valeur invalide.
 reject-image = L'image n'a pas été envoyée. Réessayez.
 reject-conflict = Cette modification est entrée en conflit avec une autre.
+reject-stale = Quelqu'un d'autre l'a modifié entre-temps. Rechargez-le et refaites votre modification.
 reject-expired = Une modification est restée trop longtemps hors ligne et a été abandonnée.
 
 ## Notes

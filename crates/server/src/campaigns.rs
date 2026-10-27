@@ -1,13 +1,14 @@
 use beholder_core::{
     Campaign, CampaignEvent, CampaignId, CampaignOp, CampaignSettings, CampaignTitle,
-    CombatVisibility, CommandId, DisplayName, ImageHash, InviteCode, Member, NoteId, Role, Seq,
-    UnixMillis, User, UserId, ValidationError,
+    CombatVisibility, CommandId, DisplayName, ImageHash, InviteCode, LibraryId, Member, NoteId,
+    Role, Seq, UnixMillis, User, UserId, ValidationError,
 };
 use beholder_protocol::{Command, CommandKind, EventEnvelope, RejectReason};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::{Deserialize, Serialize};
 
 use crate::db::DbError;
+use crate::library;
 use crate::notes;
 use crate::permissions::{self, Viewer};
 
@@ -31,6 +32,7 @@ pub struct Handled {
     pub campaign_id: Option<CampaignId>,
     pub events: Vec<EventEnvelope>,
     pub joined: Option<Role>,
+    pub library_seq: Option<u64>,
 }
 
 impl Handled {
@@ -40,14 +42,16 @@ impl Handled {
             campaign_id: None,
             events: Vec::new(),
             joined: None,
+            library_seq: None,
         }
     }
 }
 
 struct Executed {
-    campaign_id: CampaignId,
+    campaign_id: Option<CampaignId>,
     events: Vec<EventEnvelope>,
     joined: Option<Role>,
+    library_seq: Option<u64>,
 }
 
 pub fn handle_command(
@@ -78,10 +82,11 @@ pub fn handle_command(
     };
     let handled = match result {
         Ok(ex) => Handled {
-            reply: Reply::Ack(ex.events.last().map(|e| e.seq)),
-            campaign_id: Some(ex.campaign_id),
+            reply: Reply::Ack(ex.library_seq.map(Seq).or(ex.events.last().map(|e| e.seq))),
+            campaign_id: ex.campaign_id,
             events: ex.events,
             joined: ex.joined,
+            library_seq: ex.library_seq,
         },
         Err(reason) => Handled::reply_only(Reply::Reject(reason)),
     };
@@ -135,8 +140,9 @@ fn execute(
                 },
             )?;
             Ok(Ok(Executed {
-                campaign_id: *campaign_id,
+                campaign_id: Some(*campaign_id),
                 events: vec![created, code],
+                library_seq: None,
                 joined: Some(Role::Dm),
             }))
         }
@@ -153,8 +159,9 @@ fn execute(
             };
             if let Some(role) = role_of(tx, campaign_id, actor.id)? {
                 return Ok(Ok(Executed {
-                    campaign_id,
+                    campaign_id: Some(campaign_id),
                     events: Vec::new(),
+                    library_seq: None,
                     joined: Some(role),
                 }));
             }
@@ -165,8 +172,9 @@ fn execute(
             };
             let ev = log.emit(campaign_id, CampaignEvent::MemberJoined { member })?;
             Ok(Ok(Executed {
-                campaign_id,
+                campaign_id: Some(campaign_id),
                 events: vec![ev],
+                library_seq: None,
                 joined: Some(Role::Player),
             }))
         }
@@ -190,11 +198,20 @@ fn execute(
             };
             let ev = log.emit(*campaign_id, event)?;
             Ok(Ok(Executed {
-                campaign_id: *campaign_id,
+                campaign_id: Some(*campaign_id),
                 events: vec![ev],
+                library_seq: None,
                 joined: None,
             }))
         }
+        CommandKind::Library { op } => Ok(library::decide(tx, actor.id, cmd_id, op, now)?.map(
+            |seq| Executed {
+                campaign_id: None,
+                events: Vec::new(),
+                joined: None,
+                library_seq: Some(seq),
+            },
+        )),
         CommandKind::Note { campaign_id, op } => {
             let Some(role) = role_of(tx, *campaign_id, actor.id)? else {
                 return Ok(Err(RejectReason::NotFound));
@@ -214,8 +231,9 @@ fn execute(
                 None => Vec::new(),
             };
             Ok(Ok(Executed {
-                campaign_id: *campaign_id,
+                campaign_id: Some(*campaign_id),
                 events,
+                library_seq: None,
                 joined: None,
             }))
         }
@@ -343,6 +361,21 @@ fn project(
                 params![id, postcard::to_stdvec(sources)?],
             )?;
         }
+        CampaignEvent::EntryHidden { id: entry, hidden } => {
+            let stored: Option<Vec<u8>> =
+                tx.query_row("SELECT hidden FROM campaigns WHERE id = ?1", [id], |r| {
+                    r.get(0)
+                })?;
+            let mut list: Vec<LibraryId> = stored
+                .map(|b| postcard::from_bytes(&b))
+                .transpose()?
+                .unwrap_or_default();
+            beholder_core::campaign::set_hidden(&mut list, *entry, *hidden);
+            tx.execute(
+                "UPDATE campaigns SET hidden = ?2 WHERE id = ?1",
+                params![id, postcard::to_stdvec(&list)?],
+            )?;
+        }
     }
     Ok(())
 }
@@ -353,7 +386,7 @@ pub fn load_campaign(
 ) -> Result<Option<(Seq, Campaign)>, DbError> {
     let row = conn
         .query_row(
-            "SELECT title, cover_hash, invite_code, dm_can_read_private_notes, combat_visibility, head_seq, sources
+            "SELECT title, cover_hash, invite_code, dm_can_read_private_notes, combat_visibility, head_seq, sources, hidden
              FROM campaigns WHERE id = ?1",
             [id.as_bytes()],
             |r| {
@@ -363,13 +396,13 @@ pub fn load_campaign(
                     r.get::<_, Option<String>>(2)?,
                     r.get::<_, bool>(3)?,
                     r.get::<_, i64>(4)?,
-                    r.get::<_, u64>(5)?,
-                    r.get::<_, Option<Vec<u8>>>(6)?,
+                    r.get::<_, u64>(5)?,                    r.get::<_, Option<Vec<u8>>>(6)?,
+                    r.get::<_, Option<Vec<u8>>>(7)?,
                 ))
             },
         )
         .optional()?;
-    let Some((title, cover, code, dm_read, vis, head, sources)) = row else {
+    let Some((title, cover, code, dm_read, vis, head, sources, hidden)) = row else {
         return Ok(None);
     };
     let mut stmt = conn.prepare_cached(
@@ -412,8 +445,15 @@ pub fn load_campaign(
         notes: notes::campaign_notes(conn, id)?,
         sources: match sources {
             Some(b) => postcard::from_bytes(&b)?,
-            None => vec![beholder_core::compendium::SRD.to_owned()],
+            None => vec![
+                beholder_core::compendium::SRD.to_owned(),
+                beholder_core::compendium::LIBRARY.to_owned(),
+            ],
         },
+        hidden: hidden
+            .map(|b| postcard::from_bytes(&b))
+            .transpose()?
+            .unwrap_or_default(),
     };
     Ok(Some((Seq(head), campaign)))
 }
@@ -685,6 +725,20 @@ mod tests {
                 },
             },
         );
+        let hidden = LibraryId(Uuid::now_v7());
+        for h in [true, true, false, true] {
+            run(
+                &mut c,
+                &dm,
+                CommandKind::Campaign {
+                    campaign_id: id,
+                    op: CampaignOp::HideEntry {
+                        id: hidden,
+                        hidden: h,
+                    },
+                },
+            );
+        }
         let (party, secret, gone) = (nid(), nid(), nid());
         for (who, op) in [
             (&player, create_note(party, Audience::Party)),
@@ -719,6 +773,7 @@ mod tests {
         assert_ne!(projected.invite_code, Some(code));
         assert_eq!(projected.notes.len(), 3, "two notes plus one conflict copy");
         assert_eq!(projected.sources, ["tob3", "srd-5.2"]);
+        assert_eq!(projected.hidden, [hidden]);
     }
 
     fn nid() -> NoteId {
@@ -846,6 +901,125 @@ mod tests {
             Some("mine now"),
             "the original keeps the newer text"
         );
+    }
+
+    fn draft(id: LibraryId, name: &str) -> beholder_core::library::LibraryDraft {
+        beholder_core::library::LibraryDraft {
+            id,
+            name: NoteTitle::new(name).unwrap(),
+            facets: beholder_core::compendium::Facets::Condition,
+            text: NoteBody::new("Can't act.".into()).unwrap(),
+            book: None,
+            rules: beholder_core::compendium::RulesVersion::R2024,
+        }
+    }
+
+    fn save(id: LibraryId, name: &str, base_version: u32) -> CommandKind {
+        CommandKind::Library {
+            op: beholder_core::library::LibraryOp::Save {
+                draft: draft(id, name),
+                base_version,
+            },
+        }
+    }
+
+    #[test]
+    fn library_commands() {
+        let (mut c, dm, player) = setup();
+        let other = crate::auth::create_user(
+            &mut c,
+            &Username::new("other".into()).unwrap(),
+            &DisplayName::new("Other").unwrap(),
+            "phc",
+            UnixMillis(0),
+        )
+        .unwrap()
+        .unwrap();
+        create(&mut c, &dm);
+        let id = LibraryId(Uuid::now_v7());
+        let reply = |c: &mut Connection, who: &User, kind| run(c, who, kind).reply;
+
+        assert_eq!(
+            reply(&mut c, &player, save(id, "Dazed", 0)),
+            Reply::Ack(Some(Seq(1)))
+        );
+        assert_eq!(
+            reply(&mut c, &player, save(id, "Again", 0)),
+            Reply::Reject(RejectReason::IdConflict)
+        );
+        assert_eq!(
+            reply(&mut c, &other, save(id, "Mine now", 1)),
+            Reply::Reject(RejectReason::Forbidden),
+            "another player can't edit someone's entry"
+        );
+        assert!(matches!(
+            reply(&mut c, &player, save(id, "Dazed v2", 1)),
+            Reply::Ack(Some(_))
+        ));
+        assert_eq!(
+            reply(&mut c, &player, save(id, "Stale", 1)),
+            Reply::Reject(RejectReason::Stale)
+        );
+        assert!(
+            matches!(
+                reply(&mut c, &dm, save(id, "Tidied", 2)),
+                Reply::Ack(Some(_))
+            ),
+            "a DM of any campaign can edit"
+        );
+        let mut bad = draft(LibraryId(Uuid::now_v7()), "Bad");
+        bad.facets = beholder_core::compendium::Facets::Feature {
+            class: "Wizard".into(),
+            level: 0,
+        };
+        assert!(matches!(
+            reply(
+                &mut c,
+                &player,
+                CommandKind::Library {
+                    op: beholder_core::library::LibraryOp::Save {
+                        draft: bad,
+                        base_version: 0
+                    }
+                }
+            ),
+            Reply::Reject(RejectReason::Invalid(_))
+        ));
+
+        let b = crate::library::bundle(&c).unwrap();
+        assert_eq!(b.seq, 3);
+        assert_eq!(b.entries.len(), 1);
+        assert_eq!(b.entries[0].name, "Tidied");
+        let ch = crate::library::changes(&c, 1).unwrap();
+        assert_eq!(ch.head, 3);
+        assert_eq!(ch.changes.map(|v| v.len()), Some(2));
+        assert_eq!(
+            crate::library::changes(&c, 9).unwrap().changes,
+            None,
+            "ahead of the server: reload"
+        );
+
+        let delete = CommandKind::Library {
+            op: beholder_core::library::LibraryOp::Delete { id },
+        };
+        assert_eq!(
+            reply(&mut c, &other, delete.clone()),
+            Reply::Reject(RejectReason::Forbidden)
+        );
+        assert!(matches!(
+            reply(&mut c, &player, delete.clone()),
+            Reply::Ack(Some(_))
+        ));
+        assert_eq!(
+            reply(&mut c, &player, delete),
+            Reply::Reject(RejectReason::NotFound)
+        );
+        assert_eq!(
+            reply(&mut c, &player, save(id, "Back", 0)),
+            Reply::Reject(RejectReason::NotFound),
+            "a deleted id isn't reused"
+        );
+        assert!(crate::library::bundle(&c).unwrap().entries.is_empty());
     }
 
     #[test]

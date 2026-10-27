@@ -32,6 +32,7 @@ uuid_id!(UserId);
 uuid_id!(CampaignId);
 uuid_id!(CommandId);
 uuid_id!(NoteId);
+uuid_id!(LibraryId);
 
 impl CommandId {
     pub fn unix_millis(&self) -> Option<u64> {

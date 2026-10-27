@@ -11,7 +11,7 @@ use beholder_core::ImageHash;
 use beholder_core::User;
 use beholder_protocol::http::{
     AuthError, AuthResponse, ImageError, ImageUploaded, LoginRequest, MAX_IMAGE_BYTES,
-    RegisterRequest,
+    RegisterRequest, SourceInfo,
 };
 use beholder_protocol::{PROTOCOL_HEADER, PROTOCOL_VERSION, SessionToken};
 use serde::Serialize;
@@ -292,11 +292,66 @@ async fn signed_in(state: &AppState, headers: &HeaderMap) -> Result<User, Respon
     }
 }
 
+async fn library_bundle(state: &AppState) -> Result<(SourceInfo, Bytes), Response> {
+    let head = state
+        .db
+        .call(|c| crate::library::head(c))
+        .await
+        .map_err(internal)?;
+    if let Some(c) = state
+        .library_cache
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .as_ref()
+        .filter(|c| c.seq == head)
+    {
+        return Ok((c.info.clone(), c.bytes.clone()));
+    }
+    let bundle = state
+        .db
+        .call(|c| crate::library::bundle(c))
+        .await
+        .map_err(internal)?;
+    let built = tokio::task::spawn_blocking(move || compendium::describe_library(&bundle))
+        .await
+        .map_err(internal)?
+        .map_err(internal)?;
+    let out = (built.info.clone(), built.bytes.clone());
+    *state
+        .library_cache
+        .lock()
+        .unwrap_or_else(|p| p.into_inner()) = Some(built);
+    Ok(out)
+}
+
 pub async fn compendium_index(State(state): State<AppState>, headers: HeaderMap) -> Response {
     if let Err(r) = signed_in(&state, &headers).await {
         return r;
     }
-    reply(StatusCode::OK, &state.compendium.index())
+    let mut index = state.compendium.index();
+    match library_bundle(&state).await {
+        Ok((info, _)) => index.insert(0, info),
+        Err(r) => return r,
+    }
+    reply(StatusCode::OK, &index)
+}
+
+pub async fn library_changes(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(after): Path<u64>,
+) -> Response {
+    if let Err(r) = signed_in(&state, &headers).await {
+        return r;
+    }
+    match state
+        .db
+        .call(move |c| crate::library::changes(c, after))
+        .await
+    {
+        Ok(changes) => reply(StatusCode::OK, &changes),
+        Err(e) => internal(e),
+    }
 }
 
 pub async fn compendium_bundle(
@@ -307,7 +362,14 @@ pub async fn compendium_bundle(
     if let Err(r) = signed_in(&state, &headers).await {
         return r;
     }
-    let Some(bytes) = state.compendium.bundle(&sha256) else {
+    let library = state
+        .library_cache
+        .lock()
+        .unwrap_or_else(|p| p.into_inner())
+        .as_ref()
+        .filter(|c| c.info.sha256 == sha256)
+        .map(|c| c.bytes.clone());
+    let Some(bytes) = library.or_else(|| state.compendium.bundle(&sha256)) else {
         return StatusCode::NOT_FOUND.into_response();
     };
     let len = bytes.len();

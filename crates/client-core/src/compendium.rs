@@ -2,7 +2,7 @@ use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
-use beholder_core::compendium::{BUNDLE_FORMAT, Bundle};
+use beholder_core::compendium::{BUNDLE_FORMAT, Bundle, LIBRARY};
 use beholder_protocol::SessionToken;
 use beholder_protocol::http::MAX_BUNDLE_BYTES;
 use sha2::{Digest, Sha256};
@@ -40,7 +40,8 @@ pub(crate) fn maybe_start(shared: &Arc<Shared>, token: &SessionToken) {
     let Ok(want) = shared.with_cache(wanted) else {
         return;
     };
-    if lock(&shared.compendium_synced).as_ref() == Some(&want)
+    let dirty = shared.library_dirty.load(Ordering::Acquire) && want.iter().any(|s| s == LIBRARY);
+    if (!dirty && lock(&shared.compendium_synced).as_ref() == Some(&want))
         || shared.compendium_busy.swap(true, Ordering::AcqRel)
     {
         return;
@@ -59,7 +60,8 @@ fn run(shared: &Shared, token: &SessionToken) {
         if sync(shared, &http, token, &want).is_err() {
             break CompendiumState::Failed;
         }
-        let settled = shared.with_cache(wanted).ok().as_ref() == Some(&want);
+        let settled = shared.with_cache(wanted).ok().as_ref() == Some(&want)
+            && !shared.library_dirty.load(Ordering::Acquire);
         *lock(&shared.compendium_synced) = Some(want);
         if settled {
             break CompendiumState::Ready;
@@ -83,6 +85,7 @@ fn sync(
             .filter(|s| want.contains(&s.id))
             .collect()
     };
+    shared.library_dirty.store(false, Ordering::Release);
     for src in &index {
         if shared
             .with_cache(|c| c.compendium_sha256(&src.id))?
@@ -90,6 +93,15 @@ fn sync(
             == Some(&src.sha256)
         {
             continue;
+        }
+        if src.id == LIBRARY
+            && let Some(seq) = shared.with_cache(|c| c.compendium_seq(LIBRARY))?
+        {
+            let delta = http.library_changes(token, seq)?;
+            if let Some(changes) = delta.changes {
+                shared.with_cache(|c| c.apply_library(&changes, delta.head))?;
+                continue;
+            }
         }
         let bytes = download(http, token, &src.sha256)?;
         let bundle = verify(&src.sha256, &bytes)?;

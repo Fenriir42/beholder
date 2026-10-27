@@ -216,6 +216,7 @@ pub fn bundles(v2: &Path) -> Result<Vec<(String, Vec<u8>)>> {
             attribution: notice(meta, &publisher, &ids),
         };
         let bundle = Bundle {
+            seq: 0,
             format: BUNDLE_FORMAT,
             source,
             licenses: ids
@@ -555,6 +556,9 @@ fn creature(data: &Data, r: &Rec) -> Result<Entry> {
         }
     }
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Monster, r),
         name: name(r)?,
         facets: Facets::Monster {
@@ -656,6 +660,9 @@ fn spell(data: &Data, r: &Rec) -> Result<Entry> {
         write!(t, "\n\n**At Higher Levels.** {}", h.trim())?;
     }
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Spell, r),
         name: name(r)?,
         facets: Facets::Spell {
@@ -689,6 +696,9 @@ fn magic_item(data: &Data, r: &Rec) -> Result<Entry> {
     }
     write!(t, "*\n\n{}", s(r, "desc").unwrap_or_default().trim())?;
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::MagicItem, r),
         name: name(r)?,
         facets: Facets::MagicItem {
@@ -779,6 +789,9 @@ fn item(data: &Data, r: &Rec) -> Result<Entry> {
         write!(t, "\n\n{}", d.trim())?;
     }
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Equipment, r),
         name: name(r)?,
         facets: Facets::Equipment { category },
@@ -814,6 +827,9 @@ fn feat(data: &Data, r: &Rec) -> Result<Entry> {
         write!(t, "\n\n{b}")?;
     }
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Feat, r),
         name: name(r)?,
         facets: Facets::Feat { category },
@@ -831,6 +847,9 @@ fn background(data: &Data, r: &Rec) -> Result<Entry> {
         write!(t, "\n\n{b}")?;
     }
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Background, r),
         name: name(r)?,
         facets: Facets::Background,
@@ -964,6 +983,9 @@ fn class(data: &Data, r: &Rec) -> Result<Vec<Entry>> {
             None => format!("*{class_name} feature, level {lv}*"),
         };
         out.push(Entry {
+            book: None,
+            rules: None,
+            library: None,
             key: key(Kind::Feature, f.rec),
             name: fname,
             facets: Facets::Feature {
@@ -978,6 +1000,9 @@ fn class(data: &Data, r: &Rec) -> Result<Vec<Entry>> {
         });
     }
     out.push(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(
             if parent.is_some() {
                 Kind::Subclass
@@ -1016,6 +1041,9 @@ fn species(data: &Data, r: &Rec) -> Result<Entry> {
         )?;
     }
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: key(Kind::Species, r),
         name: name(r)?,
         facets: Facets::Species,
@@ -1035,6 +1063,9 @@ fn condition(data: &Data, r: &Rec) -> Result<Entry> {
         bail!("condition {describes} has no text");
     }
     Ok(Entry {
+        book: None,
+        rules: None,
+        library: None,
         key: format!("condition/{slug}"),
         name: n,
         facets: Facets::Condition,

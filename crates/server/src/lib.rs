@@ -5,6 +5,7 @@ pub mod db;
 pub mod http;
 pub mod hub;
 pub mod images;
+pub mod library;
 pub mod notes;
 pub mod permissions;
 pub mod rate_limit;
@@ -43,6 +44,7 @@ pub enum StartError {
 pub struct Server {
     pub db: Db,
     pub compendium: Library,
+    pub library_cache: std::sync::Mutex<Option<compendium::CachedBundle>>,
     pub hub: Hub,
     pub data_dir: PathBuf,
     pub hashing: Semaphore,
@@ -66,6 +68,7 @@ impl Server {
         Arc::new(Self {
             db,
             compendium,
+            library_cache: std::sync::Mutex::new(None),
             hub: Hub::default(),
             data_dir,
             hashing: Semaphore::new(2),
@@ -91,6 +94,7 @@ pub fn router(state: AppState) -> Router {
         .route("/img/{hash}/{file}", get(http::get_image))
         .route("/api/compendium", get(http::compendium_index))
         .route("/api/compendium/{sha256}", get(http::compendium_bundle))
+        .route("/api/library/changes/{after}", get(http::library_changes))
         .with_state(state)
 }
 

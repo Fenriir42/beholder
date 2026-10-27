@@ -2,10 +2,12 @@ use std::collections::HashMap;
 use std::path::Path;
 
 use beholder_core::compendium::{
-    Alternative, BUNDLE_FORMAT, Bundle, Entry, FacetOptions, Facets, Hit, Kind, LicenseText,
-    SearchQuery, SourceMeta,
+    Alternative, BUNDLE_FORMAT, Bundle, Entry, FacetOptions, Facets, Hit, Kind, LIBRARY,
+    LibraryMeta, LicenseText, RulesVersion, SearchQuery, SourceMeta,
 };
+use beholder_core::library::LibraryEvent;
 use beholder_core::{Campaign, CampaignId, CommandId, Seq, User};
+use beholder_protocol::http::LibraryChange;
 use beholder_protocol::{Command, EventEnvelope};
 use rusqlite::{Connection, OptionalExtension, params};
 
@@ -21,14 +23,14 @@ CREATE TABLE outbox (n INTEGER PRIMARY KEY AUTOINCREMENT, id BLOB NOT NULL UNIQU
 
 const COMPENDIUM_SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS compendium_sources (
-    id TEXT PRIMARY KEY, sha256 TEXT NOT NULL, meta BLOB NOT NULL
+    id TEXT PRIMARY KEY, sha256 TEXT NOT NULL, seq INTEGER NOT NULL, meta BLOB NOT NULL
 ) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS compendium_licenses (
     id TEXT PRIMARY KEY, license BLOB NOT NULL
 ) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS compendium_entries (
-    rowid INTEGER PRIMARY KEY, source TEXT NOT NULL, key TEXT NOT NULL, kind INTEGER NOT NULL,
-    name TEXT NOT NULL, facets BLOB NOT NULL, text TEXT NOT NULL, UNIQUE (source, key)
+    rowid INTEGER PRIMARY KEY, source TEXT NOT NULL, key TEXT NOT NULL, kind INTEGER NOT NULL,    name TEXT NOT NULL, facets BLOB NOT NULL, text TEXT NOT NULL, extra BLOB NOT NULL,
+    UNIQUE (source, key)
 );
 CREATE VIRTUAL TABLE IF NOT EXISTS compendium_fts USING fts5(
     name, text, content = 'compendium_entries', content_rowid = 'rowid',
@@ -37,6 +39,8 @@ CREATE VIRTUAL TABLE IF NOT EXISTS compendium_fts USING fts5(
 ";
 
 const MAX_CANDIDATES: usize = 2000;
+
+type Extra = (Option<String>, Option<RulesVersion>, Option<LibraryMeta>);
 
 #[derive(Debug, thiserror::Error)]
 pub enum CacheError {
@@ -246,8 +250,8 @@ impl Cache {
         tx.execute("DELETE FROM compendium_entries WHERE source = ?1", [id])?;
         {
             let mut insert = tx.prepare_cached(
-                "INSERT INTO compendium_entries (source, key, kind, name, facets, text)
-                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+                "INSERT INTO compendium_entries (source, key, kind, name, facets, text, extra)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             )?;
             for e in &bundle.entries {
                 insert.execute(params![
@@ -256,13 +260,13 @@ impl Cache {
                     kind_to_int(e.facets.kind()),
                     e.name,
                     postcard::to_stdvec(&e.facets)?,
-                    e.text
+                    e.text,
+                    extra(e)?
                 ])?;
             }
         }
-        tx.execute(
-            "INSERT OR REPLACE INTO compendium_sources (id, sha256, meta) VALUES (?1, ?2, ?3)",
-            params![id, sha256, postcard::to_stdvec(&bundle.source)?],
+        tx.execute(            "INSERT OR REPLACE INTO compendium_sources (id, sha256, seq, meta) VALUES (?1, ?2, ?3, ?4)",
+            params![id, sha256, bundle.seq, postcard::to_stdvec(&bundle.source)?],
         )?;
         for l in &bundle.licenses {
             tx.execute(
@@ -309,10 +313,12 @@ impl Cache {
         let mut push = |row: &rusqlite::Row<'_>| -> Result<(), CacheError> {
             let source: String = row.get(0)?;
             let facets: Facets = postcard::from_bytes(&row.get::<_, Vec<u8>>(3)?)?;
-            if q.matches(&source, &facets) {
+            let key: String = row.get(1)?;
+            let hidden = source == LIBRARY && q.hidden.contains(&key);
+            if !hidden && q.matches(&source, &facets) {
                 hits.push(Hit {
                     source,
-                    key: row.get(1)?,
+                    key,
                     name: row.get(2)?,
                     facets,
                     others: 0,
@@ -361,7 +367,7 @@ impl Cache {
         let row = self
             .conn
             .query_row(
-                "SELECT e.name, e.facets, e.text, s.meta FROM compendium_entries e
+                "SELECT e.name, e.facets, e.text, s.meta, e.extra FROM compendium_entries e
                  JOIN compendium_sources s ON s.id = e.source
                  WHERE e.source = ?1 AND e.key = ?2",
                 [source, key],
@@ -371,17 +377,22 @@ impl Cache {
                         r.get::<_, Vec<u8>>(1)?,
                         r.get::<_, String>(2)?,
                         r.get::<_, Vec<u8>>(3)?,
+                        r.get::<_, Vec<u8>>(4)?,
                     ))
                 },
             )
             .optional()?;
-        row.map(|(name, facets, text, meta)| {
+        row.map(|(name, facets, text, meta, extra)| {
+            let (book, rules, library): Extra = postcard::from_bytes(&extra)?;
             Ok((
                 Entry {
                     key: key.to_owned(),
                     name,
                     facets: postcard::from_bytes(&facets)?,
                     text,
+                    book,
+                    rules,
+                    library,
                 },
                 postcard::from_bytes(&meta)?,
             ))
@@ -489,6 +500,104 @@ impl Cache {
         stmt.query_map([], |r| r.get::<_, Vec<u8>>(0))?
             .map(|row| Ok(postcard::from_bytes(&row?)?))
             .collect()
+    }
+}
+
+fn extra(e: &Entry) -> Result<Vec<u8>, CacheError> {
+    let x: Extra = (e.book.clone(), e.rules, e.library);
+    Ok(postcard::to_stdvec(&x)?)
+}
+
+impl Cache {
+    pub fn compendium_seq(&self, source: &str) -> Result<Option<u64>, CacheError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT seq FROM compendium_sources WHERE id = ?1",
+                [source],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
+    pub fn apply_library(&self, changes: &[LibraryChange], head: u64) -> Result<(), CacheError> {
+        let tx = self.conn.unchecked_transaction()?;
+        for c in changes {
+            let id = match &c.event {
+                LibraryEvent::Saved { entry } => entry.id,
+                LibraryEvent::Deleted { id } => *id,
+            };
+            let key = id.to_string();
+            let old: Option<(i64, String, String)> = tx
+                .query_row(
+                    "SELECT rowid, name, text FROM compendium_entries WHERE source = ?1 AND key = ?2",
+                    [LIBRARY, key.as_str()],
+                    |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+                )
+                .optional()?;
+            if let Some((rowid, name, text)) = &old {
+                tx.execute(
+                    "INSERT INTO compendium_fts (compendium_fts, rowid, name, text) VALUES ('delete', ?1, ?2, ?3)",
+                    params![rowid, name, text],
+                )?;
+                tx.execute("DELETE FROM compendium_entries WHERE rowid = ?1", [rowid])?;
+            }
+            if let LibraryEvent::Saved { entry } = &c.event {
+                let e = entry.to_entry();
+                tx.execute(
+                    "INSERT INTO compendium_entries (source, key, kind, name, facets, text, extra)
+                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+                    params![
+                        LIBRARY,
+                        e.key,
+                        kind_to_int(e.facets.kind()),
+                        e.name,
+                        postcard::to_stdvec(&e.facets)?,
+                        e.text,
+                        extra(&e)?
+                    ],
+                )?;
+                tx.execute(
+                    "INSERT INTO compendium_fts (rowid, name, text) VALUES (last_insert_rowid(), ?1, ?2)",
+                    params![e.name, e.text],
+                )?;
+            }
+        }
+        tx.execute(
+            "UPDATE compendium_sources SET seq = ?2 WHERE id = ?1",
+            params![LIBRARY, head],
+        )?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn library_entries(&self) -> Result<Vec<Entry>, CacheError> {
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT key, name, facets, text, extra FROM compendium_entries WHERE source = ?1 ORDER BY name",
+        )?;
+        let rows = stmt.query_map([LIBRARY], |r| {
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Vec<u8>>(2)?,
+                r.get::<_, String>(3)?,
+                r.get::<_, Vec<u8>>(4)?,
+            ))
+        })?;
+        rows.map(|row| {
+            let (key, name, facets, text, extra) = row?;
+            let (book, rules, library): Extra = postcard::from_bytes(&extra)?;
+            Ok(Entry {
+                key,
+                name,
+                facets: postcard::from_bytes(&facets)?,
+                text,
+                book,
+                rules,
+                library,
+            })
+        })
+        .collect()
     }
 }
 
