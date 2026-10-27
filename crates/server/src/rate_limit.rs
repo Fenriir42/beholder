@@ -1,14 +1,10 @@
-//! Fixed-window rate limiting for logins, registrations, joins and uploads.
-
 use std::collections::HashMap;
 use std::hash::Hash;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-/// Above this many tracked keys, stale ones are purged so memory stays bounded.
 const MAX_KEYS: usize = 4096;
 
-/// Allows `max` hits per `window` for each key.
 pub struct RateLimiter<K> {
     max: u32,
     window: Duration,
@@ -16,7 +12,6 @@ pub struct RateLimiter<K> {
 }
 
 impl<K: Hash + Eq> RateLimiter<K> {
-    /// A limiter allowing `max` hits per `window`.
     pub fn new(max: u32, window: Duration) -> Self {
         Self {
             max,
@@ -25,7 +20,6 @@ impl<K: Hash + Eq> RateLimiter<K> {
         }
     }
 
-    /// Records a hit for `key`; `false` when the key is over its limit.
     pub fn allow(&self, key: K) -> bool {
         self.allow_at(key, Instant::now())
     }

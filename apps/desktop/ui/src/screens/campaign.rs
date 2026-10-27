@@ -1,5 +1,3 @@
-//! Campaign shell: sidebar, cover banner, and the home tabs.
-
 use beholder_core::{CampaignId, CampaignSettings, CombatVisibility, Role};
 use beholder_ipc::CampaignView;
 use leptos::prelude::*;
@@ -35,7 +33,6 @@ struct SettingsArgs {
     settings: CampaignSettings,
 }
 
-/// One campaign's home.
 #[component]
 pub fn CampaignScreen(id: CampaignId) -> impl IntoView {
     let ctx = use_app();

@@ -1,5 +1,3 @@
-//! App root: screen switching, shared state, and the shell event listeners.
-
 use std::cell::Cell;
 use std::rc::Rc;
 
@@ -14,38 +12,25 @@ use crate::i18n::{I18n, Lang, use_i18n};
 use crate::screens::{AuthScreen, CampaignScreen, LibraryScreen, ServerScreen};
 use crate::{icons, ipc};
 
-/// Which screen is showing. A desktop app has no URL bar, so no router.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Screen {
-    /// Waiting for the shell's boot info.
     Loading,
-    /// First launch: server address.
     Server,
-    /// Login / register.
     Auth,
-    /// Campaign library.
     Library,
-    /// One campaign.
     Campaign(CampaignId),
 }
 
-/// State shared by all screens.
 #[derive(Clone, Copy)]
 pub struct AppCtx {
-    /// Current screen.
     pub screen: RwSignal<Screen>,
-    /// Boot info from the shell.
     pub boot: RwSignal<Boot>,
-    /// Latest view from client-core.
     pub view: RwSignal<ViewData>,
-    /// Connection pill state.
     pub conn: RwSignal<ConnState>,
-    /// Fluent key of a transient message, if any.
     pub toast: RwSignal<Option<&'static str>>,
     refresh: StoredValue<Rc<Refresher>, LocalStorage>,
 }
 
-/// Coalesces bursts of `view-changed` events into as few fetches as possible.
 #[derive(Default)]
 struct Refresher {
     in_flight: Cell<bool>,
@@ -53,7 +38,6 @@ struct Refresher {
 }
 
 impl AppCtx {
-    /// Re-reads the view from the shell.
     pub fn refresh(&self) {
         let r = self.refresh.get_value();
         if r.in_flight.replace(true) {
@@ -75,7 +59,6 @@ impl AppCtx {
         });
     }
 
-    /// Shows a translated message for a few seconds.
     pub fn notify(&self, key: &'static str) {
         let toast = self.toast;
         toast.set(Some(key));
@@ -90,12 +73,10 @@ impl AppCtx {
     }
 }
 
-/// The shared app state.
 pub fn use_app() -> AppCtx {
     expect_context::<AppCtx>()
 }
 
-/// Fluent key for an IPC error.
 pub fn error_key(e: IpcError) -> &'static str {
     match e {
         IpcError::Invalid(ValidationError::Length) => "err-length",
@@ -129,7 +110,6 @@ fn reject_key(r: RejectReason) -> &'static str {
     }
 }
 
-/// The root component.
 #[component]
 pub fn App() -> impl IntoView {
     let browser_lang = window().navigator().language().unwrap_or_default();
@@ -207,7 +187,6 @@ fn Toast() -> impl IntoView {
     }
 }
 
-/// Logo and app name.
 #[component]
 pub fn Brand() -> impl IntoView {
     let i18n = use_i18n();
@@ -219,7 +198,6 @@ pub fn Brand() -> impl IntoView {
     }
 }
 
-/// Connection pill: a dot plus a text label, so status never relies on colour.
 #[component]
 pub fn ConnPill() -> impl IntoView {
     let ctx = use_app();
@@ -245,7 +223,6 @@ pub fn ConnPill() -> impl IntoView {
     }
 }
 
-/// Non-blocking banner shown while not online.
 #[component]
 pub fn ConnBanner() -> impl IntoView {
     let ctx = use_app();
@@ -276,7 +253,6 @@ pub fn ConnBanner() -> impl IntoView {
     }
 }
 
-/// Language toggle (EN ⇄ FR), remembered by the shell.
 #[component]
 pub fn LangSwitch() -> impl IntoView {
     let i18n = use_i18n();
@@ -305,7 +281,6 @@ struct LocaleArgs {
     locale: &'static str,
 }
 
-/// Top bar for the library: brand, connection, language, account.
 #[component]
 pub fn TopBar() -> impl IntoView {
     let ctx = use_app();
@@ -340,7 +315,6 @@ pub fn TopBar() -> impl IntoView {
     }
 }
 
-/// URL of a cached cover image, served by the shell's `img` protocol.
 pub fn image_url(ctx: &AppCtx, hash: &beholder_core::ImageHash, variant: &str) -> String {
     format!(
         "{}{variant}/{}",

@@ -1,6 +1,3 @@
-//! Beholder desktop UI (Leptos CSR, wasm32). It renders state and forwards
-//! user actions to the Tauri shell; it never talks to the network.
-
 mod app;
 mod i18n;
 mod icons;

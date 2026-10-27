@@ -1,6 +1,3 @@
-//! Blocking HTTPS calls (auth and images). Call them from a blocking thread
-//! (`tokio::task::spawn_blocking`), never from the UI thread.
-
 use std::time::Duration;
 
 use beholder_core::ImageHash;
@@ -14,40 +11,28 @@ use serde::de::DeserializeOwned;
 use ureq::Agent;
 use ureq::tls::{RootCerts, TlsConfig, TlsProvider};
 
-/// Short calls (auth): a slow VPN still answers within this.
 const SHORT: Duration = Duration::from_secs(30);
 
-/// Image transfers: 20 MB at ~30 KB/s takes about 11 minutes.
 const LONG: Duration = Duration::from_secs(15 * 60);
 
-/// Largest small response accepted.
 const SMALL_BODY: u64 = 64 * 1024;
 
-/// Which stored size of an image to download.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ImageVariant {
-    /// ~480 px wide.
     Thumb,
-    /// Up to 1920 px.
     Display,
 }
 
-/// Why an HTTP call failed.
 #[derive(Debug, thiserror::Error)]
 pub enum HttpError {
-    /// The server refused the login or registration.
     #[error("auth: {0:?}")]
     Auth(AuthError),
-    /// The server refused the image.
     #[error("image: {0:?}")]
     Image(ImageError),
-    /// Unexpected HTTP status.
     #[error("HTTP {0}")]
     Status(u16),
-    /// Couldn't reach the server, or the transfer failed.
     #[error("network: {0}")]
     Network(String),
-    /// The response body wasn't what we expected.
     #[error("bad response")]
     Decode,
 }
@@ -58,23 +43,19 @@ impl From<ureq::Error> for HttpError {
     }
 }
 
-/// HTTPS client for one server.
 pub struct Http {
     agent: Agent,
     base: String,
 }
 
 impl Http {
-    /// A client for `server_url` (e.g. `https://dnd.example.org`).
     pub fn new(server_url: &str) -> Self {
         let config = Agent::config_builder()
-            // Error statuses carry postcard bodies we want to read.
             .http_status_as_error(false)
             .timeout_global(Some(SHORT))
             .tls_config(
                 TlsConfig::builder()
                     .provider(TlsProvider::NativeTls)
-                    // The OS certificate store, so no root bundle ships in the binary.
                     .root_certs(RootCerts::PlatformVerifier)
                     .build(),
             )
@@ -116,17 +97,14 @@ impl Http {
         decode_or_error(status, &bytes, HttpError::Auth)
     }
 
-    /// Creates an account and logs in.
     pub fn register(&self, req: &RegisterRequest) -> Result<AuthResponse, HttpError> {
         self.auth("/api/register", req)
     }
 
-    /// Logs in.
     pub fn login(&self, req: &LoginRequest) -> Result<AuthResponse, HttpError> {
         self.auth("/api/login", req)
     }
 
-    /// Ends the session on the server.
     pub fn logout(&self, token: &SessionToken) -> Result<(), HttpError> {
         let (status, _) = self.post("/api/logout", Some(token), &[], false, SMALL_BODY)?;
         if (200..300).contains(&status) {
@@ -136,7 +114,6 @@ impl Http {
         }
     }
 
-    /// Uploads an image; the server re-encodes it and returns its hash.
     pub fn upload_image(&self, token: &SessionToken, bytes: &[u8]) -> Result<ImageHash, HttpError> {
         if bytes.len() > MAX_IMAGE_BYTES {
             return Err(HttpError::Image(ImageError::TooLarge));
@@ -145,7 +122,6 @@ impl Http {
         decode_or_error::<ImageUploaded, _>(status, &body, HttpError::Image).map(|u| u.hash)
     }
 
-    /// Downloads one stored image variant (WebP bytes).
     pub fn image(&self, hash: &ImageHash, variant: ImageVariant) -> Result<Vec<u8>, HttpError> {
         let file = match variant {
             ImageVariant::Thumb => "thumb.webp",

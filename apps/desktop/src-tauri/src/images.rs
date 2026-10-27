@@ -1,7 +1,3 @@
-//! The `img://` protocol: serves cover images to the webview from a disk
-//! cache keyed by content hash, downloading through client-core on a miss.
-//! The webview never fetches from the server itself.
-
 use std::path::PathBuf;
 
 use beholder_client_core::http::{Http, ImageVariant};
@@ -11,13 +7,11 @@ use tauri::{AppHandle, Manager, UriSchemeResponder};
 
 use crate::session::{Shell, lock};
 
-/// Handles `img://localhost/{thumb|display}/{hash}`.
 pub fn handle(app: AppHandle, path: String, responder: UriSchemeResponder) {
     tauri::async_runtime::spawn(async move {
         let response = match serve(&app, &path).await {
             Some(bytes) => Response::builder()
                 .header(header::CONTENT_TYPE, "image/webp")
-                // Content-addressed: a hash never changes meaning.
                 .header(header::CACHE_CONTROL, "max-age=31536000, immutable")
                 .body(bytes),
             None => Response::builder()
@@ -55,7 +49,6 @@ async fn serve(app: &AppHandle, path: &str) -> Option<Vec<u8>> {
     let dir = shell.image_dir.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let bytes = Http::new(&url).image(&hash, variant).ok()?;
-        // Best effort: a failed cache write only means downloading again later.
         let _ = std::fs::create_dir_all(&dir).and_then(|()| std::fs::write(&file, &bytes));
         Some(bytes)
     })

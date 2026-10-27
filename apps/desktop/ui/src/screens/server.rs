@@ -1,5 +1,3 @@
-//! First launch: which server to use.
-
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
@@ -12,7 +10,6 @@ struct Args {
     url: String,
 }
 
-/// Asks for the server address and remembers it.
 #[component]
 pub fn ServerScreen() -> impl IntoView {
     let ctx = use_app();

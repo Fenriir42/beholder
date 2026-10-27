@@ -1,5 +1,3 @@
-//! The app's screens.
-
 mod auth;
 mod campaign;
 mod library;

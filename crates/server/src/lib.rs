@@ -1,5 +1,3 @@
-//! Beholder server: auth, campaigns, event log, sync, presence and images.
-
 pub mod auth;
 pub mod campaigns;
 pub mod db;
@@ -29,43 +27,28 @@ use crate::db::Db;
 use crate::hub::Hub;
 use crate::rate_limit::RateLimiter;
 
-/// Shared server state.
 pub type AppState = Arc<Server>;
 
-/// Everything the handlers share.
 pub struct Server {
-    /// The database.
     pub db: Db,
-    /// Live connections.
     pub hub: Hub,
-    /// Root for the database file and stored images.
     pub data_dir: PathBuf,
-    /// Concurrent Argon2 computations (19 MiB each).
     pub hashing: Semaphore,
-    /// Concurrent image upload bodies being buffered (up to 20 MB each).
     pub uploads: Semaphore,
-    /// Concurrent image decodes (up to ~150 MB each).
     pub encoding: Semaphore,
-    /// Login attempts per client IP.
     pub login_ip_limit: RateLimiter<IpAddr>,
-    /// Login attempts per username.
     pub login_user_limit: RateLimiter<String>,
-    /// Registrations per client IP.
     pub register_limit: RateLimiter<IpAddr>,
-    /// Join attempts per user (invite codes are only 40 bits).
     pub join_limit: RateLimiter<UserId>,
-    /// Image uploads per user.
     pub upload_limit: RateLimiter<UserId>,
 }
 
 impl Server {
-    /// Opens the database under `data_dir` and builds the shared state.
     pub fn open(data_dir: PathBuf) -> Result<AppState, db::DbError> {
         let db = Db::open(&data_dir.join("beholder.db"))?;
         Ok(Self::with_db(db, data_dir))
     }
 
-    /// State around an existing database (tests use an in-memory one).
     pub fn with_db(db: Db, data_dir: PathBuf) -> AppState {
         let minute = Duration::from_secs(60);
         Arc::new(Self {
@@ -84,9 +67,7 @@ impl Server {
     }
 }
 
-/// All routes.
 pub fn router(state: AppState) -> Router {
-    // Auth bodies are tiny; refuse anything bigger before buffering it.
     let small = DefaultBodyLimit::max(4096);
     Router::new()
         .route("/ws", get(ws_upgrade))
@@ -104,7 +85,6 @@ async fn ws_upgrade(State(state): State<AppState>, ws: WebSocketUpgrade) -> Resp
         .on_upgrade(move |socket| ws::run(socket, state))
 }
 
-/// Serves until `shutdown` resolves, with daily maintenance in the background.
 pub async fn serve(
     listener: TcpListener,
     state: AppState,
@@ -119,7 +99,6 @@ pub async fn serve(
     .await
 }
 
-/// Compacts event logs and purges stale commands and sessions, once a day.
 async fn maintenance(state: AppState) {
     let mut every = tokio::time::interval(Duration::from_secs(24 * 3600));
     loop {
@@ -137,7 +116,6 @@ async fn maintenance(state: AppState) {
     }
 }
 
-/// The current time.
 pub fn now() -> UnixMillis {
     let ms = SystemTime::now()
         .duration_since(UNIX_EPOCH)
@@ -145,7 +123,6 @@ pub fn now() -> UnixMillis {
     UnixMillis(i64::try_from(ms).unwrap_or(i64::MAX))
 }
 
-/// Bytes from the OS random source.
 pub fn random_bytes<const N: usize>() -> Result<[u8; N], db::DbError> {
     let mut b = [0u8; N];
     getrandom::fill(&mut b).map_err(|_| db::DbError::Corrupt("random source failed"))?;

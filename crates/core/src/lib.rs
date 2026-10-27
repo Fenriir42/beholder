@@ -1,5 +1,3 @@
-//! Domain types and pure rules for Beholder. No IO, no async; builds for wasm32.
-
 pub mod campaign;
 pub mod ids;
 pub mod user;

@@ -1,6 +1,3 @@
-//! One WebSocket session: Hello, catch-up, then commands and pings until the
-//! socket dies or goes quiet for [`IDLE_TIMEOUT`].
-
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -22,17 +19,12 @@ use crate::hub::{ConnId, QUEUE_FRAMES};
 use crate::permissions::Outgoing;
 use crate::{AppState, auth, now};
 
-/// No traffic for this long means the connection is dead (SPEC §3).
 pub const IDLE_TIMEOUT: Duration = Duration::from_secs(35);
 
-/// Time allowed for the first message.
 const HELLO_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// How long a user stays "online" after their last connection drops, so a
-/// flapping VPN doesn't spam everyone with presence changes.
 pub const PRESENCE_GRACE: Duration = Duration::from_secs(10);
 
-/// Runs one session to completion.
 pub async fn run(mut socket: WebSocket, state: AppState) {
     let Some(hello) = read_hello(&mut socket).await else {
         return;
@@ -72,8 +64,6 @@ pub async fn run(mut socket: WebSocket, state: AppState) {
     if let Err(e) = opened {
         tracing::error!("session open failed: {e}");
     } else {
-        // Reading and writing run separately, so a slow write never delays
-        // reading and reads are never cancelled mid-frame.
         let (sink, stream) = socket.split();
         let mut writer = tokio::spawn(write_loop(sink, rx));
         read_loop(stream, &state, conn_id, user_id, &mut writer).await;
@@ -103,9 +93,6 @@ async fn reject(mut socket: WebSocket, err: HelloError) {
     let _ = socket.send(Message::Close(None)).await;
 }
 
-/// Sends HelloOk and the catch-up for every campaign, then subscribes.
-/// Runs inside `Db::call`: no command can commit in between, so no event is
-/// missed or delivered out of order.
 fn open_session(
     conn: &mut rusqlite::Connection,
     state: &AppState,
@@ -156,8 +143,6 @@ fn known_seq(hello: &Hello, id: CampaignId) -> Option<Seq> {
     hello.known.iter().find(|(c, _)| *c == id).map(|(_, s)| *s)
 }
 
-/// Sends queued frames until the queue closes (the hub dropped a slow
-/// connection) or the socket fails.
 async fn write_loop(mut sink: SplitSink<WebSocket, Message>, mut rx: mpsc::Receiver<Bytes>) {
     while let Some(frame) = rx.recv().await {
         match timeout(IDLE_TIMEOUT, sink.send(Message::Binary(frame))).await {
@@ -188,7 +173,6 @@ async fn read_loop(
         deadline = Instant::now() + IDLE_TIMEOUT;
         let frame = match msg {
             Message::Binary(f) => f,
-            // WebSocket-level pings are answered by the library; they still count as traffic.
             Message::Ping(_) | Message::Pong(_) => continue,
             Message::Close(_) | Message::Text(_) => return,
         };
@@ -200,12 +184,10 @@ async fn read_loop(
             }
             Ok(ClientMsg::Command(cmd)) => {
                 if let Err(e) = handle_command(state, conn_id, user_id, cmd).await {
-                    // The client resends after reconnecting; nothing was committed.
                     tracing::error!("command failed: {e}");
                     return;
                 }
             }
-            // A second Hello or garbage is a protocol violation.
             Ok(ClientMsg::Hello(_)) | Err(_) => return,
         }
     }
@@ -227,7 +209,6 @@ async fn handle_command(
             state.hub.send(conn_id, &out);
         }
     };
-    // Guessing invite codes is the only thing worth brute-forcing here.
     if matches!(cmd.kind, CommandKind::JoinCampaign { .. }) && !state.join_limit.allow(user_id) {
         send_reply(Reply::Reject(RejectReason::RateLimited));
         return Ok(());
@@ -236,7 +217,6 @@ async fn handle_command(
     let reply = state
         .db
         .call(move |c| {
-            // The actor's current name, so events carry it.
             let Some(user) = crate::auth::user_by_id(c, user_id)? else {
                 return Ok(Reply::Reject(RejectReason::NotFound));
             };
@@ -249,7 +229,6 @@ async fn handle_command(
     Ok(())
 }
 
-/// Fans a command's effects out. Runs inside `Db::call`, right after commit.
 fn publish(
     conn: &rusqlite::Connection,
     state: &AppState,
@@ -259,8 +238,7 @@ fn publish(
     let Some(campaign_id) = handled.campaign_id else {
         return Ok(());
     };
-    // Existing subscribers get the events first; the new member then gets a
-    // snapshot that already includes them.
+    // Events go to existing subscribers first, so the new member's snapshot already includes them.
     state.hub.publish_events(campaign_id, &handled.events);
     if let Some(role) = handled.joined
         && let Some((seq, campaign)) = campaigns::load_campaign(conn, campaign_id)?

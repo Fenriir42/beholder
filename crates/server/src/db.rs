@@ -1,23 +1,16 @@
-//! SQLite access: one connection, used from the blocking pool (ADR-0002).
-
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use rusqlite::Connection;
 
-/// Migrations in order; `PRAGMA user_version` records how many have run.
 const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_init.sql")];
 
-/// A database failure.
 #[derive(Debug, thiserror::Error)]
 pub enum DbError {
-    /// SQLite reported an error.
     #[error("sqlite: {0}")]
     Sqlite(#[from] rusqlite::Error),
-    /// A stored blob didn't decode; the database is from a newer server or corrupt.
     #[error("corrupt row: {0}")]
     Corrupt(&'static str),
-    /// The blocking task panicked or was cancelled.
     #[error("database task failed")]
     Task,
 }
@@ -28,26 +21,21 @@ impl From<postcard::Error> for DbError {
     }
 }
 
-/// Shared handle to the server database.
 #[derive(Clone)]
 pub struct Db {
     conn: Arc<Mutex<Connection>>,
 }
 
 impl Db {
-    /// Opens (creating if needed) and migrates the database at `path`.
     pub fn open(path: &Path) -> Result<Self, DbError> {
         Self::init(Connection::open(path)?)
     }
 
-    /// A fresh in-memory database, for tests.
     pub fn open_in_memory() -> Result<Self, DbError> {
         Self::init(Connection::open_in_memory()?)
     }
 
     fn init(mut conn: Connection) -> Result<Self, DbError> {
-        // WAL for crash safety without blocking readers; NORMAL sync is safe under WAL.
-        // A 4 MiB page cache and no mmap keep RSS bounded on the 1 GB VPS.
         conn.execute_batch(
             "PRAGMA journal_mode = WAL;
              PRAGMA synchronous = NORMAL;
@@ -62,7 +50,6 @@ impl Db {
         })
     }
 
-    /// The raw connection, for synchronous unit tests.
     #[cfg(test)]
     pub fn into_connection(self) -> Connection {
         match Arc::into_inner(self.conn) {
@@ -71,8 +58,6 @@ impl Db {
         }
     }
 
-    /// Runs `f` with the connection on the blocking pool. Calls are serialized,
-    /// which is what makes seq assignment and fan-out ordering race-free.
     pub async fn call<F, R, E>(&self, f: F) -> Result<R, E>
     where
         F: FnOnce(&mut Connection) -> Result<R, E> + Send + 'static,
@@ -81,7 +66,6 @@ impl Db {
     {
         let conn = Arc::clone(&self.conn);
         tokio::task::spawn_blocking(move || {
-            // A panic mid-transaction rolls back on unwind, so the connection is still usable.
             let mut guard = conn.lock().unwrap_or_else(|p| p.into_inner());
             f(&mut guard)
         })
@@ -110,7 +94,6 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let path = dir.path().join("t.db");
         drop(Db::open(&path).unwrap());
-        // Reopening must not re-run migrations (CREATE TABLE would fail).
         let db = Db::open(&path).unwrap();
         let conn = db.conn.lock().unwrap();
         let v: usize = conn

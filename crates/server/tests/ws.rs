@@ -1,7 +1,3 @@
-//! End-to-end server tests over real WebSockets, checked at the send boundary:
-//! what a client actually receives on the wire.
-
-// Test-only file: helpers panic on unexpected results by design.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::net::SocketAddr;
@@ -66,7 +62,6 @@ impl Harness {
 
 struct Client {
     ws: WebSocketStream<MaybeTlsStream<TcpStream>>,
-    /// Decompressed postcard bodies of everything received.
     raw: Vec<Vec<u8>>,
 }
 
@@ -128,7 +123,6 @@ impl Client {
             .expect("expected a message")
     }
 
-    /// Receives until `pick` returns Some, skipping presence noise.
     async fn wait_for<T>(&mut self, mut pick: impl FnMut(&ServerMsg) -> Option<T>) -> T {
         loop {
             let m = self.recv().await;
@@ -167,7 +161,6 @@ fn title(s: &str) -> CampaignTitle {
     CampaignTitle::new(s).unwrap()
 }
 
-/// DM creates a campaign and returns its id and invite code.
 async fn create_campaign(dm: &mut Client) -> (CampaignId, InviteCode) {
     let campaign_id = CampaignId(Uuid::now_v7());
     let id = dm
@@ -176,7 +169,6 @@ async fn create_campaign(dm: &mut Client) -> (CampaignId, InviteCode) {
             title: title("Strahd"),
         })
         .await;
-    // The snapshot is queued inside the commit, so it always precedes the Ack.
     let code = dm
         .wait_for(|m| match m {
             ServerMsg::Snapshot { campaign, .. } if campaign.id == campaign_id => {
@@ -211,8 +203,6 @@ async fn player_never_receives_the_invite_code() {
         .await;
     player.ack(join).await;
 
-    // Live: the DM regenerates, then renames. The player sees only the rename,
-    // with a gap in seq where the regeneration was.
     let regen = dm
         .command(CommandKind::Campaign {
             campaign_id: cid,
@@ -248,7 +238,6 @@ async fn player_never_receives_the_invite_code() {
     assert_eq!(got[0].seq, rename_seq);
     assert!(matches!(got[0].event, CampaignEvent::Renamed { .. }));
 
-    // Forbidden for players, at the server.
     let attempt = player
         .command(CommandKind::Campaign {
             campaign_id: cid,
@@ -257,7 +246,6 @@ async fn player_never_receives_the_invite_code() {
         .await;
     assert_eq!(player.reject(attempt).await, RejectReason::Forbidden);
 
-    // Catch-up after reconnecting, both by replay and by snapshot.
     let mut replay = Client::connect(h.addr, &player_token, vec![(cid, snapshot_seq)]).await;
     let mut fresh = Client::connect(h.addr, &player_token, vec![]).await;
     for c in [&mut replay, &mut fresh] {
@@ -271,7 +259,6 @@ async fn player_never_receives_the_invite_code() {
             );
         }
     }
-    // Sanity: the same scan does find the code in the DM's traffic.
     assert!(dm.saw_bytes(new_code.as_str().as_bytes()));
 }
 
@@ -292,7 +279,6 @@ async fn resent_command_is_applied_once() {
     };
     dm.send(ClientMsg::Command(cmd.clone())).await;
     let first = dm.ack(cmd.id).await;
-    // Resent on a new connection, as after a reconnect.
     let mut again = Client::connect(h.addr, &token, vec![(cid, first.unwrap())]).await;
     again.send(ClientMsg::Command(cmd.clone())).await;
     assert_eq!(again.ack(cmd.id).await, first);
@@ -312,7 +298,6 @@ async fn stale_and_bad_commands_are_rejected() {
     let h = start().await;
     let token = h.user("dmaster").await;
     let mut dm = Client::connect(h.addr, &token, vec![]).await;
-    // A UUIDv7 from 2020 is outside the dedup window.
     let old = CommandId(Uuid::from_bytes([
         0x01, 0x70, 0, 0, 0, 0, 0x70, 0, 0x80, 0, 0, 0, 0, 0, 0, 1,
     ]));

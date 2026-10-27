@@ -1,7 +1,4 @@
-//! HTTPS endpoints: auth, image upload and image download. Bodies are postcard.
-
-// Early-returning a ready `Response` as the error is the axum idiom here; boxing
-// it would only add an allocation on the error path.
+// Returning a ready `Response` as the error is the axum idiom; boxing only adds an allocation.
 #![allow(clippy::result_large_err)]
 
 use std::net::{IpAddr, SocketAddr};
@@ -37,7 +34,6 @@ fn internal(e: impl std::fmt::Display) -> Response {
     StatusCode::INTERNAL_SERVER_ERROR.into_response()
 }
 
-/// `426 Upgrade Required` unless the client speaks our protocol version.
 fn check_version(headers: &HeaderMap) -> Result<(), Response> {
     let v = headers
         .get(PROTOCOL_HEADER)
@@ -58,8 +54,6 @@ fn decode<T: DeserializeOwned>(body: &[u8]) -> Result<T, Response> {
     postcard::from_bytes(body).map_err(|_| StatusCode::BAD_REQUEST.into_response())
 }
 
-/// The client address. Behind Caddy, the last `X-Forwarded-For` hop is the
-/// one Caddy itself appended, so it can't be spoofed by the client.
 fn client_ip(headers: &HeaderMap, peer: SocketAddr) -> IpAddr {
     headers
         .get("x-forwarded-for")
@@ -74,7 +68,6 @@ fn bearer(headers: &HeaderMap) -> Option<SessionToken> {
     SessionToken::from_hex(v.strip_prefix("Bearer ")?)
 }
 
-/// Argon2 on the blocking pool, at most two at a time to bound memory.
 async fn run_hashing<T: Send + 'static>(
     state: &AppState,
     f: impl FnOnce() -> Result<T, InternalAuthError> + Send + 'static,
@@ -86,7 +79,6 @@ async fn run_hashing<T: Send + 'static>(
         .map_err(internal)
 }
 
-/// `POST /api/register`.
 pub async fn register(
     State(state): State<AppState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
@@ -126,7 +118,6 @@ pub async fn register(
     }
 }
 
-/// `POST /api/login`.
 pub async fn login(
     State(state): State<AppState>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
@@ -177,7 +168,6 @@ pub async fn login(
     }
 }
 
-/// `POST /api/logout` with `Authorization: Bearer <token>`.
 pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Response {
     let Some(token) = bearer(&headers) else {
         return StatusCode::NO_CONTENT.into_response();
@@ -192,7 +182,6 @@ pub async fn logout(State(state): State<AppState>, headers: HeaderMap) -> Respon
     }
 }
 
-/// `POST /api/images`: raw image bytes, `Authorization: Bearer <token>`.
 pub async fn upload_image(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -216,7 +205,6 @@ pub async fn upload_image(
     if !state.upload_limit.allow(user.id) {
         return reply(StatusCode::TOO_MANY_REQUESTS, &ImageError::RateLimited);
     }
-    // Bounds how many 20 MB bodies are buffered at once.
     let Ok(_body_permit) = state.uploads.acquire().await else {
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
@@ -229,7 +217,6 @@ pub async fn upload_image(
         Ok(false) => {}
         Err(e) => return internal(e),
     }
-    // One decode/encode at a time: a full-size decode can take 150 MB.
     let Ok(_encode_permit) = state.encoding.acquire().await else {
         return StatusCode::SERVICE_UNAVAILABLE.into_response();
     };
@@ -266,7 +253,6 @@ pub async fn upload_image(
     }
 }
 
-/// `GET /img/{hash}/{thumb|display}.webp`, immutable and cacheable forever.
 pub async fn get_image(
     State(state): State<AppState>,
     Path((hash, file)): Path<(String, String)>,

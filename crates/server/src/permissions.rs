@@ -1,11 +1,6 @@
-//! Every permission rule of the server, as pure functions, plus [`Outgoing`]:
-//! the only way to build a message carrying campaign data, so nothing reaches
-//! a client without passing through the filters here.
-
 use beholder_core::{Campaign, CampaignEvent, CampaignId, CampaignOp, Role, Seq, UserId};
 use beholder_protocol::{EventEnvelope, ServerMsg};
 
-/// Whether a member with `role` may apply `op` to their campaign.
 pub fn can_apply(role: Role, op: &CampaignOp) -> bool {
     match op {
         CampaignOp::Rename { .. }
@@ -15,21 +10,17 @@ pub fn can_apply(role: Role, op: &CampaignOp) -> bool {
     }
 }
 
-/// The version of `event` a member with role `viewer` may receive, if any.
 pub fn event_for(viewer: Role, event: &CampaignEvent) -> Option<CampaignEvent> {
     match event {
-        // Players could hand the code to anyone; only the DM controls who joins.
         CampaignEvent::InviteRegenerated { .. } => (viewer == Role::Dm).then(|| event.clone()),
         CampaignEvent::Created { .. }
         | CampaignEvent::Renamed { .. }
         | CampaignEvent::CoverChanged { .. }
         | CampaignEvent::MemberJoined { .. }
-        // Settings are deliberately visible to everyone (SPEC §4).
         | CampaignEvent::SettingsChanged { .. } => Some(event.clone()),
     }
 }
 
-/// The view of `campaign` a member with role `viewer` may receive.
 pub fn campaign_for(viewer: Role, campaign: &Campaign) -> Campaign {
     let mut c = campaign.clone();
     if viewer != Role::Dm {
@@ -38,12 +29,10 @@ pub fn campaign_for(viewer: Role, campaign: &Campaign) -> Campaign {
     c
 }
 
-/// A server message that has been filtered for its recipient.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Outgoing(ServerMsg);
 
 impl Outgoing {
-    /// Events for one recipient; `None` when they may see none of them.
     pub fn events(viewer: Role, campaign_id: CampaignId, events: &[EventEnvelope]) -> Option<Self> {
         let events: Vec<_> = events
             .iter()
@@ -62,7 +51,6 @@ impl Outgoing {
         }))
     }
 
-    /// A campaign snapshot for one recipient.
     pub fn snapshot(viewer: Role, seq: Seq, campaign: &Campaign) -> Self {
         Self(ServerMsg::Snapshot {
             seq,
@@ -70,8 +58,6 @@ impl Outgoing {
         })
     }
 
-    /// A message carrying no campaign data. `None` for `Events` and `Snapshot`,
-    /// which must go through [`Outgoing::events`] / [`Outgoing::snapshot`].
     pub fn control(msg: ServerMsg) -> Option<Self> {
         match msg {
             ServerMsg::Events { .. } | ServerMsg::Snapshot { .. } => None,
@@ -86,7 +72,6 @@ impl Outgoing {
         }
     }
 
-    /// Who of a campaign's members is online. Presence is visible to all members.
     pub fn presence(campaign_id: CampaignId, online: Vec<UserId>) -> Self {
         Self(ServerMsg::Presence {
             campaign_id,
@@ -94,7 +79,6 @@ impl Outgoing {
         })
     }
 
-    /// One member came online or went offline.
     pub fn presence_changed(campaign_id: CampaignId, user_id: UserId, online: bool) -> Self {
         Self(ServerMsg::PresenceChanged {
             campaign_id,
@@ -103,7 +87,6 @@ impl Outgoing {
         })
     }
 
-    /// The message to encode and send.
     pub fn msg(&self) -> &ServerMsg {
         &self.0
     }
@@ -111,7 +94,6 @@ impl Outgoing {
 
 #[cfg(test)]
 mod tests {
-    //! The permission matrix: every role against every op, event and view.
 
     use super::*;
     use beholder_core::{
@@ -135,7 +117,6 @@ mod tests {
         InviteCode::from_random([1, 2, 3, 4, 5])
     }
 
-    /// (op, DM allowed, player allowed)
     fn op_matrix() -> Vec<(CampaignOp, bool, bool)> {
         vec![
             (
@@ -155,7 +136,6 @@ mod tests {
         ]
     }
 
-    /// (event, DM sees it, player sees it)
     fn event_matrix() -> Vec<(CampaignEvent, bool, bool)> {
         vec![
             (

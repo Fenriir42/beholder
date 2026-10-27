@@ -1,5 +1,3 @@
-//! The campaign library: cover + title cards, search, join and create.
-
 use beholder_ipc::CampaignView;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -25,7 +23,6 @@ struct CodeArgs {
     code: String,
 }
 
-/// The library page.
 #[component]
 pub fn LibraryScreen() -> impl IntoView {
     let ctx = use_app();

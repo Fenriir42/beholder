@@ -1,41 +1,28 @@
-//! Frame codec: one flags byte, then the postcard body, zstd-compressed when
-//! it is larger than [`COMPRESS_THRESHOLD`] and compression actually helps.
-
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-/// Bodies above this many bytes are compressed.
 pub const COMPRESS_THRESHOLD: usize = 1024;
 
-/// Largest frame accepted, compressed or not. Bounds memory per message.
 pub const MAX_FRAME_BYTES: usize = 4 * 1024 * 1024;
 
 const FLAG_ZSTD: u8 = 0b0000_0001;
 
-/// zstd level 3: the library default, a good speed/ratio balance for small frames.
 const ZSTD_LEVEL: i32 = 3;
 
-/// Why a frame couldn't be encoded or decoded.
 #[derive(Debug, thiserror::Error)]
 pub enum CodecError {
-    /// The frame has no flags byte.
     #[error("empty frame")]
     Empty,
-    /// The flags byte has bits this version doesn't know.
     #[error("unknown frame flags {0:#04x}")]
     UnknownFlags(u8),
-    /// The frame, or its decompressed body, exceeds [`MAX_FRAME_BYTES`].
     #[error("frame too large")]
     TooLarge,
-    /// zstd failed.
     #[error("zstd: {0}")]
     Zstd(#[from] std::io::Error),
-    /// postcard failed (bad body or wrong message type).
     #[error("postcard: {0}")]
     Postcard(#[from] postcard::Error),
 }
 
-/// Encodes a message into one frame.
 pub fn encode<T: Serialize>(msg: &T) -> Result<Vec<u8>, CodecError> {
     let frame = postcard::to_extend(msg, vec![0u8])?;
     let body = &frame[1..];
@@ -54,7 +41,6 @@ pub fn encode<T: Serialize>(msg: &T) -> Result<Vec<u8>, CodecError> {
     Ok(frame)
 }
 
-/// Decodes one frame.
 pub fn decode<T: DeserializeOwned>(frame: &[u8]) -> Result<T, CodecError> {
     if frame.len() > MAX_FRAME_BYTES {
         return Err(CodecError::TooLarge);
@@ -258,7 +244,6 @@ mod tests {
         msgs
     }
 
-    /// Compile-time reminder: a new variant must get a sample above.
     #[allow(dead_code)]
     fn exhaustive(c: &ClientMsg, s: &ServerMsg) {
         match c {
@@ -338,7 +323,6 @@ mod tests {
     fn small_frames_stay_uncompressed_and_tiny() {
         let ping = encode(&ClientMsg::Ping { t: 1_000_000 }).unwrap();
         assert_eq!(ping[0], 0);
-        // An idle heartbeat must stay a handful of bytes.
         assert!(ping.len() <= 6, "ping is {} bytes", ping.len());
     }
 
@@ -367,7 +351,6 @@ mod tests {
             decode::<ClientMsg>(&[0, 0xff, 0xff]),
             Err(CodecError::Postcard(_))
         ));
-        // A body that would decompress past the limit.
         let bomb = zstd::bulk::compress(&vec![0u8; MAX_FRAME_BYTES + 1], 3).unwrap();
         let mut frame = vec![FLAG_ZSTD];
         frame.extend_from_slice(&bomb);
@@ -379,7 +362,6 @@ mod tests {
 
     #[test]
     fn invalid_values_fail_to_decode() {
-        // A title over the length limit must not get through the wire.
         #[derive(Serialize)]
         enum FakeKind {
             CreateCampaign {

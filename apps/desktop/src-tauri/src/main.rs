@@ -1,7 +1,3 @@
-//! Beholder desktop shell: hosts the Leptos UI and bridges it to client-core
-//! through Tauri commands and events. The UI never touches the network.
-
-// Release builds on Windows shouldn't open a console window.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod commands;
@@ -40,8 +36,6 @@ fn main() {
             let config = Config::load(&shell.config_dir);
             *session::lock(&shell.config) = config.clone();
             app.manage(shell);
-            // Resume the last session from the cache: the library renders before
-            // the network answers (SPEC §2, cold start < 1 s).
             if let (Some(url), Some(user)) = (config.server_url, config.last_user) {
                 let shell = app.state::<Shell>();
                 if let Some(token) = shell.secrets.load(&url) {

@@ -1,5 +1,3 @@
-//! Login and registration. Discord login is shown but disabled until its phase.
-
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
@@ -20,7 +18,6 @@ struct RegisterArgs {
     password: String,
 }
 
-/// Login / register form.
 #[component]
 pub fn AuthScreen() -> impl IntoView {
     let ctx = use_app();

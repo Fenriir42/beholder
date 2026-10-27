@@ -1,38 +1,23 @@
-//! The optimistic view: confirmed state with pending commands applied on top.
-//!
-//! Rolling back a rejected command is just recomputing without it, and server
-//! events rebase pending commands for free (ADR-0004).
-
 use std::collections::{HashMap, HashSet};
 
 use beholder_core::{Campaign, CampaignId, Member, Role, Seq, User, UserId};
 use beholder_protocol::{Command, CommandKind};
 
-/// What the UI shows for one campaign.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CampaignView {
-    /// State including pending changes.
     pub campaign: Campaign,
-    /// Last confirmed seq (0 for a campaign that only exists locally so far).
     pub seq: Seq,
-    /// Whether some of what's shown is still waiting for the server.
     pub pending: bool,
-    /// Members currently online.
     pub online: Vec<UserId>,
 }
 
-/// Everything the UI needs, computed from the cache.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct View {
-    /// The logged-in user, if known.
     pub user: Option<User>,
-    /// Campaigns, sorted by title.
     pub campaigns: Vec<CampaignView>,
-    /// Join requests still waiting for the server.
     pub pending_joins: usize,
 }
 
-/// Builds the view from confirmed state, the outbox and presence.
 pub fn compute(
     user: Option<User>,
     confirmed: Vec<(Seq, Campaign)>,
@@ -52,7 +37,6 @@ pub fn compute(
     for cmd in outbox {
         match &cmd.kind {
             CommandKind::CreateCampaign { campaign_id, title } => {
-                // Already confirmed if the server's snapshot arrived before the Ack.
                 if campaigns.iter().any(|c| c.campaign.id == *campaign_id) {
                     continue;
                 }
@@ -154,7 +138,6 @@ mod tests {
         let v = compute(Some(me()), vec![base.clone()], &[rename], &HashMap::new());
         assert_eq!(v.campaigns[0].campaign.title.as_str(), "New");
         assert!(v.campaigns[0].pending);
-        // Rejected: the command leaves the outbox and the view rolls back.
         let v = compute(Some(me()), vec![base], &[], &HashMap::new());
         assert_eq!(v.campaigns[0].campaign.title.as_str(), "Old");
         assert!(!v.campaigns[0].pending);

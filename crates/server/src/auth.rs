@@ -1,5 +1,3 @@
-//! Accounts, Argon2id password hashing and opaque rotating session tokens.
-
 use std::sync::OnceLock;
 
 use argon2::password_hash::phc::PasswordHash;
@@ -13,34 +11,25 @@ use sha2::{Digest, Sha256};
 use crate::campaigns::blob_id;
 use crate::db::DbError;
 
-/// Sessions unused for this long expire.
 pub const SESSION_TTL_MS: i64 = 30 * 24 * 3600 * 1000;
 
-/// A token older than this is replaced at the next `Hello`.
 pub const ROTATE_AFTER_MS: i64 = 24 * 3600 * 1000;
 
-/// OWASP's Argon2id baseline: 19 MiB, 2 passes, 1 lane. With the hashing
-/// semaphore (2 permits) this caps hashing memory at ~40 MiB.
 fn argon2() -> Result<Argon2<'static>, AuthError> {
     let params = Params::new(19 * 1024, 2, 1, None).map_err(|_| AuthError::Hash)?;
     Ok(Argon2::new(Algorithm::Argon2id, Version::V0x13, params))
 }
 
-/// Why an auth operation failed (besides the expected outcomes).
 #[derive(Debug, thiserror::Error)]
 pub enum AuthError {
-    /// Database failure.
     #[error(transparent)]
     Db(#[from] DbError),
-    /// Hashing failed or a stored hash is malformed.
     #[error("password hashing failed")]
     Hash,
-    /// The OS random source failed.
     #[error("random source failed")]
     Random,
 }
 
-/// Hashes a password into a PHC string. CPU- and memory-heavy: run it on the blocking pool.
 pub fn hash_password(password: &Password) -> Result<String, AuthError> {
     let salt: [u8; 16] = crate::random_bytes().map_err(|_| AuthError::Random)?;
     let hash: PasswordHash = argon2()?
@@ -49,8 +38,6 @@ pub fn hash_password(password: &Password) -> Result<String, AuthError> {
     Ok(hash.to_string())
 }
 
-/// Checks a password against a PHC string. `None` hashes against a fixed dummy,
-/// so an unknown username takes as long as a wrong password.
 pub fn verify_password(password: &Password, phc: Option<&str>) -> Result<bool, AuthError> {
     static DUMMY: OnceLock<Option<String>> = OnceLock::new();
     let Some(phc) = phc else {
@@ -74,7 +61,6 @@ fn verify(password: &Password, phc: &str) -> Result<bool, AuthError> {
         .is_ok())
 }
 
-/// Creates an account. `Ok(None)` when the username is taken.
 pub fn create_user(
     conn: &mut Connection,
     username: &Username,
@@ -111,7 +97,6 @@ pub fn create_user(
     }))
 }
 
-/// The account and stored password hash for a login name (case-insensitive).
 pub fn credentials(
     conn: &Connection,
     username: &Username,
@@ -135,7 +120,6 @@ pub fn credentials(
     .transpose()
 }
 
-/// The account with this id.
 pub fn user_by_id(conn: &Connection, id: UserId) -> Result<Option<User>, DbError> {
     conn.query_row(
         "SELECT username, display_name FROM users WHERE id = ?1",
@@ -147,7 +131,6 @@ pub fn user_by_id(conn: &Connection, id: UserId) -> Result<Option<User>, DbError
     .transpose()
 }
 
-/// Issues a new session token for `user`.
 pub fn create_session(
     conn: &Connection,
     user: UserId,
@@ -168,20 +151,12 @@ pub fn create_session(
     Ok(token)
 }
 
-/// A valid session: the user, and a replacement token when it was time to rotate.
 #[derive(Debug)]
 pub struct Session {
-    /// The logged-in account.
     pub user: User,
-    /// New token to hand to the client, if rotated.
     pub rotated: Option<SessionToken>,
 }
 
-/// Checks a token and slides its expiry. With `rotate` (only on `Hello`, the one
-/// place a new token can be delivered) an old token is also replaced.
-///
-/// Rotation keeps the old token valid until the new one is first used, since
-/// on a flaky link the client may never receive the new one.
 pub fn validate_session(
     conn: &mut Connection,
     token: &SessionToken,
@@ -221,7 +196,6 @@ pub fn validate_session(
         return Ok(None);
     }
     let user = user_from_row(&user_id, username, &display)?;
-    // This token being used proves the client has it: retire its predecessor.
     tx.execute(
         "DELETE FROM sessions WHERE replaced_by = ?1",
         [hash.as_slice()],
@@ -233,7 +207,6 @@ pub fn validate_session(
     )
     .map_err(DbError::from)?;
     let rotated = if rotate && (now.0 - created >= ROTATE_AFTER_MS || replaced_by.is_some()) {
-        // A replacement the client never used is discarded and issued afresh.
         if let Some(old) = replaced_by {
             tx.execute(
                 "DELETE FROM sessions WHERE token_hash = ?1",
@@ -255,7 +228,6 @@ pub fn validate_session(
     Ok(Some(Session { user, rotated }))
 }
 
-/// Ends a session, including any rotation partner.
 pub fn delete_session(conn: &Connection, token: &SessionToken) -> Result<(), DbError> {
     let hash = token_hash(token);
     conn.execute(
@@ -266,13 +238,11 @@ pub fn delete_session(conn: &Connection, token: &SessionToken) -> Result<(), DbE
     Ok(())
 }
 
-/// Removes expired sessions.
 pub fn purge_sessions(conn: &Connection, now: UnixMillis) -> Result<(), DbError> {
     conn.execute("DELETE FROM sessions WHERE expires_at <= ?1", [now.0])?;
     Ok(())
 }
 
-/// Only hashes are stored, so a leaked database doesn't leak live sessions.
 fn token_hash(token: &SessionToken) -> [u8; 32] {
     Sha256::digest(token.0).into()
 }
@@ -291,7 +261,6 @@ mod tests {
     use crate::db::Db;
 
     fn conn() -> Connection {
-        // Tests use the raw connection; Db::open_in_memory runs the migrations.
         let db = Db::open_in_memory().unwrap();
         db.into_connection()
     }
@@ -354,8 +323,6 @@ mod tests {
             .unwrap()
             .unwrap();
         let new1 = s.rotated.unwrap();
-        // The client lost `new1` and reconnects with the old token: still valid,
-        // and it gets a fresh replacement while `new1` is discarded.
         let s = validate_session(&mut c, &old, later, true)
             .unwrap()
             .unwrap();
@@ -365,7 +332,6 @@ mod tests {
                 .unwrap()
                 .is_none()
         );
-        // Using `new2` retires the old token.
         let s = validate_session(&mut c, &new2, later, true)
             .unwrap()
             .unwrap();

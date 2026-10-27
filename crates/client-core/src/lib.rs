@@ -1,6 +1,3 @@
-//! Beholder client core: connection manager, outbox, local cache and sync.
-//! No Tauri dependency, so it is testable headless.
-
 pub mod cache;
 pub mod connection;
 pub mod http;
@@ -17,51 +14,24 @@ use crate::cache::{Cache, CacheError};
 use crate::connection::Wake;
 use crate::view::View;
 
-/// What the UI shows in the connection pill (SPEC §3).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ConnectionState {
-    /// First connection attempt of this run.
     Connecting,
-    /// Connected and synced.
     Online,
-    /// Lost the connection; retrying. `queued` commands are waiting.
-    Reconnecting {
-        /// Commands in the outbox.
-        queued: usize,
-    },
-    /// Several attempts failed; showing cached data, still retrying.
-    Offline {
-        /// Commands in the outbox.
-        queued: usize,
-    },
+    Reconnecting { queued: usize },
+    Offline { queued: usize },
 }
 
-/// Notifications for the shell.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ClientEvent {
-    /// The connection state changed.
     State(ConnectionState),
-    /// Cached or pending data changed; re-read [`Client::view`].
     ViewChanged,
-    /// The server refused a command; it has been rolled back.
-    Rejected {
-        /// The command.
-        id: CommandId,
-        /// Why.
-        reason: RejectReason,
-    },
-    /// Store this token in place of the old one.
+    Rejected { id: CommandId, reason: RejectReason },
     SessionRotated(SessionToken),
-    /// The token is no longer valid; the user must log in again.
     SessionInvalid,
-    /// The server speaks a newer protocol; the app must be updated.
-    UpdateRequired {
-        /// The server's protocol version.
-        server_version: u16,
-    },
+    UpdateRequired { server_version: u16 },
 }
 
-/// State shared by the handle and the manager task.
 pub(crate) struct Shared {
     cache: Mutex<Cache>,
     presence: Mutex<HashMap<CampaignId, HashSet<UserId>>>,
@@ -95,7 +65,6 @@ impl Shared {
     }
 
     pub(crate) fn emit(&self, e: ClientEvent) {
-        // The shell may have gone away during shutdown; nothing to do then.
         let _ = self.events.send(e);
     }
 
@@ -103,7 +72,6 @@ impl Shared {
         lock(&self.presence).clear();
     }
 
-    /// Applies one server message to the cache and presence.
     pub(crate) fn handle(&self, msg: ServerMsg) -> Result<(), CacheError> {
         match msg {
             ServerMsg::Ack { id, .. } => {
@@ -153,7 +121,6 @@ impl Shared {
     }
 }
 
-/// Handle to a running client. Cheap to clone.
 #[derive(Clone)]
 pub struct Client {
     shared: Arc<Shared>,
@@ -161,8 +128,6 @@ pub struct Client {
 }
 
 impl Client {
-    /// Starts the connection manager on the current tokio runtime. The cache
-    /// is usable immediately, so the UI can render before any network I/O.
     pub fn start(
         server_url: &str,
         cache: Cache,
@@ -185,7 +150,6 @@ impl Client {
         (Self { shared, wake }, events_rx)
     }
 
-    /// The current optimistic view.
     pub fn view(&self) -> Result<View, CacheError> {
         let (user, confirmed, outbox) = self
             .shared
@@ -194,8 +158,6 @@ impl Client {
         Ok(view::compute(user, confirmed, &outbox, &presence))
     }
 
-    /// Records a user action: persisted in the outbox first, then sent when
-    /// online. Returns its id, to match a later `Rejected`.
     pub fn submit(&self, kind: CommandKind) -> Result<CommandId, CacheError> {
         let cmd = Command {
             id: CommandId(uuid::Uuid::now_v7()),
@@ -208,23 +170,19 @@ impl Client {
         Ok(id)
     }
 
-    /// The current connection state.
     pub fn state(&self) -> ConnectionState {
         *lock(&self.shared.state)
     }
 
-    /// Retry now: the OS reported a network change, or the user asked.
     pub fn network_changed(&self) {
         let _ = self.wake.send(Wake::NetworkChanged);
     }
 
-    /// Closes the connection and stops the manager.
     pub fn shutdown(&self) {
         let _ = self.wake.send(Wake::Shutdown);
     }
 }
 
-/// The WebSocket URL for a server base URL (`https://host` → `wss://host/ws`).
 pub fn ws_url(server_url: &str) -> String {
     let base = server_url.trim_end_matches('/');
     let rest = base

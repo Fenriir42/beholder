@@ -1,6 +1,3 @@
-//! Shell state and the signed-in session: owns the client-core `Client` and
-//! forwards its events to the UI.
-
 use std::path::PathBuf;
 use std::sync::{Mutex, MutexGuard};
 
@@ -16,30 +13,19 @@ use tokio::sync::mpsc::UnboundedReceiver;
 use crate::config::Config;
 use crate::secrets::Secrets;
 
-/// Everything the commands share.
 pub struct Shell {
-    /// Where `config.json` lives.
     pub config_dir: PathBuf,
-    /// Where caches live (per server and user).
     pub data_dir: PathBuf,
-    /// Where downloaded images are cached by hash.
     pub image_dir: PathBuf,
-    /// Remembered settings.
     pub config: Mutex<Config>,
-    /// OS keyring.
     pub secrets: Secrets,
-    /// The signed-in session, if any.
     pub session: Mutex<Option<Session>>,
 }
 
-/// A signed-in session.
 #[derive(Clone)]
 pub struct Session {
-    /// The server this session belongs to.
     pub server_url: String,
-    /// The running client.
     pub client: Client,
-    /// Current token (rotated by the server from time to time).
     pub token: std::sync::Arc<Mutex<SessionToken>>,
 }
 
@@ -48,7 +34,6 @@ pub fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl Shell {
-    /// The configured server's HTTP client.
     pub fn http(&self) -> Result<(String, Http), IpcError> {
         let url = lock(&self.config)
             .server_url
@@ -58,20 +43,16 @@ impl Shell {
         Ok((url, http))
     }
 
-    /// The running session.
     pub fn session(&self) -> Result<Session, IpcError> {
         lock(&self.session).clone().ok_or(IpcError::SignedOut)
     }
 
-    /// Persists the config.
     pub fn save_config(&self) -> Result<(), IpcError> {
         lock(&self.config)
             .save(&self.config_dir)
             .map_err(|_| IpcError::Storage)
     }
 
-    /// Opens the user's cache and starts the client. Must run inside the
-    /// async runtime (the client spawns its connection task).
     pub fn start(
         &self,
         app: &AppHandle,
@@ -94,7 +75,6 @@ impl Shell {
         Ok(())
     }
 
-    /// Stops the client, keeping its cache on disk.
     pub fn stop(&self) {
         if let Some(s) = lock(&self.session).take() {
             s.client.shutdown();
@@ -102,7 +82,6 @@ impl Shell {
     }
 }
 
-/// One cache file per (server, user), so accounts never see each other's data.
 fn cache_file(server_url: &str, user: UserId) -> String {
     let server: String = server_url
         .chars()
@@ -111,7 +90,6 @@ fn cache_file(server_url: &str, user: UserId) -> String {
     format!("{server}-{user}.sqlite")
 }
 
-/// The connection state as the UI sees it.
 pub fn conn_state(s: ConnectionState) -> ConnState {
     match s {
         ConnectionState::Connecting => ConnState::Connecting,
@@ -121,7 +99,6 @@ pub fn conn_state(s: ConnectionState) -> ConnState {
     }
 }
 
-/// The current view as the UI sees it.
 pub fn view_data(client: &Client) -> Result<ViewData, IpcError> {
     let v = client.view().map_err(|_| IpcError::Storage)?;
     Ok(ViewData {
@@ -139,7 +116,6 @@ pub fn view_data(client: &Client) -> Result<ViewData, IpcError> {
     })
 }
 
-/// Maps an HTTP failure to what the UI shows.
 pub fn http_error(e: HttpError) -> IpcError {
     match e {
         HttpError::Auth(a) => IpcError::Auth(a),
@@ -151,7 +127,6 @@ pub fn http_error(e: HttpError) -> IpcError {
 
 async fn forward(app: AppHandle, mut rx: UnboundedReceiver<ClientEvent>, session: Session) {
     while let Some(event) = rx.recv().await {
-        // Emit failures only mean the window is gone; nothing to do.
         let _ = match event {
             ClientEvent::State(s) => app.emit(events::STATE, conn_state(s)),
             ClientEvent::ViewChanged => app.emit(events::VIEW_CHANGED, ()),

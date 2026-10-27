@@ -1,5 +1,3 @@
-//! Strongly typed identifiers, sequence numbers and timestamps.
-
 use core::fmt;
 
 use serde::{Deserialize, Serialize};
@@ -13,12 +11,10 @@ macro_rules! uuid_id {
         pub struct $name(pub Uuid);
 
         impl $name {
-            /// The 16 raw bytes, used as the SQLite key.
             pub fn as_bytes(&self) -> &[u8; 16] {
                 self.0.as_bytes()
             }
 
-            /// Rebuilds the id from its 16 raw bytes.
             pub fn from_bytes(bytes: [u8; 16]) -> Self {
                 Self(Uuid::from_bytes(bytes))
             }
@@ -32,21 +28,11 @@ macro_rules! uuid_id {
     };
 }
 
-uuid_id!(
-    /// A user account.
-    UserId
-);
-uuid_id!(
-    /// A campaign.
-    CampaignId
-);
-uuid_id!(
-    /// A client command; a UUIDv7 so the server can tell its age when deduplicating.
-    CommandId
-);
+uuid_id!(UserId);
+uuid_id!(CampaignId);
+uuid_id!(CommandId);
 
 impl CommandId {
-    /// Unix milliseconds embedded in a UUIDv7, or `None` for any other version.
     pub fn unix_millis(&self) -> Option<u64> {
         if self.0.get_version_num() != 7 {
             return None;
@@ -58,27 +44,23 @@ impl CommandId {
     }
 }
 
-/// Position of an event in a campaign's log. Starts at 1; 0 means "nothing seen yet".
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
 )]
 #[serde(transparent)]
 pub struct Seq(pub u64);
 
-/// Milliseconds since the Unix epoch, UTC.
 #[derive(
     Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize,
 )]
 #[serde(transparent)]
 pub struct UnixMillis(pub i64);
 
-/// SHA-256 of an uploaded image's original bytes; images are content-addressed by it.
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 pub struct ImageHash(pub [u8; 32]);
 
 impl ImageHash {
-    /// Lowercase hex, as used in image URLs and file names.
     pub fn to_hex(&self) -> String {
         const HEX: &[u8; 16] = b"0123456789abcdef";
         let mut s = String::with_capacity(64);
@@ -89,7 +71,6 @@ impl ImageHash {
         s
     }
 
-    /// Parses 64 hex digits (either case).
     pub fn from_hex(s: &str) -> Option<Self> {
         let bytes = s.as_bytes();
         if bytes.len() != 64 {
@@ -139,7 +120,6 @@ mod tests {
 
     #[test]
     fn command_id_reads_v7_timestamp() {
-        // 0x0190_0000_0000 ms, version nibble 7, variant bits 10.
         let id = CommandId(Uuid::from_bytes([
             0x01, 0x90, 0, 0, 0, 0, 0x70, 0, 0x80, 0, 0, 0, 0, 0, 0, 1,
         ]));

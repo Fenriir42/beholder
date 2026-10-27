@@ -1,9 +1,3 @@
-//! Campaign commands, the event log and its SQL projection.
-//!
-//! Every function here runs inside [`crate::db::Db::call`], so calls are
-//! serialized and each command is one transaction: dedupe check, validation,
-//! event append, projection update and stored reply commit together.
-
 use beholder_core::{
     Campaign, CampaignEvent, CampaignId, CampaignOp, CampaignSettings, CampaignTitle,
     CombatVisibility, CommandId, DisplayName, ImageHash, InviteCode, Member, Role, Seq, UnixMillis,
@@ -16,38 +10,25 @@ use serde::{Deserialize, Serialize};
 use crate::db::DbError;
 use crate::permissions;
 
-/// Commands older than this are refused: the server may have forgotten them,
-/// so applying them again could duplicate their effect.
 pub const DEDUP_WINDOW_MS: i64 = 7 * 24 * 3600 * 1000;
 
-/// Stored replies are kept a day longer than the window, so there is no gap.
 pub const COMMAND_RETENTION_MS: i64 = DEDUP_WINDOW_MS + 24 * 3600 * 1000;
 
-/// A client further behind than this gets a snapshot instead of replayed events.
 pub const MAX_REPLAY: u64 = 1000;
 
-/// Events kept per campaign by compaction; older ones are covered by snapshots.
 pub const KEEP_EVENTS: u64 = 1000;
 
-/// The answer to a command, stored for deduplication.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Reply {
-    /// Applied; seq of the last event produced, if any.
     Ack(Option<Seq>),
-    /// Refused.
     Reject(RejectReason),
 }
 
-/// The result of handling one command.
 #[derive(Debug, PartialEq, Eq)]
 pub struct Handled {
-    /// What to answer the sender.
     pub reply: Reply,
-    /// The campaign the new events belong to.
     pub campaign_id: Option<CampaignId>,
-    /// New events to fan out (unfiltered; the hub filters per recipient).
     pub events: Vec<EventEnvelope>,
-    /// Set when the sender just became a member (create or join) with this role.
     pub joined: Option<Role>,
 }
 
@@ -68,7 +49,6 @@ struct Executed {
     joined: Option<Role>,
 }
 
-/// Handles one command from `actor`, at most once per command id.
 pub fn handle_command(
     conn: &mut Connection,
     actor: &User,
@@ -171,7 +151,6 @@ fn execute(
                 return Ok(Err(RejectReason::InvalidInviteCode));
             };
             if let Some(role) = role_of(tx, campaign_id, actor.id)? {
-                // Already a member (e.g. the DM typed their own code): nothing to record.
                 return Ok(Ok(Executed {
                     campaign_id,
                     events: Vec::new(),
@@ -218,7 +197,6 @@ fn execute(
     }
 }
 
-/// Appends events and keeps the projection in step, inside one transaction.
 struct Log<'a> {
     tx: &'a Transaction<'a>,
     actor: UserId,
@@ -267,7 +245,6 @@ impl Log<'_> {
     }
 }
 
-/// Applies one event to the SQL projection; mirrors `Campaign::apply`.
 fn project(
     tx: &Transaction<'_>,
     campaign_id: CampaignId,
@@ -323,7 +300,6 @@ fn project(
     Ok(())
 }
 
-/// The current state of a campaign and the seq it is current at.
 pub fn load_campaign(
     conn: &Connection,
     id: CampaignId,
@@ -389,16 +365,12 @@ pub fn load_campaign(
     Ok(Some((Seq(head), campaign)))
 }
 
-/// What a client that has seen up to `after` needs.
 #[derive(Debug, PartialEq, Eq)]
 pub enum CatchUp {
-    /// These events (possibly none).
     Events(Vec<EventEnvelope>),
-    /// Too far behind, or ahead of the server: send a snapshot.
     Snapshot,
 }
 
-/// Events after `after`, or `Snapshot` when replay isn't possible or worthwhile.
 pub fn catch_up(conn: &Connection, id: CampaignId, after: Seq) -> Result<CatchUp, DbError> {
     let (head, compacted): (u64, u64) = conn.query_row(
         "SELECT head_seq, compacted_seq FROM campaigns WHERE id = ?1",
@@ -433,7 +405,6 @@ pub fn catch_up(conn: &Connection, id: CampaignId, after: Seq) -> Result<CatchUp
     Ok(CatchUp::Events(events))
 }
 
-/// Every campaign `user` belongs to, with their role.
 pub fn memberships_of(conn: &Connection, user: UserId) -> Result<Vec<(CampaignId, Role)>, DbError> {
     let mut stmt =
         conn.prepare_cached("SELECT campaign_id, role FROM memberships WHERE user_id = ?1")?;
@@ -447,7 +418,6 @@ pub fn memberships_of(conn: &Connection, user: UserId) -> Result<Vec<(CampaignId
     .collect()
 }
 
-/// Drops old events (keeping [`KEEP_EVENTS`] per campaign) and expired command replies.
 pub fn compact(conn: &mut Connection, now: UnixMillis) -> Result<(), DbError> {
     let tx = conn.transaction()?;
     tx.execute(
@@ -521,7 +491,6 @@ fn unused_invite_code(tx: &Transaction<'_>) -> Result<InviteCode, DbError> {
     }
 }
 
-/// Reads a 16-byte id column.
 pub(crate) fn blob_id(b: &[u8]) -> Result<uuid::Uuid, DbError> {
     uuid::Uuid::from_slice(b).map_err(|_| DbError::Corrupt("id"))
 }
@@ -688,7 +657,6 @@ mod tests {
         assert_eq!(first.reply, again.reply);
         assert!(again.events.is_empty());
         assert_eq!(load_campaign(&c, id).unwrap().unwrap().0, Seq(3));
-        // Another user reusing the id is refused and changes nothing.
         let stolen = handle_command(&mut c, &player, &once, crate::now()).unwrap();
         assert_eq!(stolen.reply, Reply::Reject(RejectReason::IdConflict));
     }

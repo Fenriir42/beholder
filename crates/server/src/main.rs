@@ -1,7 +1,3 @@
-//! Beholder server binary. Configuration comes from the environment:
-//! `BEHOLDER_BIND` (default `0.0.0.0:8080`), `BEHOLDER_DATA_DIR` (default `./data-dev`),
-//! `BEHOLDER_LOG` (`error`…`trace`, default `info`).
-
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
@@ -24,8 +20,6 @@ fn main() -> anyhow::Result<()> {
         PathBuf::from(std::env::var("BEHOLDER_DATA_DIR").unwrap_or_else(|_| "data-dev".into()));
     std::fs::create_dir_all(&data_dir).context("creating data dir")?;
 
-    // Two workers are plenty for one friend group; a small blocking pool bounds
-    // the threads (and stacks) used by SQLite, Argon2 and image work.
     let rt = tokio::runtime::Builder::new_multi_thread()
         .worker_threads(2)
         .max_blocking_threads(8)

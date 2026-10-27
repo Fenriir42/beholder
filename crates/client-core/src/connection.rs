@@ -1,6 +1,3 @@
-//! The connection manager: one task that keeps a WebSocket to the server
-//! alive, resyncs on every reconnect, and resends the outbox.
-
 use std::time::Duration;
 
 use beholder_protocol::{
@@ -14,45 +11,30 @@ use tokio_tungstenite::tungstenite::Message;
 
 use crate::{ClientEvent, ConnectionState, Shared};
 
-/// Application-level ping interval (SPEC §3).
 pub const PING_EVERY: Duration = Duration::from_secs(15);
 
-/// No traffic for this long means the connection is dead.
 pub const IDLE_TIMEOUT: Duration = Duration::from_secs(35);
 
-/// First retry delay; doubles per failure.
 const BACKOFF_START: Duration = Duration::from_millis(500);
 
-/// Longest retry delay.
 const BACKOFF_CAP: Duration = Duration::from_secs(10);
 
-/// Consecutive failures before the UI says "Offline" instead of "Reconnecting".
 const OFFLINE_AFTER: u32 = 3;
 
-/// Limit for connecting and for the server's answer to Hello.
 const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
-/// Requests from the `Client` handle to the manager task.
 pub(crate) enum Wake {
-    /// A command was added to the outbox; send it now if online.
     Send(Command),
-    /// The OS reports a network change: retry immediately.
     NetworkChanged,
-    /// Stop for good.
     Shutdown,
 }
 
 enum End {
     Shutdown,
-    /// The session can't continue without user action.
     Fatal(ClientEvent),
-    /// The connection dropped; `online` says whether it got past Hello.
-    Lost {
-        online: bool,
-    },
+    Lost { online: bool },
 }
 
-/// Runs until `Shutdown` or a fatal handshake error.
 pub(crate) async fn run(
     shared: std::sync::Arc<Shared>,
     ws_url: String,
@@ -77,7 +59,6 @@ pub(crate) async fn run(
                     queued: shared.queued(),
                 });
                 shared.emit(event);
-                // Stay alive so the handle keeps working offline until shutdown.
                 while let Some(w) = rx.recv().await {
                     if matches!(w, Wake::Shutdown) {
                         return;
@@ -106,7 +87,6 @@ pub(crate) async fn run(
                 w = rx.recv() => match w {
                     None | Some(Wake::Shutdown) => return,
                     Some(Wake::NetworkChanged) => break,
-                    // Already persisted in the outbox; it goes out after the next Hello.
                     Some(Wake::Send(_)) => {
                         let queued = shared.queued();
                         shared.set_state(if failures >= OFFLINE_AFTER {
@@ -121,8 +101,6 @@ pub(crate) async fn run(
     }
 }
 
-/// Exponential backoff with "equal jitter": half fixed, half random, so many
-/// clients don't reconnect in lockstep after a server restart.
 pub fn backoff(failures: u32) -> Duration {
     let exp = BACKOFF_START.saturating_mul(1 << failures.saturating_sub(1).min(16));
     let base = exp.min(BACKOFF_CAP);
@@ -155,7 +133,6 @@ async fn session(
         return lost;
     }
 
-    // Wait for HelloOk (or a refusal) before going Online.
     let first = timeout(HANDSHAKE_TIMEOUT, async {
         loop {
             match ws.next().await {
@@ -192,7 +169,6 @@ async fn session(
     shared.emit(ClientEvent::ViewChanged);
 
     let online = End::Lost { online: true };
-    // Resend everything still pending, in order; the server deduplicates.
     let Ok(outbox) = shared.with_cache(|c| c.outbox()) else {
         return online;
     };
@@ -235,8 +211,6 @@ async fn session(
                         return online;
                     }
                 }
-                // The socket may be dead after a network change: probe it now
-                // instead of waiting for the next ping.
                 Some(Wake::NetworkChanged) => {
                     if send(&mut ws, &ClientMsg::Ping { t: 0 }).await.is_err() {
                         return online;

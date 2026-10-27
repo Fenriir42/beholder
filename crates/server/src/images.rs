@@ -1,6 +1,3 @@
-//! Image uploads: header checks, bounded decoding, lossy WebP re-encoding and
-//! content-addressed storage (ADR-0006).
-
 use std::io::Cursor;
 use std::path::{Path, PathBuf};
 
@@ -13,30 +10,21 @@ use sha2::{Digest, Sha256};
 
 use crate::db::DbError;
 
-/// Thumbnail width (library cards, mini covers).
 pub const THUMB_WIDTH: u32 = 480;
 
-/// Longest side of the display size.
 pub const DISPLAY_MAX: u32 = 1920;
 
-/// WebP quality: visually clean for covers at a fraction of JPEG size.
 const QUALITY: f32 = 80.0;
 
-/// Decoder allocation cap. A 40 MP RGB image needs 120 MB; RGBA PNGs at the
-/// pixel limit need 160 MB. This keeps peak RSS under the 256 MB container limit.
 const MAX_DECODE_BYTES: u64 = 170 * 1024 * 1024;
 
-/// The two stored variants of an image.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Variant {
-    /// ~480 px wide.
     Thumb,
-    /// Longest side at most 1920 px.
     Display,
 }
 
 impl Variant {
-    /// Parses the URL segment (`thumb.webp` / `display.webp`).
     pub fn from_file_name(s: &str) -> Option<Self> {
         match s {
             "thumb.webp" => Some(Self::Thumb),
@@ -53,25 +41,17 @@ impl Variant {
     }
 }
 
-/// Re-encoded output of one upload.
 pub struct Encoded {
-    /// Original width.
     pub width: u32,
-    /// Original height.
     pub height: u32,
-    /// Thumbnail WebP bytes.
     pub thumb: Vec<u8>,
-    /// Display-size WebP bytes.
     pub display: Vec<u8>,
 }
 
-/// Content hash of the uploaded bytes.
 pub fn hash(bytes: &[u8]) -> ImageHash {
     ImageHash(Sha256::digest(bytes).into())
 }
 
-/// Checks the header, decodes within the memory cap, and re-encodes both
-/// variants. CPU- and memory-heavy: run on the blocking pool, one at a time.
 pub fn process(bytes: &[u8]) -> Result<Encoded, ImageError> {
     let reader = || {
         ImageReader::new(Cursor::new(bytes))
@@ -96,8 +76,6 @@ pub fn process(bytes: &[u8]) -> Result<Encoded, ImageError> {
     r.limits(limits);
     let full = r.decode().map_err(|_| ImageError::Unsupported)?;
 
-    // `thumbnail` averages areas: fast, low-memory and good for big downscales.
-    // The full-size decode is dropped as soon as the display size exists.
     let display = if width > DISPLAY_MAX || height > DISPLAY_MAX {
         full.thumbnail(DISPLAY_MAX, DISPLAY_MAX)
     } else {
@@ -129,7 +107,6 @@ fn webp(img: &DynamicImage) -> Vec<u8> {
     }
 }
 
-/// Where a variant is stored: `images/<first byte>/<hash>-<variant>.webp`.
 pub fn path(root: &Path, hash: &ImageHash, variant: Variant) -> PathBuf {
     let hex = hash.to_hex();
     root.join("images")
@@ -137,8 +114,6 @@ pub fn path(root: &Path, hash: &ImageHash, variant: Variant) -> PathBuf {
         .join(format!("{hex}-{}.webp", variant.suffix()))
 }
 
-/// Writes both variants atomically (temp file + rename), so a crash never
-/// leaves a half-written file under a valid name.
 pub fn store_files(root: &Path, hash: &ImageHash, enc: &Encoded) -> std::io::Result<()> {
     for (variant, bytes) in [
         (Variant::Thumb, &enc.thumb),
@@ -155,7 +130,6 @@ pub fn store_files(root: &Path, hash: &ImageHash, enc: &Encoded) -> std::io::Res
     Ok(())
 }
 
-/// Whether an image with this hash is already stored.
 pub fn exists(conn: &Connection, hash: &ImageHash) -> Result<bool, DbError> {
     Ok(conn
         .query_row(
@@ -167,7 +141,6 @@ pub fn exists(conn: &Connection, hash: &ImageHash) -> Result<bool, DbError> {
         .is_some())
 }
 
-/// Records a stored image.
 pub fn record(
     conn: &Connection,
     hash: &ImageHash,
@@ -244,8 +217,6 @@ mod tests {
             process(b"not an image").err(),
             Some(ImageError::Unsupported)
         );
-        // A well-formed PNG claiming 10000x10000 (100 MP) with no pixel data:
-        // refused from the header alone, without attempting to decode.
         let mut ihdr = Vec::new();
         ihdr.extend_from_slice(&10_000u32.to_be_bytes());
         ihdr.extend_from_slice(&10_000u32.to_be_bytes());

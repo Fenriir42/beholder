@@ -1,6 +1,3 @@
-//! Calls into the Tauri shell. The UI never opens network connections: every
-//! request goes through `invoke`, and updates come back as Tauri events.
-
 use beholder_ipc::IpcError;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -32,25 +29,20 @@ fn from_js<T: DeserializeOwned>(v: JsValue) -> Result<T, IpcError> {
     serde_wasm_bindgen::from_value(v).map_err(|_| IpcError::Server)
 }
 
-/// A command's failure arrives as the serialized `IpcError`.
 fn error(e: JsValue) -> IpcError {
     from_js(e).unwrap_or(IpcError::Server)
 }
 
-/// Calls a shell command with named arguments.
 pub async fn call<R: DeserializeOwned>(cmd: &str, args: impl Serialize) -> Result<R, IpcError> {
     let out = tauri_invoke(cmd, to_js(&args)?).await.map_err(error)?;
     from_js(out)
 }
 
-/// Calls a shell command that takes no arguments.
 pub async fn call0<R: DeserializeOwned>(cmd: &str) -> Result<R, IpcError> {
     let out = tauri_invoke(cmd, JsValue::UNDEFINED).await.map_err(error)?;
     from_js(out)
 }
 
-/// Sends a picked file to the shell as a raw body. The bytes stay in the JS
-/// heap and go straight to IPC; they are never copied into WASM memory.
 pub async fn upload_cover(campaign_id: &str, file: web_sys::File) -> Result<(), IpcError> {
     let buf = JsFuture::from(file.array_buffer())
         .await
@@ -67,7 +59,6 @@ pub async fn upload_cover(campaign_id: &str, file: web_sys::File) -> Result<(), 
     from_js(out)
 }
 
-/// Subscribes to a shell event for the lifetime of the app.
 pub fn listen<T: DeserializeOwned + 'static>(event: &'static str, mut f: impl FnMut(T) + 'static) {
     let handler = Closure::<dyn FnMut(JsValue)>::new(move |e: JsValue| {
         let payload = js_sys::Reflect::get(&e, &"payload".into()).unwrap_or(JsValue::NULL);
@@ -77,7 +68,6 @@ pub fn listen<T: DeserializeOwned + 'static>(event: &'static str, mut f: impl Fn
     });
     leptos::task::spawn_local(async move {
         let _ = tauri_listen(event, handler.as_ref().unchecked_ref()).await;
-        // App-lifetime listener: the closure must outlive this future.
         handler.forget();
     });
 }

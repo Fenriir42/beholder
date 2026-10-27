@@ -1,9 +1,3 @@
-//! Flaky-network test (SPEC §7): a TCP proxy adds latency, refuses some
-//! connections and kills the rest after a random lifetime. Through it, a DM
-//! and a player send many commands. Nothing may be lost or applied twice, and
-//! both clients must converge to the server's state as each may see it.
-
-// Test-only file: helpers panic on unexpected results by design.
 #![allow(clippy::unwrap_used, clippy::expect_used)]
 
 use std::collections::HashSet;
@@ -38,7 +32,6 @@ async fn chaos_proxy(upstream: SocketAddr, accepted: Arc<AtomicUsize>) -> Socket
         let mut rng = fastrand::Rng::with_seed(SEED);
         while let Ok((down, _)) = listener.accept().await {
             accepted.fetch_add(1, Ordering::Relaxed);
-            // One connection in eight is refused outright.
             if rng.u8(..8) == 0 {
                 drop(down);
                 continue;
@@ -57,7 +50,6 @@ async fn pipe(down: TcpStream, upstream: SocketAddr, life: Duration, seed: u64) 
     };
     let (dr, dw) = down.into_split();
     let (ur, uw) = up.into_split();
-    // Dropping the halves when any branch ends closes both sockets mid-stream.
     tokio::select! {
         () = relay(dr, uw, fastrand::Rng::with_seed(seed)) => {}
         () = relay(ur, dw, fastrand::Rng::with_seed(seed ^ 1)) => {}
@@ -102,7 +94,6 @@ async fn user(state: &AppState, name: &str) -> SessionToken {
         .unwrap()
 }
 
-/// Polls `client.view()` until `done` holds, collecting rejections meanwhile.
 async fn wait_until(
     client: &Client,
     events: &mut UnboundedReceiver<ClientEvent>,
@@ -192,7 +183,6 @@ async fn no_lost_or_duplicated_commands_and_clients_converge() {
     )
     .await;
 
-    // Both send a burst while the proxy keeps cutting connections.
     let mut dm_ids = Vec::new();
     let mut rng = fastrand::Rng::with_seed(SEED ^ 2);
     for i in 0..DM_COMMANDS {
@@ -250,7 +240,6 @@ async fn no_lost_or_duplicated_commands_and_clients_converge() {
     )
     .await;
 
-    // No DM command was refused, and every player command was refused once.
     assert!(dm_rejects.is_empty(), "DM rejects: {dm_rejects:?}");
     let rejected: HashSet<CommandId> = player_rejects.iter().map(|(id, _)| *id).collect();
     assert_eq!(rejected, player_ids);
@@ -260,7 +249,6 @@ async fn no_lost_or_duplicated_commands_and_clients_converge() {
             .all(|(_, r)| *r == RejectReason::Forbidden)
     );
 
-    // Server side: every DM command produced exactly one event.
     let (counts, head) = state
         .db
         .call(move |c| {
@@ -275,7 +263,6 @@ async fn no_lost_or_duplicated_commands_and_clients_converge() {
         })
         .await
         .unwrap();
-    // CreateCampaign emits two events (Created + InviteRegenerated); nothing emits more.
     assert!(counts.iter().all(|(_, n)| *n <= 2), "{counts:?}");
     for id in &dm_ids {
         let n = counts
@@ -290,8 +277,6 @@ async fn no_lost_or_duplicated_commands_and_clients_converge() {
     let (head_seq, server_campaign) = head;
     assert_eq!(server_campaign.title.as_str(), final_title);
 
-    // Clients converge (eventually: the other side's last events may still be
-    // in flight through the proxy) to exactly what each may see.
     let dm_expected = permissions::campaign_for(Role::Dm, &server_campaign);
     wait_until(&dm, &mut dm_events, &mut dm_rejects, "dm converge", |v| {
         v.campaigns.len() == 1
@@ -310,7 +295,6 @@ async fn no_lost_or_duplicated_commands_and_clients_converge() {
     )
     .await;
 
-    // The run is only meaningful if the proxy really cut connections.
     let connections = accepted.load(Ordering::Relaxed);
     assert!(
         connections >= 6,

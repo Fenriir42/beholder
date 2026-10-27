@@ -1,19 +1,12 @@
-//! Small persisted settings: server URL, UI language, last user. Secrets are
-//! never stored here; the session token lives in the OS keyring.
-
 use std::path::{Path, PathBuf};
 
 use beholder_core::UserId;
 use serde::{Deserialize, Serialize};
 
-/// What the shell remembers between launches.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Config {
-    /// The server, normalized (`https://host[:port]`, no trailing slash).
     pub server_url: Option<String>,
-    /// UI language code.
     pub locale: Option<String>,
-    /// The last signed-in user, to open their cache before the network answers.
     pub last_user: Option<UserId>,
 }
 
@@ -22,7 +15,6 @@ impl Config {
         dir.join("config.json")
     }
 
-    /// Loads the config; a missing or unreadable file means defaults.
     pub fn load(dir: &Path) -> Self {
         std::fs::read(Self::path(dir))
             .ok()
@@ -30,7 +22,6 @@ impl Config {
             .unwrap_or_default()
     }
 
-    /// Saves the config (temp file + rename, so a crash can't corrupt it).
     pub fn save(&self, dir: &Path) -> std::io::Result<()> {
         std::fs::create_dir_all(dir)?;
         let tmp = dir.join("config.json.tmp");
@@ -42,8 +33,6 @@ impl Config {
     }
 }
 
-/// Normalizes a server address: `http(s)://host[:port]`, no path. Bare hosts
-/// get `https://`.
 pub fn normalize_server_url(input: &str) -> Option<String> {
     let s = input.trim().trim_end_matches('/');
     let (scheme, rest) = match s.split_once("://") {
