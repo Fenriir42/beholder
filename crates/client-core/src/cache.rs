@@ -1,5 +1,8 @@
 use std::path::Path;
 
+use beholder_core::compendium::{
+    Bundle, Entry, FacetOptions, Facets, Hit, Kind, SearchQuery, SourceMeta,
+};
 use beholder_core::{Campaign, CampaignId, CommandId, Seq, User};
 use beholder_protocol::{Command, EventEnvelope};
 use rusqlite::{Connection, OptionalExtension, params};
@@ -13,6 +16,22 @@ CREATE TABLE campaigns (id BLOB PRIMARY KEY, last_seq INTEGER NOT NULL, state BL
 -- Pending commands in submission order; deleted on Ack or Reject.
 CREATE TABLE outbox (n INTEGER PRIMARY KEY AUTOINCREMENT, id BLOB NOT NULL UNIQUE, body BLOB NOT NULL);
 ";
+
+const COMPENDIUM_SCHEMA: &str = "
+CREATE TABLE IF NOT EXISTS compendium_sources (
+    id TEXT PRIMARY KEY, sha256 TEXT NOT NULL, meta BLOB NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS compendium_entries (
+    rowid INTEGER PRIMARY KEY, source TEXT NOT NULL, key TEXT NOT NULL, kind INTEGER NOT NULL,
+    name TEXT NOT NULL, facets BLOB NOT NULL, text TEXT NOT NULL, UNIQUE (source, key)
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS compendium_fts USING fts5(
+    name, text, content = 'compendium_entries', content_rowid = 'rowid',
+    tokenize = 'unicode61 remove_diacritics 2', prefix = '2 3'
+);
+";
+
+const MAX_CANDIDATES: usize = 2000;
 
 #[derive(Debug, thiserror::Error)]
 pub enum CacheError {
@@ -53,6 +72,7 @@ impl Cache {
             conn.execute_batch(SCHEMA)?;
             conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
         }
+        conn.execute_batch(COMPENDIUM_SCHEMA)?;
         Ok(Self { conn })
     }
 
@@ -186,6 +206,217 @@ impl Cache {
     }
 }
 
+impl Cache {
+    pub fn compendium_sha256(&self, source: &str) -> Result<Option<String>, CacheError> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT sha256 FROM compendium_sources WHERE id = ?1",
+                [source],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
+    pub fn put_bundle(&self, sha256: &str, bundle: &Bundle) -> Result<(), CacheError> {
+        let tx = self.conn.unchecked_transaction()?;
+        let id = bundle.source.id.as_str();
+        tx.execute("DELETE FROM compendium_entries WHERE source = ?1", [id])?;
+        {
+            let mut insert = tx.prepare_cached(
+                "INSERT INTO compendium_entries (source, key, kind, name, facets, text)
+                 VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            )?;
+            for e in &bundle.entries {
+                insert.execute(params![
+                    id,
+                    e.key,
+                    kind_to_int(e.facets.kind()),
+                    e.name,
+                    postcard::to_stdvec(&e.facets)?,
+                    e.text
+                ])?;
+            }
+        }
+        tx.execute(
+            "INSERT OR REPLACE INTO compendium_sources (id, sha256, meta) VALUES (?1, ?2, ?3)",
+            params![id, sha256, postcard::to_stdvec(&bundle.source)?],
+        )?;
+        tx.execute_batch("INSERT INTO compendium_fts (compendium_fts) VALUES ('rebuild')")?;
+        tx.commit()?;
+        Ok(())
+    }
+
+    pub fn retain_sources(&self, keep: &[String]) -> Result<bool, CacheError> {
+        let gone: Vec<String> = self
+            .compendium_sources()?
+            .into_iter()
+            .map(|m| m.id)
+            .filter(|id| !keep.contains(id))
+            .collect();
+        if gone.is_empty() {
+            return Ok(false);
+        }
+        let tx = self.conn.unchecked_transaction()?;
+        for id in &gone {
+            tx.execute("DELETE FROM compendium_entries WHERE source = ?1", [id])?;
+            tx.execute("DELETE FROM compendium_sources WHERE id = ?1", [id])?;
+        }
+        tx.execute_batch("INSERT INTO compendium_fts (compendium_fts) VALUES ('rebuild')")?;
+        tx.commit()?;
+        Ok(true)
+    }
+
+    pub fn compendium_sources(&self) -> Result<Vec<SourceMeta>, CacheError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached("SELECT meta FROM compendium_sources ORDER BY id")?;
+        stmt.query_map([], |r| r.get::<_, Vec<u8>>(0))?
+            .map(|row| Ok(postcard::from_bytes(&row?)?))
+            .collect()
+    }
+
+    pub fn search(&self, q: &SearchQuery, limit: usize) -> Result<Vec<Hit>, CacheError> {
+        let mut hits = Vec::new();
+        let mut push = |row: &rusqlite::Row<'_>| -> Result<(), CacheError> {
+            let source: String = row.get(0)?;
+            let facets: Facets = postcard::from_bytes(&row.get::<_, Vec<u8>>(3)?)?;
+            if q.matches(&source, &facets) {
+                hits.push(Hit {
+                    source,
+                    key: row.get(1)?,
+                    name: row.get(2)?,
+                    facets,
+                });
+            }
+            Ok(())
+        };
+        match fts_query(&q.text) {
+            Some(m) => {
+                let mut stmt = self.conn.prepare_cached(
+                    "SELECT e.source, e.key, e.name, e.facets FROM compendium_fts f
+                     JOIN compendium_entries e ON e.rowid = f.rowid
+                     WHERE compendium_fts MATCH ?1
+                     ORDER BY bm25(compendium_fts, 10.0, 1.0) LIMIT ?2",
+                )?;
+                let mut rows = stmt.query(params![m, MAX_CANDIDATES])?;
+                while let Some(row) = rows.next()? {
+                    push(row)?;
+                }
+            }
+            None => {
+                let mut stmt = self.conn.prepare_cached(
+                    "SELECT source, key, name, facets FROM compendium_entries
+                     WHERE ?1 IS NULL OR kind = ?1 ORDER BY name COLLATE NOCASE",
+                )?;
+                let mut rows = stmt.query([q.kind.map(kind_to_int)])?;
+                while let Some(row) = rows.next()? {
+                    push(row)?;
+                }
+            }
+        }
+        let needle = q.text.trim().to_lowercase();
+        if !needle.is_empty() {
+            hits.sort_by_key(|h| !h.name.to_lowercase().starts_with(&needle));
+        }
+        hits.truncate(limit);
+        Ok(hits)
+    }
+
+    pub fn compendium_entry(
+        &self,
+        source: &str,
+        key: &str,
+    ) -> Result<Option<(Entry, SourceMeta)>, CacheError> {
+        let row = self
+            .conn
+            .query_row(
+                "SELECT e.name, e.facets, e.text, s.meta FROM compendium_entries e
+                 JOIN compendium_sources s ON s.id = e.source
+                 WHERE e.source = ?1 AND e.key = ?2",
+                [source, key],
+                |r| {
+                    Ok((
+                        r.get::<_, String>(0)?,
+                        r.get::<_, Vec<u8>>(1)?,
+                        r.get::<_, String>(2)?,
+                        r.get::<_, Vec<u8>>(3)?,
+                    ))
+                },
+            )
+            .optional()?;
+        row.map(|(name, facets, text, meta)| {
+            Ok((
+                Entry {
+                    key: key.to_owned(),
+                    name,
+                    facets: postcard::from_bytes(&facets)?,
+                    text,
+                },
+                postcard::from_bytes(&meta)?,
+            ))
+        })
+        .transpose()
+    }
+
+    pub fn facet_options(&self) -> Result<FacetOptions, CacheError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached("SELECT facets FROM compendium_entries WHERE kind IN (?1, ?2, ?3)")?;
+        let mut opts = FacetOptions::default();
+        let rows = stmt.query_map(
+            params![
+                kind_to_int(Kind::Spell),
+                kind_to_int(Kind::MagicItem),
+                kind_to_int(Kind::Class)
+            ],
+            |r| r.get::<_, Vec<u8>>(0),
+        )?;
+        let keep = |list: &mut Vec<String>, v: &str| {
+            if !list.iter().any(|x| x == v) {
+                list.push(v.to_owned());
+            }
+        };
+        for row in rows {
+            match postcard::from_bytes::<Facets>(&row?)? {
+                Facets::Spell {
+                    school, classes, ..
+                } => {
+                    keep(&mut opts.schools, &school);
+                    for c in &classes {
+                        keep(&mut opts.classes, c);
+                    }
+                }
+                Facets::MagicItem { rarity, .. } => keep(&mut opts.rarities, &rarity),
+                _ => {}
+            }
+        }
+        opts.schools.sort();
+        opts.classes.sort();
+        opts.rarities.sort();
+        Ok(opts)
+    }
+}
+
+fn kind_to_int(k: Kind) -> i64 {
+    Kind::ALL
+        .iter()
+        .position(|x| *x == k)
+        .map_or(-1, |i| i as i64)
+}
+
+fn fts_query(text: &str) -> Option<String> {
+    let cleaned: String = text
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect();
+    let terms: Vec<String> = cleaned
+        .split_whitespace()
+        .map(|t| format!("\"{t}\"*"))
+        .collect();
+    (!terms.is_empty()).then(|| terms.join(" "))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -273,5 +504,76 @@ mod tests {
         let cache = Cache::open(&path).unwrap();
         assert!(cache.campaigns().unwrap().is_empty());
         cache.retain_campaigns(&[]).unwrap();
+    }
+
+    fn srd() -> Bundle {
+        let bytes = include_bytes!("../../../data/srd-5.2/srd.bundle");
+        let raw = zstd::bulk::decompress(bytes, 64 << 20).unwrap();
+        postcard::from_bytes(&raw).unwrap()
+    }
+
+    #[test]
+    fn compendium_search() {
+        let cache = Cache::open_in_memory().unwrap();
+        assert_eq!(cache.compendium_sha256("srd-5.2").unwrap(), None);
+        cache.put_bundle("aa", &srd()).unwrap();
+        cache.put_bundle("bb", &srd()).unwrap();
+        assert_eq!(
+            cache.compendium_sha256("srd-5.2").unwrap().as_deref(),
+            Some("bb")
+        );
+
+        let q = |text: &str| SearchQuery {
+            text: text.into(),
+            ..SearchQuery::default()
+        };
+        let hits = cache.search(&q("fireb"), 20).unwrap();
+        assert_eq!(
+            hits.first().map(|h| h.key.as_str()),
+            Some("spell/fireball"),
+            "{hits:?}"
+        );
+        let names: Vec<String> = cache
+            .search(&q("magic missile"), 5)
+            .unwrap()
+            .into_iter()
+            .map(|h| h.name)
+            .collect();
+        assert_eq!(names.first().map(String::as_str), Some("Magic Missile"));
+        assert!(
+            cache.search(&q("\"; DROP TABLE x --"), 5).is_ok(),
+            "FTS syntax can't be injected"
+        );
+
+        let wizard_3 = SearchQuery {
+            kind: Some(Kind::Spell),
+            level: Some(3),
+            class: Some("Wizard".into()),
+            ..SearchQuery::default()
+        };
+        let hits = cache.search(&wizard_3, 500).unwrap();
+        assert!(hits.iter().any(|h| h.key == "spell/fireball"));
+        assert!(hits.iter().all(|h| matches!(&h.facets, Facets::Spell { level: 3, classes, .. } if classes.iter().any(|c| c == "Wizard"))));
+        let all_monsters = SearchQuery {
+            kind: Some(Kind::Monster),
+            ..SearchQuery::default()
+        };
+        assert_eq!(cache.search(&all_monsters, 10_000).unwrap().len(), 341);
+
+        let (entry, meta) = cache
+            .compendium_entry("srd-5.2", "spell/fireball")
+            .unwrap()
+            .unwrap();
+        assert_eq!(entry.name, "Fireball");
+        assert!(meta.attribution.contains("Creative Commons"));
+        let opts = cache.facet_options().unwrap();
+        assert!(opts.schools.contains(&"Evocation".to_owned()));
+        assert!(opts.classes.contains(&"Wizard".to_owned()));
+        assert!(opts.rarities.contains(&"Legendary".to_owned()));
+
+        assert!(!cache.retain_sources(&["srd-5.2".into()]).unwrap());
+        assert!(cache.retain_sources(&[]).unwrap());
+        assert!(cache.search(&q("fireball"), 5).unwrap().is_empty());
+        assert!(cache.compendium_sources().unwrap().is_empty());
     }
 }

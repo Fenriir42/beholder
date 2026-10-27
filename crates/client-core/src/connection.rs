@@ -109,7 +109,7 @@ pub fn backoff(failures: u32) -> Duration {
 }
 
 async fn session(
-    shared: &Shared,
+    shared: &std::sync::Arc<Shared>,
     ws_url: &str,
     token: &mut SessionToken,
     rx: &mut mpsc::UnboundedReceiver<Wake>,
@@ -167,6 +167,13 @@ async fn session(
     shared.clear_presence();
     shared.set_state(ConnectionState::Online);
     shared.emit(ClientEvent::ViewChanged);
+    if !shared
+        .compendium_done
+        .load(std::sync::atomic::Ordering::Acquire)
+    {
+        let (s, t) = (std::sync::Arc::clone(shared), token.clone());
+        tokio::task::spawn_blocking(move || crate::compendium::run(&s, &s.server_url, &t));
+    }
 
     let online = End::Lost { online: true };
     let Ok(outbox) = shared.with_cache(|c| c.outbox()) else {

@@ -1,11 +1,14 @@
 pub mod cache;
+pub mod compendium;
 pub mod connection;
 pub mod http;
 pub mod view;
 
 use std::collections::{HashMap, HashSet};
+use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use beholder_core::compendium::{Entry, FacetOptions, Hit, SearchQuery, SourceMeta};
 use beholder_core::{CampaignId, CommandId, UserId};
 use beholder_protocol::{Command, CommandKind, RejectReason, ServerMsg, SessionToken};
 use tokio::sync::mpsc;
@@ -22,8 +25,16 @@ pub enum ConnectionState {
     Offline { queued: usize },
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CompendiumState {
+    Syncing,
+    Ready,
+    Failed,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ClientEvent {
+    Compendium(CompendiumState),
     State(ConnectionState),
     ViewChanged,
     Rejected { id: CommandId, reason: RejectReason },
@@ -37,6 +48,9 @@ pub(crate) struct Shared {
     presence: Mutex<HashMap<CampaignId, HashSet<UserId>>>,
     state: Mutex<ConnectionState>,
     events: mpsc::UnboundedSender<ClientEvent>,
+    server_url: String,
+    compendium_busy: AtomicBool,
+    compendium_done: AtomicBool,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -140,6 +154,9 @@ impl Client {
             presence: Mutex::new(HashMap::new()),
             state: Mutex::new(ConnectionState::Connecting),
             events,
+            server_url: server_url.to_owned(),
+            compendium_busy: AtomicBool::new(false),
+            compendium_done: AtomicBool::new(false),
         });
         tokio::spawn(connection::run(
             Arc::clone(&shared),
@@ -168,6 +185,26 @@ impl Client {
         let _ = self.wake.send(Wake::Send(cmd));
         self.shared.emit(ClientEvent::ViewChanged);
         Ok(id)
+    }
+
+    pub fn search(&self, q: &SearchQuery, limit: usize) -> Result<Vec<Hit>, CacheError> {
+        self.shared.with_cache(|c| c.search(q, limit))
+    }
+
+    pub fn compendium_entry(
+        &self,
+        source: &str,
+        key: &str,
+    ) -> Result<Option<(Entry, SourceMeta)>, CacheError> {
+        self.shared.with_cache(|c| c.compendium_entry(source, key))
+    }
+
+    pub fn compendium_sources(&self) -> Result<Vec<SourceMeta>, CacheError> {
+        self.shared.with_cache(|c| c.compendium_sources())
+    }
+
+    pub fn facet_options(&self) -> Result<FacetOptions, CacheError> {
+        self.shared.with_cache(|c| c.facet_options())
     }
 
     pub fn state(&self) -> ConnectionState {

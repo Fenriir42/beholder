@@ -3,9 +3,11 @@ use std::sync::{Mutex, MutexGuard};
 
 use beholder_client_core::cache::Cache;
 use beholder_client_core::http::{Http, HttpError};
-use beholder_client_core::{Client, ClientEvent, ConnectionState};
+use beholder_client_core::{Client, ClientEvent, CompendiumState, ConnectionState};
 use beholder_core::UserId;
-use beholder_ipc::{CampaignView, ConnState, IpcError, Rejected, ViewData, events};
+use beholder_ipc::{
+    CampaignView, CompendiumStatus, ConnState, IpcError, Rejected, ViewData, events,
+};
 use beholder_protocol::SessionToken;
 use tauri::{AppHandle, Emitter, Manager};
 use tokio::sync::mpsc::UnboundedReceiver;
@@ -148,6 +150,14 @@ async fn forward(app: AppHandle, mut rx: UnboundedReceiver<ClientEvent>, session
             ClientEvent::UpdateRequired { server_version } => {
                 app.emit(events::UPDATE_REQUIRED, server_version)
             }
+            ClientEvent::Compendium(s) => app.emit(
+                events::COMPENDIUM,
+                match s {
+                    CompendiumState::Syncing => CompendiumStatus::Syncing,
+                    CompendiumState::Ready => CompendiumStatus::Ready,
+                    CompendiumState::Failed => CompendiumStatus::Failed,
+                },
+            ),
         };
     }
 }

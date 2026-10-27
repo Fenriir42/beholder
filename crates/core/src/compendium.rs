@@ -174,6 +174,72 @@ impl Kind {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SearchQuery {
+    pub text: String,
+    pub kind: Option<Kind>,
+    pub level: Option<u8>,
+    pub school: Option<String>,
+    pub class: Option<String>,
+    pub cr_min: Option<ChallengeRating>,
+    pub cr_max: Option<ChallengeRating>,
+    pub rarity: Option<String>,
+    pub source: Option<String>,
+}
+
+impl SearchQuery {
+    pub fn matches(&self, source: &str, facets: &Facets) -> bool {
+        if self.source.as_deref().is_some_and(|s| s != source)
+            || self.kind.is_some_and(|k| k != facets.kind())
+        {
+            return false;
+        }
+        let eq = |want: &Option<String>, have: &str| want.as_deref().is_none_or(|w| w == have);
+        match facets {
+            Facets::Spell {
+                level,
+                school,
+                classes,
+                ..
+            } => {
+                self.level.is_none_or(|l| l == *level)
+                    && eq(&self.school, school)
+                    && self.class.as_ref().is_none_or(|c| classes.contains(c))
+            }
+            Facets::Monster { cr, .. } => {
+                self.cr_min.is_none_or(|m| *cr >= m) && self.cr_max.is_none_or(|m| *cr <= m)
+            }
+            Facets::MagicItem { rarity, .. } => eq(&self.rarity, rarity),
+            Facets::Feature { class, level } => {
+                eq(&self.class, class) && self.level.is_none_or(|l| l == *level)
+            }
+            Facets::Subclass { class } => eq(&self.class, class),
+            Facets::Equipment { .. }
+            | Facets::Class
+            | Facets::Species
+            | Facets::Background
+            | Facets::Feat { .. }
+            | Facets::Trait
+            | Facets::Condition => true,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Hit {
+    pub source: String,
+    pub key: String,
+    pub name: String,
+    pub facets: Facets,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FacetOptions {
+    pub schools: Vec<String>,
+    pub classes: Vec<String>,
+    pub rarities: Vec<String>,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,6 +251,39 @@ mod tests {
             .into();
         assert_eq!(shown, ["0", "1/8", "1/4", "1/2", "1", "3", "30"]);
         assert!(ChallengeRating::from_eighths(2) < ChallengeRating::from_eighths(8));
+    }
+
+    #[test]
+    fn queries_filter_by_facets() {
+        let fireball = Facets::Spell {
+            level: 3,
+            school: "Evocation".into(),
+            classes: vec!["Sorcerer".into(), "Wizard".into()],
+            ritual: false,
+            concentration: false,
+        };
+        let q = |f: fn(&mut SearchQuery)| {
+            let mut q = SearchQuery::default();
+            f(&mut q);
+            q
+        };
+        assert!(SearchQuery::default().matches("srd", &fireball));
+        assert!(q(|q| q.class = Some("Wizard".into())).matches("srd", &fireball));
+        assert!(!q(|q| q.class = Some("Cleric".into())).matches("srd", &fireball));
+        assert!(!q(|q| q.level = Some(2)).matches("srd", &fireball));
+        assert!(!q(|q| q.kind = Some(Kind::Monster)).matches("srd", &fireball));
+        assert!(!q(|q| q.source = Some("open5e".into())).matches("srd", &fireball));
+        let goblin = Facets::Monster {
+            cr: ChallengeRating::from_eighths(2),
+            creature_type: "Fey".into(),
+            size: "Small".into(),
+        };
+        assert!(q(|q| q.cr_max = Some(ChallengeRating::from_eighths(8))).matches("srd", &goblin));
+        assert!(!q(|q| q.cr_min = Some(ChallengeRating::from_eighths(8))).matches("srd", &goblin));
+        assert!(
+            q(|q| q.school = Some("Evocation".into())).matches("srd", &goblin),
+            "spell-only filters don't hide monsters unless a kind is chosen"
+        );
     }
 
     #[test]

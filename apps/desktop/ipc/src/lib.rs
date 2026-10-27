@@ -1,3 +1,4 @@
+use beholder_core::compendium::{Entry, SourceMeta};
 use beholder_core::{Campaign, NoteId, User, UserId, ValidationError};
 use beholder_protocol::RejectReason;
 use beholder_protocol::http::{AuthError, ImageError};
@@ -9,6 +10,7 @@ pub mod events {
     pub const REJECTED: &str = "beholder://rejected";
     pub const SIGNED_OUT: &str = "beholder://signed-out";
     pub const UPDATE_REQUIRED: &str = "beholder://update-required";
+    pub const COMPENDIUM: &str = "beholder://compendium";
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -45,6 +47,19 @@ pub struct ViewData {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Rejected {
     pub reason: RejectReason,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CompendiumStatus {
+    Syncing,
+    Ready,
+    Failed,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct EntryView {
+    pub entry: Entry,
+    pub source: SourceMeta,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

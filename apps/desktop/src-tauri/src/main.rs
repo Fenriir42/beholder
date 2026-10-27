@@ -68,6 +68,10 @@ fn main() {
             commands::edit_note,
             commands::set_note_audience,
             commands::delete_note,
+            commands::compendium_search,
+            commands::compendium_entry,
+            commands::compendium_sources,
+            commands::compendium_facets,
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {

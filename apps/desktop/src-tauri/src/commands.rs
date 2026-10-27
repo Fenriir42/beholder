@@ -1,8 +1,9 @@
+use beholder_core::compendium::{FacetOptions, Hit, SearchQuery, SourceMeta};
 use beholder_core::{
     Audience, CampaignId, CampaignOp, CampaignSettings, CampaignTitle, DisplayName, ImageHash,
     InviteCode, NoteBody, NoteId, NoteOp, NoteTitle, Password, Username,
 };
-use beholder_ipc::{Boot, ConnState, IpcError, ViewData};
+use beholder_ipc::{Boot, ConnState, EntryView, IpcError, ViewData};
 use beholder_protocol::CommandKind;
 use beholder_protocol::http::{AuthResponse, LoginRequest, RegisterRequest};
 use tauri::ipc::{InvokeBody, Request};
@@ -311,4 +312,50 @@ pub fn delete_note(
         id: self::note_id(&note_id)?,
     };
     note_op(&shell, &campaign_id, op)
+}
+
+const SEARCH_LIMIT: usize = 300;
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn compendium_search(
+    shell: State<'_, Shell>,
+    query: SearchQuery,
+) -> Result<Vec<Hit>, IpcError> {
+    shell
+        .session()?
+        .client
+        .search(&query, SEARCH_LIMIT)
+        .map_err(|_| IpcError::Storage)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn compendium_entry(
+    shell: State<'_, Shell>,
+    source: String,
+    key: String,
+) -> Result<Option<EntryView>, IpcError> {
+    let found = shell
+        .session()?
+        .client
+        .compendium_entry(&source, &key)
+        .map_err(|_| IpcError::Storage)?;
+    Ok(found.map(|(entry, source)| EntryView { entry, source }))
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn compendium_sources(shell: State<'_, Shell>) -> Result<Vec<SourceMeta>, IpcError> {
+    shell
+        .session()?
+        .client
+        .compendium_sources()
+        .map_err(|_| IpcError::Storage)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn compendium_facets(shell: State<'_, Shell>) -> Result<FacetOptions, IpcError> {
+    shell
+        .session()?
+        .client
+        .facet_options()
+        .map_err(|_| IpcError::Storage)
 }

@@ -2,8 +2,8 @@ use std::time::Duration;
 
 use beholder_core::ImageHash;
 use beholder_protocol::http::{
-    AuthError, AuthResponse, ImageError, ImageUploaded, LoginRequest, MAX_IMAGE_BYTES,
-    RegisterRequest,
+    AuthError, AuthResponse, ImageError, ImageUploaded, LoginRequest, MAX_BUNDLE_BYTES,
+    MAX_IMAGE_BYTES, RegisterRequest, SourceInfo,
 };
 use beholder_protocol::{PROTOCOL_HEADER, PROTOCOL_VERSION, SessionToken};
 use serde::Serialize;
@@ -145,6 +145,56 @@ impl Http {
             .limit(MAX_IMAGE_BYTES as u64)
             .read_to_vec()?)
     }
+}
+
+impl Http {
+    fn get_authed(
+        &self,
+        path: &str,
+        token: &SessionToken,
+        from: usize,
+        limit: u64,
+    ) -> Result<(u16, Vec<u8>), HttpError> {
+        let mut req = self
+            .agent
+            .get(format!("{}{path}", self.base))
+            .header(PROTOCOL_HEADER, PROTOCOL_VERSION.to_string())
+            .header("authorization", format!("Bearer {}", token.to_hex()));
+        if from > 0 {
+            req = req.header("range", format!("bytes={from}-"));
+        }
+        let mut resp = req.config().timeout_global(Some(LONG)).build().call()?;
+        let status = resp.status().as_u16();
+        let bytes = resp.body_mut().with_config().limit(limit).read_to_vec()?;
+        Ok((status, bytes))
+    }
+
+    pub fn compendium_index(&self, token: &SessionToken) -> Result<Vec<SourceInfo>, HttpError> {
+        let (status, body) = self.get_authed("/api/compendium", token, 0, SMALL_BODY)?;
+        if status != 200 {
+            return Err(HttpError::Status(status));
+        }
+        postcard::from_bytes(&body).map_err(|_| HttpError::Decode)
+    }
+
+    pub fn bundle_from(
+        &self,
+        token: &SessionToken,
+        sha256: &str,
+        from: usize,
+    ) -> Result<BundlePart, HttpError> {
+        let path = format!("/api/compendium/{sha256}");
+        match self.get_authed(&path, token, from, MAX_BUNDLE_BYTES as u64)? {
+            (200, bytes) => Ok(BundlePart::Whole(bytes)),
+            (206, bytes) if from > 0 => Ok(BundlePart::Rest(bytes)),
+            (status, _) => Err(HttpError::Status(status)),
+        }
+    }
+}
+
+pub enum BundlePart {
+    Whole(Vec<u8>),
+    Rest(Vec<u8>),
 }
 
 fn decode_or_error<T: DeserializeOwned, E: DeserializeOwned>(
