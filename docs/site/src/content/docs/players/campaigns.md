@@ -42,7 +42,7 @@ As the DM you can:
 - **Change the cover**: JPEG, PNG or WebP, up to 20 MB and 40 megapixels. The server shrinks it for fast loading. Uploading needs a connection.
 - **See and regenerate the invite code.** Only the DM sees the code. Regenerating it stops the old code from working, which is how you close the campaign to new players.
 - Set the **rules**:
-  - **The DM can read players' private notes:** off by default.
-  - **What players see of monsters and NPCs in combat:** *Exact* (everything, including HP), *Vague* (Healthy, Bloodied or Near death) or *Hidden* (players don't see the tracker).
+  - **The DM can read players' private notes:** off by default.  - **What players see of monsters and NPCs in combat:** *Exact* (everything, including HP), *Vague* (Healthy, Bloodied or Near death) or *Hidden* (players don't see the tracker).
+  - **Rules sources:** which books the compendium uses for this campaign. New campaigns start with only the SRD 5.2. See [Compendium](/players/compendium/).
 
 Players see the same rules read-only under **Campaign rules**, so nothing about how the table is run is hidden from them.

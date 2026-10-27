@@ -21,3 +21,4 @@ Les textes complets sont dans `docs/decisions/` (en anglais). Chacun couvre le c
 | 0010 | Documentation avec Astro Starlight, en local pour l'instant, sur un Node installé dans le dossier utilisateur. |
 | 0011 | Notes : filtrage et partage des trames par utilisateur, révélation par ajout/suppression, rattrapage par instantané quand la visibilité change, copies de conflit, protocole v2, Markdown assaini avec pulldown-cmark. |
 | 0012 | Compendium : SRD copié depuis 5e-srd-api (5e-database est archivé), convertisseur `beholder-xtask` réservé au développement, paquet reproductible versionné, servi immuable avec Range, recherche FTS5 sur le client. |
+| 0013 | Open5e : un paquet par livre converti depuis un commit fixé (données brutes non copiées), mentions OGL générées, sources par campagne (SRD compris), étiquette de système de jeu, priorité en cas de nom en double avec « Aussi dans », protocole v3. |

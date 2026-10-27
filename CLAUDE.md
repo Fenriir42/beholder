@@ -26,6 +26,7 @@ When two of these conflict, name the tradeoff and propose an option instead of c
 | `apps/desktop/src-tauri` | `beholder-desktop` | Tauri shell: commands and events between the UI and client-core |
 | `apps/desktop/ui` | `beholder-ui` | Leptos CSR app (wasm32) |
 | `data/srd-5.2` | n/a | Vendored SRD JSON (pinned commit), attribution text, and the generated `srd.bundle` |
+| `data/open5e` | n/a | Generated Open5e bundles, one per book (raw data fetched from a pinned commit, not vendored) |
 | `deploy/` | n/a | Dockerfile, Caddyfile, docker-compose |
 | `docs/site` | n/a | Documentation (Astro Starlight, EN + FR), local only |
 
@@ -38,7 +39,7 @@ The laptop is slow, so always run the narrowest command that verifies the change
 - Format: `cargo fmt --all`
 - Lint one crate: `cargo clippy -p <crate> --all-targets -- -D warnings`
 - Test one crate: `cargo test -p <crate>` (filter by test name when you can)
-- SRD bundle, after touching `crates/xtask` or `data/srd-5.2/upstream`: `cargo xtask srd` (writes `data/srd-5.2/srd.bundle`; `--check` verifies it), `cargo xtask srd-show <key>` to inspect an entry
+- Compendium bundles, after touching `crates/xtask` or the vendored data: `cargo xtask srd` and `cargo xtask open5e` (`--check` verifies them; `open5e` fetches the pinned upstream commit into `target/` once), `cargo xtask show <srd|book-id> [key…]` to list or inspect entries
 - WASM compatibility, required after touching core, protocol or ui: `cargo check -p beholder-core -p beholder-protocol -p beholder-ui --target wasm32-unknown-unknown`
 - Full check, only before a commit that touches several crates: `cargo clippy --workspace --all-targets -- -D warnings && cargo test --workspace`
 

@@ -42,7 +42,7 @@ En tant que MJ, vous pouvez :
 - **Changer la couverture** : JPEG, PNG ou WebP, jusqu'à 20 Mo et 40 mégapixels. Le serveur la réduit pour un chargement rapide. L'envoi nécessite une connexion.
 - **Voir et regénérer le code d'invitation.** Seul le MJ voit le code. En générer un nouveau désactive l'ancien : c'est ainsi qu'on ferme la campagne aux nouveaux joueurs.
 - Régler les **règles** :
-  - **Le MJ peut lire les notes privées des joueurs :** désactivé par défaut.
-  - **Ce que les joueurs voient des monstres et PNJ en combat :** *Exact* (tout, PV compris), *Vague* (En forme, Ensanglanté ou Presque mort) ou *Masqué* (les joueurs ne voient pas le suivi de combat).
+  - **Le MJ peut lire les notes privées des joueurs :** désactivé par défaut.  - **Ce que les joueurs voient des monstres et PNJ en combat :** *Exact* (tout, PV compris), *Vague* (En forme, Ensanglanté ou Presque mort) ou *Masqué* (les joueurs ne voient pas le suivi de combat).
+  - **Sources de règles :** les livres utilisés par le compendium pour cette campagne. Une nouvelle campagne commence avec le seul SRD 5.2. Voir [Compendium](/fr/players/compendium/).
 
 Les joueurs voient ces mêmes règles en lecture seule dans **Règles de la campagne** : rien de la façon dont la table est menée ne leur est caché.
