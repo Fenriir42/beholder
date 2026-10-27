@@ -46,7 +46,7 @@ The laptop is slow, so always run the narrowest command that verifies the change
 - Bundle the desktop app: `cd apps/desktop/src-tauri && cargo tauri build --bundles deb,rpm` (Linux) or `--bundles nsis` (Windows)
 - Server image: `docker build -f deploy/Dockerfile -t beholder-server .`; deployment is in `deploy/README.md`
 - Tools: `trunk` 0.21.14 and `tauri-cli` 2.12.2, prebuilt via `cargo binstall`
-- Docs: `cd docs/site && PATH=~/.local/share/node24/bin:$PATH npm run dev` (Node ≥ 22.12; English and French pages must stay in sync)
+- Docs: `cd docs/site && npm run dev` (system Node ≥ 22.12; English and French pages must stay in sync)
 
 Don't run any of the following unless asked: release builds, `cargo tauri build` or other bundling, `cargo clean`, `cargo update`, or long-running processes (`cargo tauri dev`, `trunk serve`, the server). The user runs the app himself.
 

@@ -19,3 +19,4 @@ Les textes complets sont dans `docs/decisions/` (en anglais). Chacun couvre le c
 | 0008 | Bureau : pas de routeur, IPC Tauri sans surcouche, envoi brut des fichiers, cache d'images `img://`, Fluent, trousseau du système. |
 | 0009 | Déploiement : image musl statique sur `scratch`, limites mémoire dans compose, Caddy en HTTP/1+2, installateurs construits par la CI. |
 | 0010 | Documentation avec Astro Starlight, en local pour l'instant, sur un Node installé dans le dossier utilisateur. |
+| 0011 | Notes : filtrage et partage des trames par utilisateur, révélation par ajout/suppression, rattrapage par instantané quand la visibilité change, copies de conflit, protocole v2, Markdown assaini avec pulldown-cmark. |

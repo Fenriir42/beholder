@@ -25,15 +25,15 @@ client                                   serveur
   (file d'envoi renvoyée dans l'ordre) ─▶
 ```
 
-Un instantané (snapshot) remplace les événements quand le client ne connaît pas la campagne, est en retard sur le point de compaction, a plus de 1 000 événements de retard, ou annonce un `seq` que le serveur n'a pas.
+Un instantané (snapshot) remplace les événements quand le client ne connaît pas la campagne, est en retard sur le point de compaction, a plus de 1 000 événements de retard, annonce un `seq` que le serveur n'a pas, ou quand la plage manquée change la visibilité (public d'une note ou réglages de la campagne), car le rejeu est filtré avec les publics actuels.
 
 ## Journal d'événements
 
-Chaque campagne a un journal en ajout seul, avec un `seq` strictement croissant. Une commande s'exécute dans **une seule transaction SQLite** : vérification de doublon, vérification des droits, ajout de l'événement et mise à jour de la projection (tables `campaigns` et `memberships`). `Campaign::apply`, dans `beholder-core`, est l'unique machine à états, utilisée par les tests du serveur et par chaque cache client.
+Chaque campagne a un journal en ajout seul, avec un `seq` strictement croissant. Une commande s'exécute dans **une seule transaction SQLite** : vérification de doublon, vérification des droits, ajout de l'événement et mise à jour de la projection (tables `campaigns`, `memberships` et `notes`). `Campaign::apply`, dans `beholder-core`, est l'unique machine à états, utilisée par les tests du serveur et par chaque cache client.
 
 ## Filtrage par destinataire
 
-`permissions.rs` décide, selon le rôle, quels événements et quelles parties d'un instantané chaque membre reçoit. Exemple : `InviteRegenerated` ne va qu'au MJ, donc les joueurs voient un trou dans les `seq`, ce qui est normal. La diffusion n'encode qu'une fois par rôle.
+`permissions.rs` décide, par utilisateur (`Viewer { user, role }`), quels événements et quelles parties d'un instantané chaque membre reçoit. Exemple : `InviteRegenerated` ne va qu'au MJ, et une note ne va qu'à son public, donc les autres voient un trou dans les `seq`, ce qui est normal. Quand le public d'une note change, ceux qui gagnent l'accès reçoivent la note complète et ceux qui le perdent reçoivent une suppression. Un changement de réglages renvoie à chaque membre un instantané filtré. La diffusion n'encode qu'une fois par utilisateur. Voir l'ADR-0011.
 
 ## Commandes, déduplication et file d'envoi
 

@@ -19,3 +19,4 @@ The full records are in `docs/decisions/`. Each one covers context, decision, al
 | 0008 | Desktop: no router, Tauri IPC without wrappers, raw-body uploads, `img://` image cache, Fluent, keyring. |
 | 0009 | Deployment: static musl image on `scratch`, compose memory limits, Caddy HTTP/1+2, CI-built installers. |
 | 0010 | Documentation with Astro Starlight, local only, on a user-local Node. |
+| 0011 | Notes: per-user filtering and frame sharing, reveal as upsert/removal, snapshot catch-up across visibility changes, conflict copies, protocol v2, sanitized Markdown with pulldown-cmark. |

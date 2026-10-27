@@ -25,15 +25,15 @@ client                                   server
   (outbox resent in order) ─▶
 ```
 
-A snapshot replaces events when the client knows nothing about the campaign, is behind the compaction point, is more than 1,000 events behind, or claims a seq the server doesn't have.
+A snapshot replaces events when the client knows nothing about the campaign, is behind the compaction point, is more than 1,000 events behind, claims a seq the server doesn't have, or when the missed range changes visibility (a note's audience or the campaign settings), because replay is filtered with today's audiences.
 
 ## Event log
 
-Each campaign has an append-only log with a monotonically increasing `seq`. A command runs in **one SQLite transaction**: dedupe check, permission check, event append and projection update (the `campaigns` and `memberships` tables). `Campaign::apply` in `beholder-core` is the single state machine, used by the server's tests and by every client cache.
+Each campaign has an append-only log with a monotonically increasing `seq`. A command runs in **one SQLite transaction**: dedupe check, permission check, event append and projection update (the `campaigns`, `memberships` and `notes` tables). `Campaign::apply` in `beholder-core` is the single state machine, used by the server's tests and by every client cache.
 
 ## Per-recipient filtering
 
-`permissions.rs` decides, per role, which events and which parts of a snapshot each member receives. Example: `InviteRegenerated` goes to the DM only, so players see a gap in `seq`, which is normal. Fan-out encodes at most once per role.
+`permissions.rs` decides, per user (`Viewer { user, role }`), which events and which parts of a snapshot each member receives. Example: `InviteRegenerated` goes to the DM only, and a note goes only to its audience, so others see a gap in `seq`, which is normal. When a note's audience changes, users who gain access receive the full note and users who lose it receive a removal. A settings change re-sends every member a filtered snapshot. Fan-out encodes at most once per user. See ADR-0011.
 
 ## Commands, dedupe and the outbox
 
