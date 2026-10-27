@@ -1,16 +1,21 @@
 use std::time::Duration;
 
-use beholder_core::CampaignId;
 use beholder_core::compendium::{
-    ChallengeRating, FacetOptions, Facets, Hit, Kind, RulesVersion, SearchQuery, SourceMeta,
+    ChallengeRating, Entry, FacetOptions, Facets, Hit, Kind, LIBRARY, RulesVersion, SearchQuery,
+    SourceMeta,
 };
+use beholder_core::library::ImportSummary;
+use beholder_core::{CampaignId, LibraryId, Role};
 use beholder_ipc::{CompendiumStatus, ConnState, Credits, EntryView};
 use beholder_protocol::http::SourceInfo;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::JsFuture;
 
 use crate::app::{error_key, use_app};
 use crate::i18n::{I18n, use_i18n};
+use crate::screens::entry_editor::EntryEditor;
 use crate::{icons, ipc, markdown};
 
 const TYPE_DELAY: Duration = Duration::from_millis(120);
@@ -30,6 +35,29 @@ struct EntryArgs {
     source: String,
     key: String,
     sources: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+struct LibraryIdArgs {
+    id: LibraryId,
+}
+
+#[derive(serde::Serialize)]
+struct HideArgs {
+    campaign_id: String,
+    id: LibraryId,
+    hidden: bool,
+}
+
+#[derive(serde::Serialize)]
+struct ExportArgs {
+    yaml: bool,
+}
+
+#[derive(serde::Serialize)]
+struct ImportArgs {
+    file_name: String,
+    text: String,
 }
 
 #[derive(serde::Serialize)]
@@ -154,6 +182,39 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
                 .unwrap_or_default()
         })
     });
+    let me = Memo::new(move |_| ctx.view.with(|v| v.user.as_ref().map(|u| u.id)));
+    let roles = Memo::new(move |_| {
+        ctx.view.with(|v| {
+            let me = v.user.as_ref().map(|u| u.id);
+            let role_in = |c: &beholder_ipc::CampaignView| me.and_then(|m| c.campaign.role_of(m));
+            let here = v
+                .campaigns
+                .iter()
+                .find(|c| c.campaign.id == id)
+                .and_then(role_in);
+            let anywhere = v.campaigns.iter().any(|c| role_in(c) == Some(Role::Dm));
+            (here == Some(Role::Dm), anywhere)
+        })
+    });
+    let hidden = Memo::new(move |_| {
+        ctx.view.with(|v| {
+            v.campaigns
+                .iter()
+                .find(|c| c.campaign.id == id)
+                .map(|c| {
+                    c.campaign
+                        .hidden
+                        .iter()
+                        .map(|h| h.to_string())
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
+        })
+    });
+    let editing = RwSignal::new(None::<Option<Entry>>);
+    let message = RwSignal::new(None::<String>);
+    let invalid = RwSignal::new(Vec::<String>::new());
+    let confirm_delete = RwSignal::new(false);
     let query = RwSignal::new(SearchQuery::default());
     let hits = RwSignal::new(Vec::<Hit>::new());
     let credits_data = RwSignal::new(Credits::default());
@@ -187,6 +248,11 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
     Effect::new(move |_| {
         let q = SearchQuery {
             sources: enabled.get(),
+            hidden: if roles.get().0 {
+                Vec::new()
+            } else {
+                hidden.get()
+            },
             ..query.get()
         };
         ctx.compendium.track();
@@ -215,6 +281,7 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
             detail.set(None);
             return;
         };
+        ctx.compendium.track();
         let sources = enabled.get();
         spawn_local(async move {
             if let Ok(d) = ipc::call::<Option<EntryView>>(
@@ -344,15 +411,17 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
         let rows = list
             .into_iter()
             .map(|h| {
-                let id = (h.source.clone(), h.key.clone());
-                let active = id.clone();                let line = meta(i18n, &h.facets);
+                let id = (h.source.clone(), h.key.clone());                let active = id.clone();
+                let line = meta(i18n, &h.facets);
                 let others = h.others;
+                let is_hidden = h.source == LIBRARY && hidden.with(|l| l.contains(&h.key));
                 view! {
-                    <button class="note-row" class:active=move || selected.with(|s| s.as_ref() == Some(&active))
-                        on:click=move |_| { credits.set(false); selected.set(Some(id.clone())); }>
+                    <button class="note-row" class:active=move || selected.with(|s| s.as_ref() == Some(&active))                        on:click=move |_| { credits.set(false); editing.set(None); selected.set(Some(id.clone())); }>
                         <span class="note-row-title">{h.name}</span>
                         <span class="note-row-meta muted">
-                            <span class="grow">{line}</span>
+                            <span class="grow">{line}</span>                            {is_hidden.then(|| view! {
+                                <span class="chip dm">{move || i18n.t("lib-hidden")}</span>
+                            })}
                             {(others > 0).then(|| view! {
                                 <span class="chip shared">{move || i18n.tr("cmp-others", &[("count", others.into())])}</span>
                             })}
@@ -367,9 +436,62 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
         }
         .into_any()
     };
+    let export = move |yaml: bool| {
+        spawn_local(async move {
+            match ipc::call::<String>("library_export", ExportArgs { yaml }).await {
+                Ok(path) => message.set(Some(i18n.tr("lib-exported", &[("path", path.into())]))),
+                Err(e) => ctx.notify(error_key(e)),
+            }
+        });
+    };
+    let import = move |ev: leptos::ev::Event| {
+        let Some(input) = ev
+            .target()
+            .and_then(|t| t.dyn_into::<web_sys::HtmlInputElement>().ok())
+        else {
+            return;
+        };
+        let Some(file) = input.files().and_then(|f| f.get(0)) else {
+            return;
+        };
+        input.set_value("");
+        spawn_local(async move {
+            let Ok(text) = JsFuture::from(file.text()).await else {
+                ctx.notify("err-bad-file");
+                return;
+            };
+            let args = ImportArgs {
+                file_name: file.name(),
+                text: text.as_string().unwrap_or_default(),
+            };
+            match ipc::call::<ImportSummary>("library_import", args).await {
+                Ok(s) => {
+                    message.set(Some(i18n.tr(
+                        "lib-imported",
+                        &[
+                            ("added", s.added.into()),
+                            ("skipped", s.skipped.into()),
+                            ("invalid", s.invalid.len().into()),
+                        ],
+                    )));
+                    invalid.set(s.invalid);
+                }
+                Err(e) => ctx.notify(error_key(e)),
+            }
+        });
+    };
 
     let image_base = ctx.boot.with_untracked(|b| b.image_base.clone());
+    let done_editing = Callback::new(move |saved: Option<String>| {
+        editing.set(None);
+        if let Some(key) = saved {
+            selected.set(Some((LIBRARY.to_owned(), key)));
+        }
+    });
     let pane = move || {
+        if let Some(existing) = editing.get() {
+            return view! { <EntryEditor existing=existing on_done=done_editing/> }.into_any();
+        }
         if credits.get() {
             let licenses = credits_data
                 .get()
@@ -400,8 +522,8 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
                 })
                 .collect_view();
             return view! {
-                <article class="editor">
-                    <h2 class="note-title-view">{move || i18n.t("cmp-credits")}</h2>                    <p class="muted">{move || i18n.t("cmp-credits-intro")}</p>
+                <article class="editor">                    <h2 class="note-title-view">{move || i18n.t("cmp-credits")}</h2>
+                    <p class="muted">{move || i18n.t("cmp-credits-intro")}</p>
                     {list}
                     <section class="credit">
                         <h3>{move || i18n.t("cmp-licenses")}</h3>
@@ -417,6 +539,81 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
                 let line = meta(i18n, &d.entry.facets);
                 let source = source_label(i18n, &d.source);
                 let html = markdown::render(&d.entry.text, &image_base);
+                let library = (d.source.id == LIBRARY).then(|| {
+                    let entry = d.entry.clone();
+                    let lib_id = entry.key.parse().ok().map(LibraryId);
+                    let (dm_here, dm_anywhere) = roles.get();
+                    let author = entry.library.map(|m| m.author);
+                    let can_edit = dm_anywhere || (author.is_some() && author == me.get());
+                    let is_hidden = hidden.with(|l| l.contains(&entry.key));
+                    let book = entry.book.clone();
+                    let rules = entry.rules.map(|r| rules_label(i18n, r));
+                    let hide = move |_| {
+                        let Some(lib_id) = lib_id else { return };
+                        let args = HideArgs {
+                            campaign_id: id.to_string(),
+                            id: lib_id,
+                            hidden: !is_hidden,
+                        };
+                        spawn_local(async move {
+                            if let Err(e) = ipc::call::<()>("library_hide", args).await {
+                                ctx.notify(error_key(e));
+                            }
+                        });
+                    };
+                    view! {
+                        <p class="muted small">
+                            {book.map(|b| i18n.tr("lib-from-book", &[("book", b.into())]))}
+                            {rules.map(|r| format!(" · {r}"))}
+                        </p>
+                        {is_hidden.then(|| view! {
+                            <div class="notice">{icons::lock()}<span>{move || i18n.t("lib-hidden-hint")}</span></div>
+                        })}
+                        <div class="toolbar">
+                            {can_edit.then(|| view! {
+                                <button type="button" on:click=move |_| editing.set(Some(Some(entry.clone())))>
+                                    {icons::pencil()}{move || i18n.t("lib-edit")}
+                                </button>
+                            })}
+                            {dm_here.then(|| view! {
+                                <button type="button" on:click=hide>
+                                    {icons::eye()}
+                                    {move || if is_hidden { i18n.t("lib-unhide") } else { i18n.t("lib-hide") }}
+                                </button>
+                            })}
+                            <span class="grow"></span>
+                            {can_edit.then(|| view! {
+                                <button type="button" class="ghost danger" on:click=move |_| confirm_delete.set(true)
+                                    aria-label=move || i18n.t("lib-delete") title=move || i18n.t("lib-delete")>
+                                    {icons::trash()}
+                                </button>
+                            })}
+                        </div>
+                        {move || confirm_delete.get().then(|| view! {
+                            <div class="dialog" role="dialog" aria-modal="true">
+                                <div class="panel">
+                                    <h2>{move || i18n.t("lib-delete")}</h2>
+                                    <p>{move || i18n.t("lib-delete-confirm")}</p>
+                                    <div class="actions">
+                                        <button type="button" on:click=move |_| confirm_delete.set(false)>{move || i18n.t("cancel")}</button>
+                                        <button type="button" class="danger-solid" on:click=move |_| {
+                                            confirm_delete.set(false);
+                                            let Some(lib_id) = lib_id else { return };
+                                            selected.set(None);
+                                            spawn_local(async move {
+                                                if let Err(e) = ipc::call::<()>("library_delete", LibraryIdArgs { id: lib_id }).await {
+                                                    ctx.notify(error_key(e));
+                                                }
+                                            });
+                                        }>
+                                            {icons::trash()}{move || i18n.t("lib-delete")}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        })}
+                    }
+                });
                 let also = (!d.also.is_empty()).then(|| {
                     let links = d
                         .also
@@ -444,9 +641,10 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
                             <h2 class="note-title-view">{d.entry.name}</h2>
                             <div class="editor-meta">
                                 <span class="chip private">{kind}</span>
-                                <span class="muted">{line}</span>
-                            </div>                            <p class="muted small">{source}</p>
+                                <span class="muted">{line}</span>                            </div>
+                            <p class="muted small">{source}</p>
                         </header>
+                        {library}
                         {also}
                         <div class="prose" inner_html=html></div>
                     </article>
@@ -464,12 +662,29 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
         <div class="notes">
             <aside class="notes-list">
                 <div class="notes-head">
-                    <h2>{move || i18n.t("nav-compendium")}</h2>
-                    <button class="ghost" class:active=move || credits.get()
+                    <h2>{move || i18n.t("nav-compendium")}</h2>                    <button class="ghost" class:active=move || credits.get()
                         on:click=move |_| credits.update(|c| *c = !*c)>
                         {move || i18n.t("cmp-credits")}
                     </button>
                 </div>
+                <div class="toolbar">
+                    <button type="button" class="primary" on:click=move |_| { credits.set(false); editing.set(Some(None)); }>
+                        {icons::plus()}{move || i18n.t("lib-new")}
+                    </button>
+                    <label class="btn file">
+                        <span>{move || i18n.t("lib-import")}</span>
+                        <input type="file" accept=".json,.yaml,.yml,application/json" on:change=import/>
+                    </label>
+                    <button type="button" on:click=move |_| export(false)>{move || i18n.t("lib-export-json")}</button>
+                    <button type="button" on:click=move |_| export(true)>{move || i18n.t("lib-export-yaml")}</button>
+                </div>
+                {move || message.get().map(|m| view! { <p class="notice" role="status">{m}</p> })}
+                {move || (!invalid.with(Vec::is_empty)).then(|| view! {
+                    <details class="license">
+                        <summary>{move || i18n.t("lib-invalid-title")}</summary>
+                        <ul class="small">{invalid.get().into_iter().map(|line| view! { <li>{line}</li> }).collect_view()}</ul>
+                    </details>
+                })}
                 <input type="search" placeholder=move || i18n.t("cmp-search") aria-label=move || i18n.t("cmp-search")
                     prop:value=move || query.with(|q| q.text.clone())
                     on:input=move |ev| query.update(|q| q.text = event_target_value(&ev))/>
@@ -481,8 +696,8 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
                             {Kind::ALL.into_iter().map(|k| view! {
                                 <option value=k.as_str()>{move || i18n.t(&format!("kinds-{}", k.as_str()))}</option>
                             }).collect_view()}
-                        </select>
-                    </label>                {filters}
+                        </select>                    </label>
+                    {filters}
                     <Choice label=text_label("cmp-source-filter")
                         value=Signal::derive(move || query.with(|q| q.source.clone().unwrap_or_default()))
                         options=Signal::derive(move || sources.get().into_iter().map(|s| (s.id, s.name)).collect())

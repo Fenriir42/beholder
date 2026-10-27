@@ -73,6 +73,11 @@ fn main() {
             commands::compendium_credits,
             commands::compendium_available,
             commands::set_sources,
+            commands::library_save,
+            commands::library_delete,
+            commands::library_hide,
+            commands::library_export,
+            commands::library_import,
             commands::compendium_facets,
         ])
         .run(tauri::generate_context!());

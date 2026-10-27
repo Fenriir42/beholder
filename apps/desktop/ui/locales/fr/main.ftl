@@ -103,6 +103,7 @@ err-update = Mettez Beholder à jour : le serveur utilise une version plus réce
 err-network = Impossible de joindre le serveur. Vérifiez l'adresse et votre connexion.
 err-server = Le serveur a renvoyé une réponse inattendue.
 err-signed-out = Votre session a expiré. Reconnectez-vous.
+err-bad-file = Ce fichier n'est pas un fichier de bibliothèque Beholder, ou il est endommagé.
 err-storage = Impossible d'enregistrer les données sur cet appareil.
 err-image-large = Cette image est trop lourde (20 Mo et 40 mégapixels maximum).
 err-image-unsupported = Utilisez une image JPEG, PNG ou WebP.
@@ -226,3 +227,67 @@ sources-readonly = Le MJ choisit les sources utilisées par cette campagne.
 sources-loading = Chargement de la liste des sources…
 sources-offline = Connectez-vous au serveur pour voir toutes les sources disponibles. Actuellement activées :
 sources-size = { $kb } Ko
+
+## Server library
+lib-new = Nouvelle entrée
+lib-import = Importer
+lib-export-json = Exporter en JSON
+lib-export-yaml = Exporter en YAML
+lib-exported = Enregistré dans { $path }
+lib-imported = Import terminé : { $added } ajoutées, { $skipped } ignorées car en double, { $invalid } invalides.
+lib-invalid-title = Entrées non importées
+lib-edit = Modifier
+lib-delete = Supprimer l'entrée
+lib-delete-confirm = Supprimer cette entrée de la bibliothèque du serveur ? Elle disparaît pour tous les utilisateurs du serveur. Cette action est définitive.
+lib-hide = Masquer dans cette campagne
+lib-unhide = Afficher dans cette campagne
+lib-hidden = Masquée
+lib-hidden-hint = Masquée aux joueurs de cette campagne. Vous seul la voyez.
+lib-from-book = Tiré de { $book }
+lib-editor-new = Nouvelle entrée de bibliothèque
+lib-editor-edit = Modifier l'entrée de bibliothèque
+lib-editor-hint = Les entrées de la bibliothèque sont partagées par tous les utilisateurs du serveur. Les champs ci-dessous servent à la recherche et aux filtres ; le texte contient les règles complètes en Markdown.
+lib-name = Nom
+lib-book = Livre
+lib-book-hint = D'où elle vient, par ex. « Player's Handbook (2024) » ou « Création maison »
+lib-rules = Version des règles
+lib-text = Texte (Markdown)
+lib-classes = Classes (séparées par des virgules)
+lib-ritual = Rituel
+lib-concentration = Concentration
+lib-cr = Facteur de puissance
+lib-creature-type = Type de créature
+lib-size = Taille
+lib-category = Catégorie
+lib-attunement = Nécessite un lien
+tmpl-monster =
+    {"*"}Taille Type, alignement*
+
+    {"*"}*CA** 12 · **PV** 11 (2d8 + 2) · **Vitesse** 9 m
+
+    | FOR | DEX | CON | INT | SAG | CHA |
+    |---|---|---|---|---|---|
+    | 10 (+0) | 10 (+0) | 10 (+0) | 10 (+0) | 10 (+0) | 10 (+0) |
+
+    {"*"}*Sens** Perception passive 10
+
+    {"*"}*Langues** commun
+
+    {"*"}*FP** 1/4 (PX 50)
+
+    ## Actions
+
+    {"*"}*Morsure.** Jet d'attaque au corps à corps : +4, allonge 1,50 m. Touché : 5 (1d6 + 2) dégâts perforants.
+tmpl-spell =
+    {"*"}Niveau 1, évocation*
+
+    | | |
+    |---|---|
+    | Temps d'incantation | Action |
+    | Portée | 18 mètres |
+    | Composantes | V, S |
+    | Durée | Instantanée |
+
+    Décrivez l'effet du sort.
+
+    {"*"}*Avec un emplacement de niveau supérieur.** Décrivez ce qui change.

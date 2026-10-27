@@ -1,5 +1,5 @@
 use beholder_core::compendium::{Alternative, Entry, LicenseText, SourceMeta};
-use beholder_core::{Campaign, NoteId, User, UserId, ValidationError};
+use beholder_core::{Campaign, LibraryId, NoteId, User, UserId, ValidationError};
 use beholder_protocol::RejectReason;
 use beholder_protocol::http::{AuthError, ImageError};
 use serde::{Deserialize, Serialize};
@@ -42,6 +42,7 @@ pub struct ViewData {
     pub user: Option<User>,
     pub campaigns: Vec<CampaignView>,
     pub pending_joins: usize,
+    pub pending_library: Vec<LibraryId>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -79,4 +80,5 @@ pub enum IpcError {
     Server,
     SignedOut,
     Storage,
+    BadFile,
 }

@@ -96,6 +96,7 @@ pub fn error_key(e: IpcError) -> &'static str {
         IpcError::Network => "err-network",
         IpcError::Server => "err-server",
         IpcError::Storage => "err-storage",
+        IpcError::BadFile => "err-bad-file",
     }
 }
 
@@ -107,7 +108,8 @@ fn reject_key(r: RejectReason) -> &'static str {
         RejectReason::Invalid(_) => "reject-invalid",
         RejectReason::UnknownImage => "reject-image",
         RejectReason::IdConflict => "reject-conflict",
-        RejectReason::Expired => "reject-expired",        RejectReason::RateLimited => "err-rate-limited",
+        RejectReason::Expired => "reject-expired",
+        RejectReason::RateLimited => "err-rate-limited",
         RejectReason::Stale => "reject-stale",
     }
 }

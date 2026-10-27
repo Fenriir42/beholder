@@ -97,3 +97,28 @@ impl I18n {
 pub fn use_i18n() -> I18n {
     expect_context::<I18n>()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn locales_parse_and_templates_render() {
+        for (lang, source) in [
+            ("en", include_str!("../locales/en/main.ftl")),
+            ("fr", include_str!("../locales/fr/main.ftl")),
+        ] {
+            if let Err((_, errors)) = FluentResource::try_new(source.to_owned()) {
+                panic!("{lang}: {errors:?}");
+            }
+            let b = bundle(lang, source);
+            for key in ["tmpl-monster", "tmpl-spell"] {
+                let msg = b.get_message(key).and_then(|m| m.value()).unwrap();
+                let mut errors = Vec::new();
+                let text = b.format_pattern(msg, None, &mut errors);
+                assert!(errors.is_empty(), "{lang} {key}: {errors:?}");
+                assert!(text.starts_with('*') && text.contains("\n\n"), "{lang} {key}: {text}");
+            }
+        }
+    }
+}

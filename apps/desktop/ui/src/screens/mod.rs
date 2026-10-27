@@ -1,6 +1,7 @@
 mod auth;
 mod campaign;
 mod compendium;
+mod entry_editor;
 mod library;
 mod notes;
 mod server;

@@ -1,4 +1,8 @@
+use beholder_client_core::ClientError;
+use beholder_client_core::library_file::FileFormat;
+use beholder_core::LibraryId;
 use beholder_core::compendium::{FacetOptions, Hit, SearchQuery};
+use beholder_core::library::{ImportSummary, LibraryDraft};
 use beholder_core::{
     Audience, CampaignId, CampaignOp, CampaignSettings, CampaignTitle, DisplayName, ImageHash,
     InviteCode, NoteBody, NoteId, NoteOp, NoteTitle, Password, Username,
@@ -8,7 +12,7 @@ use beholder_protocol::CommandKind;
 use beholder_protocol::http::SourceInfo;
 use beholder_protocol::http::{AuthResponse, LoginRequest, RegisterRequest};
 use tauri::ipc::{InvokeBody, Request};
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Manager, State};
 
 use crate::config::normalize_server_url;
 use crate::session::{Shell, conn_state, http_error, lock, view_data};
@@ -391,4 +395,90 @@ pub fn compendium_facets(shell: State<'_, Shell>) -> Result<FacetOptions, IpcErr
         .client
         .facet_options()
         .map_err(|_| IpcError::Storage)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn library_save(
+    shell: State<'_, Shell>,
+    mut draft: LibraryDraft,
+    base_version: u32,
+) -> Result<String, IpcError> {
+    draft.check_facets().map_err(IpcError::Invalid)?;
+    if base_version == 0 && draft.id.0.is_nil() {
+        draft.id = LibraryId(uuid::Uuid::now_v7());
+    }
+    let id = draft.id.to_string();
+    shell
+        .session()?
+        .client
+        .library_save(draft, base_version)
+        .map_err(|_| IpcError::Storage)?;
+    Ok(id)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn library_delete(shell: State<'_, Shell>, id: LibraryId) -> Result<(), IpcError> {
+    shell
+        .session()?
+        .client
+        .library_delete(id)
+        .map_err(|_| IpcError::Storage)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn library_hide(
+    shell: State<'_, Shell>,
+    campaign_id: String,
+    id: LibraryId,
+    hidden: bool,
+) -> Result<(), IpcError> {
+    campaign_op(&shell, &campaign_id, CampaignOp::HideEntry { id, hidden })
+}
+
+fn client_error(e: ClientError) -> IpcError {
+    match e {
+        ClientError::Cache(_) => IpcError::Storage,
+        ClientError::File(_) => IpcError::BadFile,
+    }
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn library_export(
+    app: AppHandle,
+    shell: State<'_, Shell>,
+    yaml: bool,
+) -> Result<String, IpcError> {
+    let format = if yaml {
+        FileFormat::Yaml
+    } else {
+        FileFormat::Json
+    };
+    let text = shell
+        .session()?
+        .client
+        .library_export(format)
+        .map_err(client_error)?;
+    let dir = app.path().download_dir().map_err(|_| IpcError::Storage)?;
+    let ext = if yaml { "yaml" } else { "json" };
+    let mut path = dir.join(format!("beholder-library.{ext}"));
+    let mut n = 1;
+    while path.exists() {
+        n += 1;
+        path = dir.join(format!("beholder-library-{n}.{ext}"));
+    }
+    std::fs::write(&path, text).map_err(|_| IpcError::Storage)?;
+    Ok(path.display().to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn library_import(
+    shell: State<'_, Shell>,
+    file_name: String,
+    text: String,
+) -> Result<ImportSummary, IpcError> {
+    shell
+        .session()?
+        .client
+        .library_import(&text, FileFormat::from_name(&file_name))
+        .map_err(client_error)
 }

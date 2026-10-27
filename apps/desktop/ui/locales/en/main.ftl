@@ -103,6 +103,7 @@ err-update = Please update Beholder: the server uses a newer version.
 err-network = Can't reach the server. Check the address and your connection.
 err-server = The server returned an unexpected answer.
 err-signed-out = Your session ended. Please log in again.
+err-bad-file = This file isn't a Beholder library file, or it's damaged.
 err-storage = Couldn't save data on this device.
 err-image-large = This image is too large (max 20 MB, 40 megapixels).
 err-image-unsupported = Use a JPEG, PNG or WebP image.
@@ -226,3 +227,67 @@ sources-readonly = The DM chooses which sources this campaign uses.
 sources-loading = Loading the list of sources…
 sources-offline = Connect to the server to see every available source. Turned on now:
 sources-size = { $kb } KB
+
+## Server library
+lib-new = New entry
+lib-import = Import
+lib-export-json = Export JSON
+lib-export-yaml = Export YAML
+lib-exported = Saved to { $path }
+lib-imported = Import done: { $added } added, { $skipped } skipped as duplicates, { $invalid } invalid.
+lib-invalid-title = Entries that weren't imported
+lib-edit = Edit
+lib-delete = Delete entry
+lib-delete-confirm = Delete this entry from the server library? It disappears for everyone on this server. This can't be undone.
+lib-hide = Hide in this campaign
+lib-unhide = Show in this campaign
+lib-hidden = Hidden
+lib-hidden-hint = Hidden from the players of this campaign. Only you see it.
+lib-from-book = From { $book }
+lib-editor-new = New library entry
+lib-editor-edit = Edit library entry
+lib-editor-hint = Library entries are shared by everyone on this server. The fields below are what search and filters use; the text holds the full rules in Markdown.
+lib-name = Name
+lib-book = Book
+lib-book-hint = Where it comes from, e.g. "Player's Handbook (2024)" or "Homebrew"
+lib-rules = Rules version
+lib-text = Text (Markdown)
+lib-classes = Classes (comma-separated)
+lib-ritual = Ritual
+lib-concentration = Concentration
+lib-cr = Challenge rating
+lib-creature-type = Creature type
+lib-size = Size
+lib-category = Category
+lib-attunement = Requires attunement
+tmpl-monster =
+    {"*"}Size Type, Alignment*
+
+    {"*"}*AC** 12 · **HP** 11 (2d8 + 2) · **Speed** 30 ft.
+
+    | STR | DEX | CON | INT | WIS | CHA |
+    |---|---|---|---|---|---|
+    | 10 (+0) | 10 (+0) | 10 (+0) | 10 (+0) | 10 (+0) | 10 (+0) |
+
+    {"*"}*Senses** Passive Perception 10
+
+    {"*"}*Languages** Common
+
+    {"*"}*CR** 1/4 (XP 50)
+
+    ## Actions
+
+    {"*"}*Bite.** Melee Attack Roll: +4, reach 5 ft. Hit: 5 (1d6 + 2) Piercing damage.
+tmpl-spell =
+    {"*"}Level 1 Evocation*
+
+    | | |
+    |---|---|
+    | Casting Time | Action |
+    | Range | 60 feet |
+    | Components | V, S |
+    | Duration | Instantaneous |
+
+    Describe what the spell does.
+
+    {"*"}*Using a Higher-Level Spell Slot.** Describe what changes.
