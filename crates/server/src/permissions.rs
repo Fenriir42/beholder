@@ -17,7 +17,8 @@ pub fn can_apply(role: Role, op: &CampaignOp) -> bool {
         CampaignOp::Rename { .. }
         | CampaignOp::SetCover { .. }
         | CampaignOp::RegenerateInvite
-        | CampaignOp::UpdateSettings(_) => role == Role::Dm,
+        | CampaignOp::UpdateSettings(_)
+        | CampaignOp::SetSources { .. } => role == Role::Dm,
     }
 }
 
@@ -58,7 +59,8 @@ pub fn event_for(
         | CampaignEvent::Renamed { .. }
         | CampaignEvent::CoverChanged { .. }
         | CampaignEvent::MemberJoined { .. }
-        | CampaignEvent::SettingsChanged { .. } => Some(event.clone()),
+        | CampaignEvent::SettingsChanged { .. }
+        | CampaignEvent::SourcesChanged { .. } => Some(event.clone()),
         CampaignEvent::NoteCreated { note } => {
             can_read_note(viewer, settings, note).then(|| event.clone())
         }
@@ -103,6 +105,7 @@ pub fn campaign_for(viewer: Viewer, campaign: &Campaign) -> Campaign {
             .filter(|n| can_read_note(viewer, &campaign.settings, n))
             .cloned()
             .collect(),
+        sources: campaign.sources.clone(),
     }
 }
 
@@ -431,6 +434,13 @@ mod tests {
                 true,
                 false,
             ),
+            (
+                CampaignOp::SetSources {
+                    sources: vec!["tob3".into()],
+                },
+                true,
+                false,
+            ),
         ]
     }
 
@@ -476,6 +486,13 @@ mod tests {
                         dm_can_read_private_notes: true,
                         combat_visibility: CombatVisibility::Vague,
                     },
+                },
+                true,
+                true,
+            ),
+            (
+                CampaignEvent::SourcesChanged {
+                    sources: vec!["tob3".into()],
                 },
                 true,
                 true,

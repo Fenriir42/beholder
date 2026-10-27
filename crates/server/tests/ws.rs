@@ -335,6 +335,26 @@ async fn stale_and_bad_commands_are_rejected() {
         })
         .await;
     assert_eq!(dm.reject(missing).await, RejectReason::NotFound);
+    let (cid, _) = create_campaign(&mut dm).await;
+    let unknown = dm
+        .command(CommandKind::Campaign {
+            campaign_id: cid,
+            op: CampaignOp::SetSources {
+                sources: vec!["srd-5.2".into(), "not-a-source".into()],
+            },
+        })
+        .await;
+    assert_eq!(dm.reject(unknown).await, RejectReason::NotFound);
+    let known = dm
+        .command(CommandKind::Campaign {
+            campaign_id: cid,
+            op: CampaignOp::SetSources { sources: vec![] },
+        })
+        .await;
+    assert!(
+        dm.ack(known).await.is_some(),
+        "a DM may turn every source off"
+    );
 }
 
 #[tokio::test]

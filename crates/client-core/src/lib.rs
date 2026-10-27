@@ -8,7 +8,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, MutexGuard};
 
-use beholder_core::compendium::{Entry, FacetOptions, Hit, SearchQuery, SourceMeta};
+use beholder_core::compendium::{
+    Alternative, Entry, FacetOptions, Hit, LicenseText, SearchQuery, SourceMeta,
+};
 use beholder_core::{CampaignId, CommandId, UserId};
 use beholder_protocol::{Command, CommandKind, RejectReason, ServerMsg, SessionToken};
 use tokio::sync::mpsc;
@@ -50,7 +52,7 @@ pub(crate) struct Shared {
     events: mpsc::UnboundedSender<ClientEvent>,
     server_url: String,
     compendium_busy: AtomicBool,
-    compendium_done: AtomicBool,
+    compendium_synced: Mutex<Option<Vec<String>>>,
 }
 
 fn lock<T>(m: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -156,7 +158,7 @@ impl Client {
             events,
             server_url: server_url.to_owned(),
             compendium_busy: AtomicBool::new(false),
-            compendium_done: AtomicBool::new(false),
+            compendium_synced: Mutex::new(None),
         });
         tokio::spawn(connection::run(
             Arc::clone(&shared),
@@ -197,6 +199,20 @@ impl Client {
         key: &str,
     ) -> Result<Option<(Entry, SourceMeta)>, CacheError> {
         self.shared.with_cache(|c| c.compendium_entry(source, key))
+    }
+
+    pub fn alternatives(
+        &self,
+        source: &str,
+        key: &str,
+        allowed: &[String],
+    ) -> Result<Vec<Alternative>, CacheError> {
+        self.shared
+            .with_cache(|c| c.alternatives(source, key, allowed))
+    }
+
+    pub fn compendium_licenses(&self) -> Result<Vec<LicenseText>, CacheError> {
+        self.shared.with_cache(|c| c.compendium_licenses())
     }
 
     pub fn compendium_sources(&self) -> Result<Vec<SourceMeta>, CacheError> {

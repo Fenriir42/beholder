@@ -1,4 +1,4 @@
-use beholder_core::compendium::RulesVersion;
+use beholder_core::compendium::{GameSystem, RulesVersion};
 use beholder_core::{DisplayName, ImageHash, Password, User, Username};
 use serde::{Deserialize, Serialize};
 
@@ -49,6 +49,8 @@ pub enum ImageError {
 pub struct SourceInfo {
     pub id: String,
     pub name: String,
+    pub publisher: String,
+    pub system: GameSystem,
     pub rules: RulesVersion,
     pub sha256: String,
     pub bytes: u64,

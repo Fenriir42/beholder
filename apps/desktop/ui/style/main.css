@@ -245,3 +245,7 @@ select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .prose table { display: block; overflow-x: auto; }
 .credit { border-top: 1px solid var(--border); padding-top: var(--space-4); display: flex; flex-direction: column; gap: var(--space-2); }
 .credit h3 { margin: 0; font-size: var(--text-md); }
+.also { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); }
+.license summary { cursor: pointer; min-height: var(--touch); display: flex; align-items: center; }
+.source-group { display: flex; flex-direction: column; }
+.source-group h4 { margin: var(--space-2) 0 0; color: var(--text-2); font-size: var(--text-sm); }

@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use beholder_core::CampaignEvent;
 use beholder_protocol::{
     ClientMsg, Command, Hello, HelloError, PROTOCOL_VERSION, ServerMsg, SessionToken, codec,
 };
@@ -167,13 +168,7 @@ async fn session(
     shared.clear_presence();
     shared.set_state(ConnectionState::Online);
     shared.emit(ClientEvent::ViewChanged);
-    if !shared
-        .compendium_done
-        .load(std::sync::atomic::Ordering::Acquire)
-    {
-        let (s, t) = (std::sync::Arc::clone(shared), token.clone());
-        tokio::task::spawn_blocking(move || crate::compendium::run(&s, &s.server_url, &t));
-    }
+    crate::compendium::maybe_start(shared, token);
 
     let online = End::Lost { online: true };
     let Ok(outbox) = shared.with_cache(|c| c.outbox()) else {
@@ -201,8 +196,18 @@ async fn session(
                 };
                 deadline = Instant::now() + IDLE_TIMEOUT;
                 let Ok(msg) = codec::decode::<ServerMsg>(&frame) else { return online };
+                let sources_may_change = match &msg {
+                    ServerMsg::Snapshot { .. } | ServerMsg::CampaignRemoved { .. } => true,
+                    ServerMsg::Events { events, .. } => events
+                        .iter()
+                        .any(|e| matches!(e.event, CampaignEvent::SourcesChanged { .. })),
+                    _ => false,
+                };
                 if shared.handle(msg).is_err() {
                     return online;
+                }
+                if sources_may_change {
+                    crate::compendium::maybe_start(shared, token);
                 }
             }
             _ = ping.tick() => {

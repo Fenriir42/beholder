@@ -4,9 +4,12 @@ use std::path::Path;
 
 use anyhow::{Context, Result, bail, ensure};
 use beholder_core::compendium::{
-    BUNDLE_FORMAT, Bundle, ChallengeRating, Entry, Facets, Kind, RulesVersion, SourceMeta,
+    BUNDLE_FORMAT, Bundle, ChallengeRating, Entry, Facets, GameSystem, Kind, LicenseText,
+    RulesVersion, SRD, SourceMeta,
 };
 use serde_json::Value;
+
+pub const CC_BY: &str = "cc-by-40";
 
 const UPSTREAM: &str = "5e-bits/5e-srd-api@386930c2e93a7f2c9ba2a9715ccc5b95d8926e41";
 
@@ -32,12 +35,20 @@ pub fn bundle(dir: &Path) -> Result<Vec<u8>> {
     let bundle = Bundle {
         format: BUNDLE_FORMAT,
         source: SourceMeta {
-            id: "srd-5.2".into(),
+            id: SRD.into(),
             name: "System Reference Document 5.2.1".into(),
+            publisher: "Wizards of the Coast".into(),
+            system: GameSystem::Dnd5e,
             rules: RulesVersion::R2024,
+            licenses: vec![CC_BY.into()],
             upstream: UPSTREAM.into(),
             attribution: ATTRIBUTION.into(),
         },
+        licenses: vec![LicenseText {
+            id: CC_BY.into(),
+            name: "Creative Commons Attribution 4.0 International".into(),
+            text: "https://creativecommons.org/licenses/by/4.0/legalcode".into(),
+        }],
         entries,
     };
     let raw = postcard::to_stdvec(&bundle)?;

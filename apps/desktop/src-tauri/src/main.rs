@@ -70,7 +70,9 @@ fn main() {
             commands::delete_note,
             commands::compendium_search,
             commands::compendium_entry,
-            commands::compendium_sources,
+            commands::compendium_credits,
+            commands::compendium_available,
+            commands::set_sources,
             commands::compendium_facets,
         ])
         .run(tauri::generate_context!());

@@ -2,6 +2,7 @@ use core::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use crate::compendium::SRD;
 use crate::ids::{CampaignId, ImageHash, NoteId, UserId};
 use crate::note::{Audience, Note, NoteBody, NoteTitle};
 use crate::user::{DisplayName, ValidationError, clean_text};
@@ -141,7 +142,10 @@ pub enum CampaignOp {
     SetCover { cover: Option<ImageHash> },
     RegenerateInvite,
     UpdateSettings(CampaignSettings),
+    SetSources { sources: Vec<String> },
 }
+
+pub const MAX_SOURCES: usize = 64;
 
 impl CampaignOp {
     pub fn predicted_event(&self) -> Option<CampaignEvent> {
@@ -152,6 +156,16 @@ impl CampaignOp {
             Self::SetCover { cover } => Some(CampaignEvent::CoverChanged { cover: *cover }),
             Self::RegenerateInvite => None,
             Self::UpdateSettings(s) => Some(CampaignEvent::SettingsChanged { settings: *s }),
+            Self::SetSources { sources } => {
+                let mut unique: Vec<String> = Vec::with_capacity(sources.len());
+                for s in sources {
+                    if !unique.contains(s) {
+                        unique.push(s.clone());
+                    }
+                }
+                (unique.len() <= MAX_SOURCES)
+                    .then_some(CampaignEvent::SourcesChanged { sources: unique })
+            }
         }
     }
 }
@@ -195,6 +209,9 @@ pub enum CampaignEvent {
     NoteDeleted {
         id: NoteId,
     },
+    SourcesChanged {
+        sources: Vec<String>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -206,6 +223,7 @@ pub struct Campaign {
     pub invite_code: Option<InviteCode>,
     pub members: Vec<Member>,
     pub notes: Vec<Note>,
+    pub sources: Vec<String>,
 }
 
 impl Campaign {
@@ -218,6 +236,7 @@ impl Campaign {
             invite_code: None,
             members: vec![dm],
             notes: Vec::new(),
+            sources: vec![SRD.to_owned()],
         }
     }
 
@@ -268,6 +287,7 @@ impl Campaign {
                     self.notes.remove(i);
                 }
             }
+            CampaignEvent::SourcesChanged { sources } => self.sources = sources.clone(),
         }
     }
 
@@ -441,5 +461,21 @@ mod tests {
             Some(CampaignEvent::Renamed { title })
         );
         assert_eq!(CampaignOp::RegenerateInvite.predicted_event(), None);
+        let s = |v: &[&str]| v.iter().map(|x| (*x).to_owned()).collect::<Vec<_>>();
+        assert_eq!(
+            CampaignOp::SetSources {
+                sources: s(&["tob3", "srd-5.2", "tob3"])
+            }
+            .predicted_event(),
+            Some(CampaignEvent::SourcesChanged {
+                sources: s(&["tob3", "srd-5.2"])
+            }),
+            "duplicates are dropped, order kept"
+        );
+        let too_many = (0..=MAX_SOURCES).map(|i| i.to_string()).collect();
+        assert_eq!(
+            CampaignOp::SetSources { sources: too_many }.predicted_event(),
+            None
+        );
     }
 }

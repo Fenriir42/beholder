@@ -1,13 +1,15 @@
 use std::time::Duration;
 
+use beholder_core::CampaignId;
 use beholder_core::compendium::{
     ChallengeRating, FacetOptions, Facets, Hit, Kind, RulesVersion, SearchQuery, SourceMeta,
 };
-use beholder_ipc::{CompendiumStatus, ConnState, EntryView};
+use beholder_ipc::{CompendiumStatus, ConnState, Credits, EntryView};
+use beholder_protocol::http::SourceInfo;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
-use crate::app::use_app;
+use crate::app::{error_key, use_app};
 use crate::i18n::{I18n, use_i18n};
 use crate::{icons, ipc, markdown};
 
@@ -27,6 +29,21 @@ struct SearchArgs {
 struct EntryArgs {
     source: String,
     key: String,
+    sources: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+struct SourcesArgs {
+    campaign_id: String,
+    sources: Vec<String>,
+}
+
+pub fn rules_label(i18n: I18n, r: RulesVersion) -> String {
+    i18n.t(match r {
+        RulesVersion::R2014 => "rules-2014",
+        RulesVersion::R2024 => "rules-2024",
+        RulesVersion::LevelUp => "rules-level-up",
+    })
 }
 
 pub fn kind_label(i18n: I18n, k: Kind) -> String {
@@ -99,14 +116,7 @@ fn meta(i18n: I18n, f: &Facets) -> String {
 }
 
 fn source_label(i18n: I18n, s: &SourceMeta) -> String {
-    let rules = match s.rules {
-        RulesVersion::R2014 => "2014",
-        RulesVersion::R2024 => "2024",
-    };
-    i18n.tr(
-        "cmp-source",
-        &[("name", s.name.clone().into()), ("rules", rules.into())],
-    )
+    format!("{} · {}", s.name, rules_label(i18n, s.rules))
 }
 
 #[component]
@@ -132,12 +142,31 @@ fn Choice(
 }
 
 #[component]
-pub fn Compendium() -> impl IntoView {
+pub fn Compendium(id: CampaignId) -> impl IntoView {
     let ctx = use_app();
     let i18n = use_i18n();
+    let enabled = Memo::new(move |_| {
+        ctx.view.with(|v| {
+            v.campaigns
+                .iter()
+                .find(|c| c.campaign.id == id)
+                .map(|c| c.campaign.sources.clone())
+                .unwrap_or_default()
+        })
+    });
     let query = RwSignal::new(SearchQuery::default());
     let hits = RwSignal::new(Vec::<Hit>::new());
-    let sources = RwSignal::new(Vec::<SourceMeta>::new());
+    let credits_data = RwSignal::new(Credits::default());
+    let sources = Memo::new(move |_| {
+        let on = enabled.get();
+        credits_data.with(|c| {
+            c.sources
+                .iter()
+                .filter(|s| on.contains(&s.id))
+                .cloned()
+                .collect::<Vec<SourceMeta>>()
+        })
+    });
     let facets = RwSignal::new(FacetOptions::default());
     let selected = RwSignal::new(None::<(String, String)>);
     let detail = RwSignal::new(None::<EntryView>);
@@ -147,17 +176,19 @@ pub fn Compendium() -> impl IntoView {
     Effect::new(move |_| {
         ctx.compendium.track();
         spawn_local(async move {
-            if let Ok(s) = ipc::call0::<Vec<SourceMeta>>("compendium_sources").await {
-                sources.try_set(s);
+            if let Ok(c) = ipc::call0::<Credits>("compendium_credits").await {
+                credits_data.try_set(c);
             }
             if let Ok(f) = ipc::call0::<FacetOptions>("compendium_facets").await {
                 facets.try_set(f);
             }
         });
     });
-
     Effect::new(move |_| {
-        let q = query.get();
+        let q = SearchQuery {
+            sources: enabled.get(),
+            ..query.get()
+        };
         ctx.compendium.track();
         let g = generation.get_value() + 1;
         generation.set_value(g);
@@ -184,9 +215,17 @@ pub fn Compendium() -> impl IntoView {
             detail.set(None);
             return;
         };
+        let sources = enabled.get();
         spawn_local(async move {
-            if let Ok(d) =
-                ipc::call::<Option<EntryView>>("compendium_entry", EntryArgs { source, key }).await
+            if let Ok(d) = ipc::call::<Option<EntryView>>(
+                "compendium_entry",
+                EntryArgs {
+                    source,
+                    key,
+                    sources,
+                },
+            )
+            .await
             {
                 detail.try_set(d);
             }
@@ -278,8 +317,10 @@ pub fn Compendium() -> impl IntoView {
             _ => ().into_any(),
         }
     };
-
     let status = move || {
+        if enabled.with(Vec::is_empty) {
+            return Some(view! { <div class="empty">{icons::book()}<p>{move || i18n.t("cmp-no-sources")}</p></div> }.into_any());
+        }
         if !sources.with(Vec::is_empty) {
             return None;
         }
@@ -290,7 +331,7 @@ pub fn Compendium() -> impl IntoView {
             }
             _ => ("cmp-syncing", icons::refresh().into_any()),
         };
-        Some(view! { <div class="empty">{icon}<p>{move || i18n.t(key)}</p></div> })
+        Some(view! { <div class="empty">{icon}<p>{move || i18n.t(key)}</p></div> }.into_any())
     };
 
     let results = move || {
@@ -304,13 +345,18 @@ pub fn Compendium() -> impl IntoView {
             .into_iter()
             .map(|h| {
                 let id = (h.source.clone(), h.key.clone());
-                let active = id.clone();
-                let line = meta(i18n, &h.facets);
+                let active = id.clone();                let line = meta(i18n, &h.facets);
+                let others = h.others;
                 view! {
                     <button class="note-row" class:active=move || selected.with(|s| s.as_ref() == Some(&active))
                         on:click=move |_| { credits.set(false); selected.set(Some(id.clone())); }>
                         <span class="note-row-title">{h.name}</span>
-                        <span class="note-row-meta muted">{line}</span>
+                        <span class="note-row-meta muted">
+                            <span class="grow">{line}</span>
+                            {(others > 0).then(|| view! {
+                                <span class="chip shared">{move || i18n.tr("cmp-others", &[("count", others.into())])}</span>
+                            })}
+                        </span>
                     </button>
                 }
             })
@@ -325,8 +371,22 @@ pub fn Compendium() -> impl IntoView {
     let image_base = ctx.boot.with_untracked(|b| b.image_base.clone());
     let pane = move || {
         if credits.get() {
-            let list = sources
+            let licenses = credits_data
                 .get()
+                .licenses
+                .into_iter()
+                .map(|l| {
+                    view! {
+                        <details class="license">
+                            <summary>{l.name}</summary>
+                            <div class="prose small" inner_html=markdown::render(&l.text, "")></div>
+                        </details>
+                    }
+                })
+                .collect_view();
+            let list = credits_data
+                .get()
+                .sources
                 .into_iter()
                 .map(|s| {
                     let label = source_label(i18n, &s);
@@ -341,9 +401,12 @@ pub fn Compendium() -> impl IntoView {
                 .collect_view();
             return view! {
                 <article class="editor">
-                    <h2 class="note-title-view">{move || i18n.t("cmp-credits")}</h2>
-                    <p class="muted">{move || i18n.t("cmp-credits-intro")}</p>
+                    <h2 class="note-title-view">{move || i18n.t("cmp-credits")}</h2>                    <p class="muted">{move || i18n.t("cmp-credits-intro")}</p>
                     {list}
+                    <section class="credit">
+                        <h3>{move || i18n.t("cmp-licenses")}</h3>
+                        {licenses}
+                    </section>
                 </article>
             }
             .into_any();
@@ -354,6 +417,27 @@ pub fn Compendium() -> impl IntoView {
                 let line = meta(i18n, &d.entry.facets);
                 let source = source_label(i18n, &d.source);
                 let html = markdown::render(&d.entry.text, &image_base);
+                let also = (!d.also.is_empty()).then(|| {
+                    let links = d
+                        .also
+                        .into_iter()
+                        .map(|a| {
+                            let target = (a.source, a.key);
+                            view! {
+                                <button class="link" on:click=move |_| selected.set(Some(target.clone()))>
+                                    {a.source_name}
+                                </button>
+                            }
+                        })
+                        .collect_view();
+                    view! {
+                        <aside class="notice">
+                            {icons::copy()}
+                            <span>{move || i18n.t("cmp-also-in")}</span>
+                            <span class="also">{links}</span>
+                        </aside>
+                    }
+                });
                 view! {
                     <article class="editor">
                         <header class="editor-head">
@@ -361,9 +445,9 @@ pub fn Compendium() -> impl IntoView {
                             <div class="editor-meta">
                                 <span class="chip private">{kind}</span>
                                 <span class="muted">{line}</span>
-                            </div>
-                            <p class="muted small">{source}</p>
+                            </div>                            <p class="muted small">{source}</p>
                         </header>
+                        {also}
                         <div class="prose" inner_html=html></div>
                     </article>
                 }
@@ -398,13 +482,108 @@ pub fn Compendium() -> impl IntoView {
                                 <option value=k.as_str()>{move || i18n.t(&format!("kinds-{}", k.as_str()))}</option>
                             }).collect_view()}
                         </select>
-                    </label>
-                    {filters}
+                    </label>                {filters}
+                    <Choice label=text_label("cmp-source-filter")
+                        value=Signal::derive(move || query.with(|q| q.source.clone().unwrap_or_default()))
+                        options=Signal::derive(move || sources.get().into_iter().map(|s| (s.id, s.name)).collect())
+                        on_pick=Callback::new(move |v| query.update(|q| q.source = v))/>
                 </div>
                 {status}
                 <div class="list">{results}</div>
             </aside>
             <section class="note-pane">{pane}</section>
         </div>
+    }
+}
+
+#[component]
+pub fn SourcesSetting(
+    campaign_id: CampaignId,
+    enabled: Vec<String>,
+    editable: bool,
+) -> impl IntoView {
+    let ctx = use_app();
+    let i18n = use_i18n();
+    let failed = RwSignal::new(false);
+    if ctx.available_sources.with_untracked(Option::is_none) {
+        spawn_local(async move {
+            match ipc::call0::<Vec<SourceInfo>>("compendium_available").await {
+                Ok(list) => ctx.available_sources.set(Some(list)),
+                Err(_) => failed.set(true),
+            }
+        });
+    }
+    let enabled = StoredValue::new(enabled);
+    let toggle = move |id: String, on: bool| {
+        let mut next = enabled.get_value();
+        next.retain(|s| *s != id);
+        if on {
+            next.push(id);
+        }
+        let args = SourcesArgs {
+            campaign_id: campaign_id.to_string(),
+            sources: next,
+        };
+        spawn_local(async move {
+            if let Err(e) = ipc::call::<()>("set_sources", args).await {
+                ctx.notify(error_key(e));
+            }
+        });
+    };
+    let body = move || match ctx.available_sources.get() {
+        Some(list) => {
+            let mut publishers: Vec<String> = Vec::new();
+            for s in &list {
+                if !publishers.contains(&s.publisher) {
+                    publishers.push(s.publisher.clone());
+                }
+            }
+            publishers
+                .into_iter()
+                .map(|p| {
+                    let rows = list
+                        .iter()
+                        .filter(|s| s.publisher == p)
+                        .filter(|s| editable || enabled.with_value(|e| e.contains(&s.id)))
+                        .map(|s| {
+                            let on = enabled.with_value(|e| e.contains(&s.id));
+                            let id = s.id.clone();
+                            let size = i18n.tr("sources-size", &[("kb", s.bytes.div_ceil(1024).into())]);
+                            let rules = rules_label(i18n, s.rules);
+                            view! {
+                                <label class="choice">
+                                    <input type="checkbox" checked=on disabled=!editable
+                                        on:change=move |ev| toggle(id.clone(), event_target_checked(&ev))/>
+                                    <span class="grow">{s.name.clone()}</span>
+                                    <span class="muted small">{format!("{rules} · {size}")}</span>
+                                </label>
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    (!rows.is_empty()).then(|| view! {
+                        <div class="source-group">
+                            <h4>{p}</h4>
+                            {rows}
+                        </div>
+                    })
+                })
+                .collect_view()
+                .into_any()
+        }
+        None => {
+            let names = enabled.get_value().join(", ");
+            view! {
+                <p class="muted">{move || if failed.get() { i18n.t("sources-offline") } else { i18n.t("sources-loading") }}</p>
+                <p>{names}</p>
+            }
+            .into_any()
+        }
+    };
+    view! {
+        <fieldset>
+            <legend>{move || i18n.t("sources-label")}</legend>
+            <p class="muted small">{move || if editable { i18n.t("sources-hint") } else { i18n.t("sources-readonly") }}</p>
+            {body}
+        </fieldset>
     }
 }

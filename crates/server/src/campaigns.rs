@@ -337,6 +337,12 @@ fn project(
         | CampaignEvent::NoteEdited { .. }
         | CampaignEvent::NoteAudienceChanged { .. }
         | CampaignEvent::NoteDeleted { .. } => notes::project(tx, campaign_id, event)?,
+        CampaignEvent::SourcesChanged { sources } => {
+            tx.execute(
+                "UPDATE campaigns SET sources = ?2 WHERE id = ?1",
+                params![id, postcard::to_stdvec(sources)?],
+            )?;
+        }
     }
     Ok(())
 }
@@ -347,7 +353,7 @@ pub fn load_campaign(
 ) -> Result<Option<(Seq, Campaign)>, DbError> {
     let row = conn
         .query_row(
-            "SELECT title, cover_hash, invite_code, dm_can_read_private_notes, combat_visibility, head_seq
+            "SELECT title, cover_hash, invite_code, dm_can_read_private_notes, combat_visibility, head_seq, sources
              FROM campaigns WHERE id = ?1",
             [id.as_bytes()],
             |r| {
@@ -358,11 +364,12 @@ pub fn load_campaign(
                     r.get::<_, bool>(3)?,
                     r.get::<_, i64>(4)?,
                     r.get::<_, u64>(5)?,
+                    r.get::<_, Option<Vec<u8>>>(6)?,
                 ))
             },
         )
         .optional()?;
-    let Some((title, cover, code, dm_read, vis, head)) = row else {
+    let Some((title, cover, code, dm_read, vis, head, sources)) = row else {
         return Ok(None);
     };
     let mut stmt = conn.prepare_cached(
@@ -403,6 +410,10 @@ pub fn load_campaign(
             .map_err(|_| DbError::Corrupt("invite_code"))?,
         members,
         notes: notes::campaign_notes(conn, id)?,
+        sources: match sources {
+            Some(b) => postcard::from_bytes(&b)?,
+            None => vec![beholder_core::compendium::SRD.to_owned()],
+        },
     };
     Ok(Some((Seq(head), campaign)))
 }
@@ -664,6 +675,16 @@ mod tests {
                 op: CampaignOp::RegenerateInvite,
             },
         );
+        run(
+            &mut c,
+            &dm,
+            CommandKind::Campaign {
+                campaign_id: id,
+                op: CampaignOp::SetSources {
+                    sources: vec!["tob3".into(), "srd-5.2".into()],
+                },
+            },
+        );
         let (party, secret, gone) = (nid(), nid(), nid());
         for (who, op) in [
             (&player, create_note(party, Audience::Party)),
@@ -697,6 +718,7 @@ mod tests {
         assert_eq!(projected, folded);
         assert_ne!(projected.invite_code, Some(code));
         assert_eq!(projected.notes.len(), 3, "two notes plus one conflict copy");
+        assert_eq!(projected.sources, ["tob3", "srd-5.2"]);
     }
 
     fn nid() -> NoteId {

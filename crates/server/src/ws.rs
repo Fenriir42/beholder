@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use axum::body::Bytes;
 use axum::extract::ws::{Message, WebSocket};
-use beholder_core::{CampaignEvent, CampaignId, Role, Seq, UserId};
+use beholder_core::{CampaignEvent, CampaignId, CampaignOp, Role, Seq, UserId};
 use beholder_protocol::{
     ClientMsg, Command, CommandKind, Hello, HelloError, HelloOk, PROTOCOL_VERSION, RejectReason,
     ServerMsg, codec,
@@ -221,6 +221,15 @@ async fn handle_command(
     };
     if matches!(cmd.kind, CommandKind::JoinCampaign { .. }) && !state.join_limit.allow(user_id) {
         send_reply(Reply::Reject(RejectReason::RateLimited));
+        return Ok(());
+    }
+    if let CommandKind::Campaign {
+        op: CampaignOp::SetSources { sources },
+        ..
+    } = &cmd.kind
+        && sources.iter().any(|s| !state.compendium.has(s))
+    {
+        send_reply(Reply::Reject(RejectReason::NotFound));
         return Ok(());
     }
     let st = Arc::clone(state);

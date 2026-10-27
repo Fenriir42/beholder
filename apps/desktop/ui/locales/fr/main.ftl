@@ -199,7 +199,6 @@ cmp-monster = FP { $cr } · { $type }, taille { $size }
 cmp-attunement = harmonisation
 cmp-subclass = Sous-classe de { $class }
 cmp-feature = { $class }, niveau { $level }
-cmp-source = { $name } · règles { $rules }
 cmp-no-results = Aucun résultat. Essayez moins de mots ou de filtres.
 cmp-refine = Affichage des 300 premiers résultats. Ajoutez des mots ou des filtres pour affiner.
 cmp-none-selected = Cherchez ou choisissez une entrée pour la lire ici.
@@ -209,3 +208,20 @@ cmp-offline = Les règles se téléchargent la première fois que vous êtes en 
 cmp-credits = Crédits
 cmp-credits-intro = Le compendium contient du contenu sous licences libres. Voici les mentions requises.
 cmp-upstream = Converti depuis { $upstream }.
+rules-2014 = règles 2014
+rules-2024 = règles 2024
+rules-level-up = Level Up (A5E)
+cmp-source-filter = Source
+cmp-others = +{ $count } { $count ->
+    [one] version
+   *[other] versions
+}
+cmp-also-in = Aussi dans :
+cmp-no-sources = Cette campagne n'utilise aucune source de règles. Le MJ peut les activer dans les réglages de la campagne.
+cmp-licenses = Textes des licences
+sources-label = Sources de règles
+sources-hint = Choisissez les sources utilisées par cette campagne. Les joueurs ne téléchargent que celles activées. Les entrées de même nom n'apparaissent qu'une fois, depuis la source prioritaire, les autres étant listées sous « Aussi dans ».
+sources-readonly = Le MJ choisit les sources utilisées par cette campagne.
+sources-loading = Chargement de la liste des sources…
+sources-offline = Connectez-vous au serveur pour voir toutes les sources disponibles. Actuellement activées :
+sources-size = { $kb } Ko

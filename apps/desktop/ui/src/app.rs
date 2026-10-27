@@ -29,6 +29,7 @@ pub struct AppCtx {
     pub conn: RwSignal<ConnState>,
     pub toast: RwSignal<Option<&'static str>>,
     pub compendium: RwSignal<Option<CompendiumStatus>>,
+    pub available_sources: RwSignal<Option<Vec<beholder_protocol::http::SourceInfo>>>,
     refresh: StoredValue<Rc<Refresher>, LocalStorage>,
 }
 
@@ -123,6 +124,7 @@ pub fn App() -> impl IntoView {
         conn: RwSignal::new(ConnState::Connecting),
         toast: RwSignal::new(None),
         compendium: RwSignal::new(None),
+        available_sources: RwSignal::new(None),
         refresh: StoredValue::new_local(Rc::new(Refresher::default())),
     };
     provide_context(ctx);

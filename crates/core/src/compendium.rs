@@ -2,27 +2,59 @@ use core::fmt;
 
 use serde::{Deserialize, Serialize};
 
-pub const BUNDLE_FORMAT: u16 = 1;
+pub const BUNDLE_FORMAT: u16 = 2;
+
+pub const SRD: &str = "srd-5.2";
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum RulesVersion {
     R2014,
     R2024,
+    LevelUp,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub enum GameSystem {
+    Dnd5e,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SourceMeta {
     pub id: String,
     pub name: String,
+    pub publisher: String,
+    pub system: GameSystem,
     pub rules: RulesVersion,
+    pub licenses: Vec<String>,
     pub upstream: String,
     pub attribution: String,
+}
+
+impl SourceMeta {
+    pub fn priority(&self) -> u8 {
+        if self.id == SRD {
+            return 1;
+        }
+        match self.rules {
+            RulesVersion::R2024 => 2,
+            RulesVersion::R2014 => 3,
+            RulesVersion::LevelUp => 4,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LicenseText {
+    pub id: String,
+    pub name: String,
+    pub text: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Bundle {
     pub format: u16,
     pub source: SourceMeta,
+    pub licenses: Vec<LicenseText>,
     pub entries: Vec<Entry>,
 }
 
@@ -185,11 +217,13 @@ pub struct SearchQuery {
     pub cr_max: Option<ChallengeRating>,
     pub rarity: Option<String>,
     pub source: Option<String>,
+    pub sources: Vec<String>,
 }
 
 impl SearchQuery {
     pub fn matches(&self, source: &str, facets: &Facets) -> bool {
-        if self.source.as_deref().is_some_and(|s| s != source)
+        if !self.sources.iter().any(|s| s == source)
+            || self.source.as_deref().is_some_and(|s| s != source)
             || self.kind.is_some_and(|k| k != facets.kind())
         {
             return false;
@@ -231,6 +265,14 @@ pub struct Hit {
     pub key: String,
     pub name: String,
     pub facets: Facets,
+    pub others: u16,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Alternative {
+    pub source: String,
+    pub source_name: String,
+    pub key: String,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -263,11 +305,18 @@ mod tests {
             concentration: false,
         };
         let q = |f: fn(&mut SearchQuery)| {
-            let mut q = SearchQuery::default();
+            let mut q = SearchQuery {
+                sources: vec!["srd".into()],
+                ..SearchQuery::default()
+            };
             f(&mut q);
             q
         };
-        assert!(SearchQuery::default().matches("srd", &fireball));
+        assert!(q(|_| {}).matches("srd", &fireball));
+        assert!(
+            !SearchQuery::default().matches("srd", &fireball),
+            "only enabled sources match"
+        );
         assert!(q(|q| q.class = Some("Wizard".into())).matches("srd", &fireball));
         assert!(!q(|q| q.class = Some("Cleric".into())).matches("srd", &fireball));
         assert!(!q(|q| q.level = Some(2)).matches("srd", &fireball));

@@ -1,3 +1,4 @@
+use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::time::Duration;
 
@@ -6,9 +7,9 @@ use beholder_protocol::SessionToken;
 use beholder_protocol::http::MAX_BUNDLE_BYTES;
 use sha2::{Digest, Sha256};
 
-use crate::cache::CacheError;
+use crate::cache::{Cache, CacheError};
 use crate::http::{BundlePart, Http, HttpError};
-use crate::{ClientEvent, CompendiumState, Shared};
+use crate::{ClientEvent, CompendiumState, Shared, lock};
 
 const ATTEMPTS: u32 = 6;
 
@@ -24,24 +25,64 @@ pub enum SyncError {
     Corrupt(String),
 }
 
-pub(crate) fn run(shared: &Shared, server_url: &str, token: &SessionToken) {
-    if shared.compendium_busy.swap(true, Ordering::AcqRel) {
+fn wanted(cache: &Cache) -> Result<Vec<String>, CacheError> {
+    let mut all: Vec<String> = cache
+        .campaigns()?
+        .into_iter()
+        .flat_map(|(_, c)| c.sources)
+        .collect();
+    all.sort();
+    all.dedup();
+    Ok(all)
+}
+
+pub(crate) fn maybe_start(shared: &Arc<Shared>, token: &SessionToken) {
+    let Ok(want) = shared.with_cache(wanted) else {
+        return;
+    };
+    if lock(&shared.compendium_synced).as_ref() == Some(&want)
+        || shared.compendium_busy.swap(true, Ordering::AcqRel)
+    {
         return;
     }
+    let (s, t) = (Arc::clone(shared), token.clone());
+    tokio::task::spawn_blocking(move || run(&s, &t));
+}
+
+fn run(shared: &Shared, token: &SessionToken) {
     shared.emit(ClientEvent::Compendium(CompendiumState::Syncing));
-    let state = match sync(shared, &Http::new(server_url), token) {
-        Ok(()) => {
-            shared.compendium_done.store(true, Ordering::Release);
-            CompendiumState::Ready
+    let http = Http::new(&shared.server_url);
+    let state = loop {
+        let Ok(want) = shared.with_cache(wanted) else {
+            break CompendiumState::Failed;
+        };
+        if sync(shared, &http, token, &want).is_err() {
+            break CompendiumState::Failed;
         }
-        Err(_) => CompendiumState::Failed,
+        let settled = shared.with_cache(wanted).ok().as_ref() == Some(&want);
+        *lock(&shared.compendium_synced) = Some(want);
+        if settled {
+            break CompendiumState::Ready;
+        }
     };
     shared.compendium_busy.store(false, Ordering::Release);
     shared.emit(ClientEvent::Compendium(state));
 }
 
-fn sync(shared: &Shared, http: &Http, token: &SessionToken) -> Result<(), SyncError> {
-    let index = http.compendium_index(token)?;
+fn sync(
+    shared: &Shared,
+    http: &Http,
+    token: &SessionToken,
+    want: &[String],
+) -> Result<(), SyncError> {
+    let index: Vec<_> = if want.is_empty() {
+        Vec::new()
+    } else {
+        http.compendium_index(token)?
+            .into_iter()
+            .filter(|s| want.contains(&s.id))
+            .collect()
+    };
     for src in &index {
         if shared
             .with_cache(|c| c.compendium_sha256(&src.id))?

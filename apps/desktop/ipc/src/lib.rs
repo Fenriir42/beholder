@@ -1,4 +1,4 @@
-use beholder_core::compendium::{Entry, SourceMeta};
+use beholder_core::compendium::{Alternative, Entry, LicenseText, SourceMeta};
 use beholder_core::{Campaign, NoteId, User, UserId, ValidationError};
 use beholder_protocol::RejectReason;
 use beholder_protocol::http::{AuthError, ImageError};
@@ -60,6 +60,13 @@ pub enum CompendiumStatus {
 pub struct EntryView {
     pub entry: Entry,
     pub source: SourceMeta,
+    pub also: Vec<Alternative>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Credits {
+    pub sources: Vec<SourceMeta>,
+    pub licenses: Vec<LicenseText>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

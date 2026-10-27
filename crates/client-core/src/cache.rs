@@ -1,13 +1,15 @@
+use std::collections::HashMap;
 use std::path::Path;
 
 use beholder_core::compendium::{
-    Bundle, Entry, FacetOptions, Facets, Hit, Kind, SearchQuery, SourceMeta,
+    Alternative, BUNDLE_FORMAT, Bundle, Entry, FacetOptions, Facets, Hit, Kind, LicenseText,
+    SearchQuery, SourceMeta,
 };
 use beholder_core::{Campaign, CampaignId, CommandId, Seq, User};
 use beholder_protocol::{Command, EventEnvelope};
 use rusqlite::{Connection, OptionalExtension, params};
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB NOT NULL) WITHOUT ROWID;
@@ -20,6 +22,9 @@ CREATE TABLE outbox (n INTEGER PRIMARY KEY AUTOINCREMENT, id BLOB NOT NULL UNIQU
 const COMPENDIUM_SCHEMA: &str = "
 CREATE TABLE IF NOT EXISTS compendium_sources (
     id TEXT PRIMARY KEY, sha256 TEXT NOT NULL, meta BLOB NOT NULL
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS compendium_licenses (
+    id TEXT PRIMARY KEY, license BLOB NOT NULL
 ) WITHOUT ROWID;
 CREATE TABLE IF NOT EXISTS compendium_entries (
     rowid INTEGER PRIMARY KEY, source TEXT NOT NULL, key TEXT NOT NULL, kind INTEGER NOT NULL,
@@ -71,6 +76,23 @@ impl Cache {
             )?;
             conn.execute_batch(SCHEMA)?;
             conn.pragma_update(None, "user_version", SCHEMA_VERSION)?;
+        }
+        let format: Option<i64> = conn
+            .query_row(
+                "SELECT value FROM meta WHERE key = 'compendium_format'",
+                [],
+                |r| r.get(0),
+            )
+            .optional()?;
+        if format != Some(i64::from(BUNDLE_FORMAT)) {
+            conn.execute_batch(
+                "DROP TABLE IF EXISTS compendium_fts; DROP TABLE IF EXISTS compendium_entries;
+                 DROP TABLE IF EXISTS compendium_sources; DROP TABLE IF EXISTS compendium_licenses;",
+            )?;
+            conn.execute(
+                "INSERT OR REPLACE INTO meta (key, value) VALUES ('compendium_format', ?1)",
+                [i64::from(BUNDLE_FORMAT)],
+            )?;
         }
         conn.execute_batch(COMPENDIUM_SCHEMA)?;
         Ok(Self { conn })
@@ -242,6 +264,12 @@ impl Cache {
             "INSERT OR REPLACE INTO compendium_sources (id, sha256, meta) VALUES (?1, ?2, ?3)",
             params![id, sha256, postcard::to_stdvec(&bundle.source)?],
         )?;
+        for l in &bundle.licenses {
+            tx.execute(
+                "INSERT OR REPLACE INTO compendium_licenses (id, license) VALUES (?1, ?2)",
+                params![l.id, postcard::to_stdvec(l)?],
+            )?;
+        }
         tx.execute_batch("INSERT INTO compendium_fts (compendium_fts) VALUES ('rebuild')")?;
         tx.commit()?;
         Ok(())
@@ -287,6 +315,7 @@ impl Cache {
                     key: row.get(1)?,
                     name: row.get(2)?,
                     facets,
+                    others: 0,
                 });
             }
             Ok(())
@@ -319,6 +348,7 @@ impl Cache {
         if !needle.is_empty() {
             hits.sort_by_key(|h| !h.name.to_lowercase().starts_with(&needle));
         }
+        let mut hits = fold_duplicates(hits, &self.priorities()?);
         hits.truncate(limit);
         Ok(hits)
     }
@@ -396,6 +426,94 @@ impl Cache {
         opts.rarities.sort();
         Ok(opts)
     }
+}
+
+impl Cache {
+    fn priorities(&self) -> Result<HashMap<String, u8>, CacheError> {
+        Ok(self
+            .compendium_sources()?
+            .into_iter()
+            .map(|m| {
+                let p = m.priority();
+                (m.id, p)
+            })
+            .collect())
+    }
+
+    pub fn alternatives(
+        &self,
+        source: &str,
+        key: &str,
+        allowed: &[String],
+    ) -> Result<Vec<Alternative>, CacheError> {
+        let names: HashMap<String, (String, u8)> = self
+            .compendium_sources()?
+            .into_iter()
+            .map(|m| {
+                let p = m.priority();
+                (m.id, (m.name, p))
+            })
+            .collect();
+        let mut stmt = self.conn.prepare_cached(
+            "SELECT o.source, o.key FROM compendium_entries e
+             JOIN compendium_entries o ON o.kind = e.kind AND o.name = e.name COLLATE NOCASE
+             WHERE e.source = ?1 AND e.key = ?2 AND NOT (o.source = ?1 AND o.key = ?2)",
+        )?;
+        let rows = stmt.query_map([source, key], |r| {
+            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+        })?;
+        let mut out: Vec<(u8, Alternative)> = Vec::new();
+        for row in rows {
+            let (src, k) = row?;
+            if !allowed.contains(&src) {
+                continue;
+            }
+            let (name, p) = names.get(&src).cloned().unwrap_or_default();
+            out.push((
+                p,
+                Alternative {
+                    source: src,
+                    source_name: name,
+                    key: k,
+                },
+            ));
+        }
+        out.sort_by(|a, b| (a.0, &a.1.source_name).cmp(&(b.0, &b.1.source_name)));
+        Ok(out.into_iter().map(|(_, a)| a).collect())
+    }
+
+    pub fn compendium_licenses(&self) -> Result<Vec<LicenseText>, CacheError> {
+        let mut stmt = self
+            .conn
+            .prepare_cached("SELECT license FROM compendium_licenses ORDER BY id")?;
+        stmt.query_map([], |r| r.get::<_, Vec<u8>>(0))?
+            .map(|row| Ok(postcard::from_bytes(&row?)?))
+            .collect()
+    }
+}
+
+fn fold_duplicates(hits: Vec<Hit>, priority: &HashMap<String, u8>) -> Vec<Hit> {
+    let rank = |h: &Hit| priority.get(&h.source).copied().unwrap_or(u8::MAX);
+    let mut index: HashMap<(Kind, String), usize> = HashMap::new();
+    let mut out: Vec<Hit> = Vec::with_capacity(hits.len());
+    for h in hits {
+        let group = (h.facets.kind(), h.name.to_lowercase());
+        match index.get(&group) {
+            Some(&i) => {
+                let best = &mut out[i];
+                best.others += 1;
+                if rank(&h) < rank(best) {
+                    let others = best.others;
+                    *best = Hit { others, ..h };
+                }
+            }
+            None => {
+                index.insert(group, out.len());
+                out.push(h);
+            }
+        }
+    }
+    out
 }
 
 fn kind_to_int(k: Kind) -> i64 {
@@ -525,6 +643,7 @@ mod tests {
 
         let q = |text: &str| SearchQuery {
             text: text.into(),
+            sources: vec!["srd-5.2".into()],
             ..SearchQuery::default()
         };
         let hits = cache.search(&q("fireb"), 20).unwrap();
@@ -546,6 +665,7 @@ mod tests {
         );
 
         let wizard_3 = SearchQuery {
+            sources: vec!["srd-5.2".into()],
             kind: Some(Kind::Spell),
             level: Some(3),
             class: Some("Wizard".into()),
@@ -555,6 +675,7 @@ mod tests {
         assert!(hits.iter().any(|h| h.key == "spell/fireball"));
         assert!(hits.iter().all(|h| matches!(&h.facets, Facets::Spell { level: 3, classes, .. } if classes.iter().any(|c| c == "Wizard"))));
         let all_monsters = SearchQuery {
+            sources: vec!["srd-5.2".into()],
             kind: Some(Kind::Monster),
             ..SearchQuery::default()
         };
@@ -575,5 +696,53 @@ mod tests {
         assert!(cache.retain_sources(&[]).unwrap());
         assert!(cache.search(&q("fireball"), 5).unwrap().is_empty());
         assert!(cache.compendium_sources().unwrap().is_empty());
+    }
+
+    #[test]
+    fn duplicates_fold_by_priority_and_list_alternatives() {
+        use beholder_core::compendium::RulesVersion;
+        let cache = Cache::open_in_memory().unwrap();
+        let srd = srd();
+        let mut old = srd.clone();
+        old.source.id = "old-srd".into();
+        old.source.name = "Old SRD".into();
+        old.source.rules = RulesVersion::R2014;
+        old.entries
+            .retain(|e| e.key == "spell/fireball" || e.key == "spell/magic-missile");
+        cache.put_bundle("aa", &old).unwrap();
+        cache.put_bundle("bb", &srd).unwrap();
+        let both = vec!["old-srd".to_owned(), "srd-5.2".to_owned()];
+        let q = SearchQuery {
+            text: "fireball".into(),
+            sources: both.clone(),
+            ..SearchQuery::default()
+        };
+        let hits = cache.search(&q, 10).unwrap();
+        let fb: Vec<&Hit> = hits.iter().filter(|h| h.name == "Fireball").collect();
+        assert_eq!(fb.len(), 1, "one row per name");
+        assert_eq!(
+            fb[0].source, "srd-5.2",
+            "the 2024 SRD wins over 2014 content"
+        );
+        assert_eq!(fb[0].others, 1);
+        let only_old = SearchQuery {
+            sources: vec!["old-srd".into()],
+            ..q.clone()
+        };
+        let hits = cache.search(&only_old, 10).unwrap();
+        assert_eq!(hits[0].source, "old-srd", "disabled sources never show");
+        assert_eq!(hits[0].others, 0);
+        let alts = cache
+            .alternatives("srd-5.2", "spell/fireball", &both)
+            .unwrap();
+        assert_eq!(alts.len(), 1);
+        assert_eq!(alts[0].source_name, "Old SRD");
+        assert!(
+            cache
+                .alternatives("srd-5.2", "spell/fireball", &["srd-5.2".into()])
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(cache.compendium_licenses().unwrap().len(), 1);
     }
 }

@@ -37,6 +37,10 @@ impl Library {
         self.sources.iter().map(|(info, _)| info.clone()).collect()
     }
 
+    pub fn has(&self, id: &str) -> bool {
+        self.sources.iter().any(|(info, _)| info.id == id)
+    }
+
     pub fn bundle(&self, sha256: &str) -> Option<Bytes> {
         self.sources
             .iter()
@@ -55,6 +59,8 @@ fn describe(bytes: Bytes) -> Result<(SourceInfo, Bytes), BundleError> {
     let info = SourceInfo {
         id: head.source.id,
         name: head.source.name,
+        publisher: head.source.publisher,
+        system: head.source.system,
         rules: head.source.rules,
         sha256: digest.iter().map(|b| format!("{b:02x}")).collect(),
         bytes: bytes.len() as u64,

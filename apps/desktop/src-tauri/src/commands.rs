@@ -1,10 +1,11 @@
-use beholder_core::compendium::{FacetOptions, Hit, SearchQuery, SourceMeta};
+use beholder_core::compendium::{FacetOptions, Hit, SearchQuery};
 use beholder_core::{
     Audience, CampaignId, CampaignOp, CampaignSettings, CampaignTitle, DisplayName, ImageHash,
     InviteCode, NoteBody, NoteId, NoteOp, NoteTitle, Password, Username,
 };
-use beholder_ipc::{Boot, ConnState, EntryView, IpcError, ViewData};
+use beholder_ipc::{Boot, ConnState, Credits, EntryView, IpcError, ViewData};
 use beholder_protocol::CommandKind;
+use beholder_protocol::http::SourceInfo;
 use beholder_protocol::http::{AuthResponse, LoginRequest, RegisterRequest};
 use tauri::ipc::{InvokeBody, Request};
 use tauri::{AppHandle, State};
@@ -333,22 +334,54 @@ pub fn compendium_entry(
     shell: State<'_, Shell>,
     source: String,
     key: String,
+    sources: Vec<String>,
 ) -> Result<Option<EntryView>, IpcError> {
-    let found = shell
-        .session()?
-        .client
+    let client = shell.session()?.client;
+    let found = client
         .compendium_entry(&source, &key)
         .map_err(|_| IpcError::Storage)?;
-    Ok(found.map(|(entry, source)| EntryView { entry, source }))
+    let Some((entry, meta)) = found else {
+        return Ok(None);
+    };
+    let also = client
+        .alternatives(&source, &key, &sources)
+        .map_err(|_| IpcError::Storage)?;
+    Ok(Some(EntryView {
+        entry,
+        source: meta,
+        also,
+    }))
 }
 
 #[tauri::command(rename_all = "snake_case")]
-pub fn compendium_sources(shell: State<'_, Shell>) -> Result<Vec<SourceMeta>, IpcError> {
-    shell
-        .session()?
-        .client
-        .compendium_sources()
-        .map_err(|_| IpcError::Storage)
+pub fn compendium_credits(shell: State<'_, Shell>) -> Result<Credits, IpcError> {
+    let client = shell.session()?.client;
+    Ok(Credits {
+        sources: client.compendium_sources().map_err(|_| IpcError::Storage)?,
+        licenses: client
+            .compendium_licenses()
+            .map_err(|_| IpcError::Storage)?,
+    })
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn compendium_available(shell: State<'_, Shell>) -> Result<Vec<SourceInfo>, IpcError> {
+    let session = shell.session()?;
+    let token = lock(&session.token).clone();
+    let http = beholder_client_core::http::Http::new(&session.server_url);
+    tauri::async_runtime::spawn_blocking(move || http.compendium_index(&token))
+        .await
+        .map_err(|_| IpcError::Server)?
+        .map_err(http_error)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn set_sources(
+    shell: State<'_, Shell>,
+    campaign_id: String,
+    sources: Vec<String>,
+) -> Result<(), IpcError> {
+    campaign_op(&shell, &campaign_id, CampaignOp::SetSources { sources })
 }
 
 #[tauri::command(rename_all = "snake_case")]

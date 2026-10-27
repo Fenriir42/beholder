@@ -5,7 +5,8 @@ use std::time::Duration;
 use beholder_client_core::cache::Cache;
 use beholder_client_core::{Client, ClientEvent, CompendiumState};
 use beholder_core::compendium::{Kind, SearchQuery};
-use beholder_core::{DisplayName, UnixMillis, Username};
+use beholder_core::{CampaignId, CampaignTitle, DisplayName, UnixMillis, Username};
+use beholder_protocol::CommandKind;
 use beholder_server::compendium::Library;
 use beholder_server::db::Db;
 use beholder_server::{Server, auth, serve};
@@ -39,10 +40,20 @@ async fn client_downloads_indexes_and_searches_the_srd() {
         .unwrap();
 
     let (client, mut events) = Client::start(&url, Cache::open_in_memory().unwrap(), token);
+    client
+        .submit(CommandKind::CreateCampaign {
+            campaign_id: CampaignId(uuid::Uuid::now_v7()),
+            title: CampaignTitle::new("Lookup").unwrap(),
+        })
+        .unwrap();
     let ready = tokio::time::timeout(Duration::from_secs(30), async {
         while let Some(e) = events.recv().await {
             match e {
-                ClientEvent::Compendium(CompendiumState::Ready) => return true,
+                ClientEvent::Compendium(CompendiumState::Ready)
+                    if !client.compendium_sources().unwrap().is_empty() =>
+                {
+                    return true;
+                }
                 ClientEvent::Compendium(CompendiumState::Failed) => return false,
                 _ => {}
             }
@@ -61,6 +72,7 @@ async fn client_downloads_indexes_and_searches_the_srd() {
             &SearchQuery {
                 text: "owlbear".into(),
                 kind: Some(Kind::Monster),
+                sources: vec!["srd-5.2".into()],
                 ..SearchQuery::default()
             },
             10,

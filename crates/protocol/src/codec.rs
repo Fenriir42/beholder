@@ -162,6 +162,9 @@ mod tests {
                 previous: Audience::Private,
             },
             CampaignEvent::NoteDeleted { id: nid(4) },
+            CampaignEvent::SourcesChanged {
+                sources: vec!["srd-5.2".into(), "tob3".into()],
+            },
         ]
     }
 
@@ -175,6 +178,9 @@ mod tests {
             },
             CampaignOp::RegenerateInvite,
             CampaignOp::UpdateSettings(CampaignSettings::default()),
+            CampaignOp::SetSources {
+                sources: vec!["srd-5.2".into(), "tob3".into()],
+            },
         ];
         let mut msgs = vec![
             ClientMsg::Hello(Hello {
@@ -323,7 +329,8 @@ mod tests {
             | CampaignEvent::NoteCreated { .. }
             | CampaignEvent::NoteEdited { .. }
             | CampaignEvent::NoteAudienceChanged { .. }
-            | CampaignEvent::NoteDeleted { .. } => {}
+            | CampaignEvent::NoteDeleted { .. }
+            | CampaignEvent::SourcesChanged { .. } => {}
         }
         match n {
             NoteOp::Create { .. }
@@ -390,6 +397,8 @@ mod tests {
         round_trip(&vec![SourceInfo {
             id: "srd-5.2".into(),
             name: "System Reference Document 5.2.1".into(),
+            publisher: "Wizards of the Coast".into(),
+            system: beholder_core::compendium::GameSystem::Dnd5e,
             rules: beholder_core::compendium::RulesVersion::R2024,
             sha256: "ab".repeat(32),
             bytes: 200_759,

@@ -199,7 +199,6 @@ cmp-monster = CR { $cr } · { $size } { $type }
 cmp-attunement = attunement
 cmp-subclass = { $class } subclass
 cmp-feature = { $class } level { $level }
-cmp-source = { $name } · { $rules } rules
 cmp-no-results = Nothing matches. Try fewer words or filters.
 cmp-refine = Showing the first 300 results. Add words or filters to narrow it down.
 cmp-none-selected = Search or pick an entry to read it here.
@@ -209,3 +208,20 @@ cmp-offline = The rules download the first time you're online. After that, the c
 cmp-credits = Credits
 cmp-credits-intro = The compendium includes content under open licences. The required notices follow.
 cmp-upstream = Converted from { $upstream }.
+rules-2014 = 2014 rules
+rules-2024 = 2024 rules
+rules-level-up = Level Up (A5E)
+cmp-source-filter = Source
+cmp-others = +{ $count } { $count ->
+    [one] version
+   *[other] versions
+}
+cmp-also-in = Also in:
+cmp-no-sources = This campaign uses no rules sources. The DM can turn them on in the campaign settings.
+cmp-licenses = Licence texts
+sources-label = Rules sources
+sources-hint = Choose which sources this campaign uses. Players only download what's turned on. Entries with the same name show once, from the highest-priority source, with the others listed under "Also in".
+sources-readonly = The DM chooses which sources this campaign uses.
+sources-loading = Loading the list of sources…
+sources-offline = Connect to the server to see every available source. Turned on now:
+sources-size = { $kb } KB

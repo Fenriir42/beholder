@@ -6,7 +6,7 @@ use wasm_bindgen::JsCast;
 
 use crate::app::{ConnBanner, ConnPill, Screen, error_key, image_url, use_app};
 use crate::i18n::use_i18n;
-use crate::screens::compendium::Compendium;
+use crate::screens::compendium::{Compendium, SourcesSetting};
 use crate::screens::notes::{Notes, NotesPreview};
 use crate::{icons, ipc};
 
@@ -118,7 +118,7 @@ pub fn CampaignScreen(id: CampaignId) -> impl IntoView {
                         <Home c=c tab=tab is_dm=is_dm open_note=open_note/>
                     })).into_any(),
                     Section::Notes => view! { <Notes id=id selected=selected_note/> }.into_any(),
-                    Section::Compendium => view! { <Compendium/> }.into_any(),
+                    Section::Compendium => view! { <Compendium id=id/> }.into_any(),
                 }}
             </div>
         </div>
@@ -315,11 +315,11 @@ fn Settings(c: CampaignView, editable: bool) -> impl IntoView {
                 <div class="row">
                     <span class="grow">{move || i18n.t("rule-dm-notes")}</span>
                     <strong>{move || if dm_reads { i18n.t("yes") } else { i18n.t("no") }}</strong>
-                </div>
-                <div class="row">
+                </div>                <div class="row">
                     <span class="grow">{move || i18n.t("rule-combat")}</span>
                     <strong>{move || i18n.t(current)}</strong>
                 </div>
+                <SourcesSetting campaign_id=c.campaign.id enabled=c.campaign.sources.clone() editable=false/>
             </div>
         }
         .into_any();
@@ -379,11 +379,11 @@ fn Settings(c: CampaignView, editable: bool) -> impl IntoView {
                         })/>
                     {move || i18n.t("rule-dm-notes")}
                 </label>
-            </fieldset>
-            <fieldset>
+            </fieldset>            <fieldset>
                 <legend>{move || i18n.t("rule-combat")}</legend>
                 {radios}
             </fieldset>
+            <SourcesSetting campaign_id=c.campaign.id enabled=c.campaign.sources.clone() editable=true/>
         </div>
     }
     .into_any()
