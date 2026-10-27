@@ -15,7 +15,6 @@ target
 
 # rustc will dump stack traces when hitting an internal compiler error to PWD
 rustc-ice-*.txt
-data/
 
 # RustRover
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
