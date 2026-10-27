@@ -281,4 +281,10 @@ The style is **modern dark**, clean like a launcher app (CurseForge-like library
 5. **Dice:** roll from sheet, log, secret rolls, physical entry.
 6. **Combat tracker.**
 7. **Discord login** and account linking.
-8. **Later:** Android app; homebrew Discord bot (rolls with sheet modifiers, mirrored between Discord and the app).
+8. **Later:**
+   - Android app.
+   - Homebrew Discord bot (rolls with sheet modifiers, mirrored between Discord and the app).
+   - Other game systems (e.g. Imperium Maledictum, Call of Cthulhu). Every compendium source is already tagged with its game system, and a campaign only uses sources of its own system.
+   - Homebrew game systems, defined in the app within what it can model (stats, rolls, entry types).
+   - Scripting for custom behaviour per campaign.
+   - A modding and add-on system for the whole app, so anyone can extend it.
