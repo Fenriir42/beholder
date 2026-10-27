@@ -67,7 +67,7 @@ Don't run any of the following unless asked: release builds, `cargo tauri build`
 - `beholder-core` is pure and deterministic: no IO, no async, and the RNG is passed in.
 - Prefer borrowing to cloning, and plain structs and enums to trait hierarchies. Don't add a trait or generic that has only one implementation.
 - No `unsafe`.
-- Comments explain *why*, not what. Public items get a one-line doc comment.
+- No comments or doc comments; the docs site and ADRs carry the explanations. The only exception is an invariant that a future edit could silently break (wire compatibility, a security bound, a non-obvious ordering), in one short `//` line.
 
 ## Dependencies
 
