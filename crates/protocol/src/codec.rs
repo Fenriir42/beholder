@@ -107,7 +107,24 @@ mod tests {
         }
         c.cover = Some(ImageHash([3; 32]));
         c.invite_code = Some(InviteCode::from_random([1, 2, 3, 4, 5]));
+        c.apply(&CampaignEvent::NoteCreated { note: note() });
         c
+    }
+
+    fn nid(n: u8) -> NoteId {
+        NoteId(Uuid::from_bytes([n; 16]))
+    }
+
+    fn note() -> Note {
+        Note {
+            id: nid(4),
+            author: uid(1),
+            title: NoteTitle::new("Handout: the letter").unwrap(),
+            body: NoteBody::new("# Dear *Ireena*\n![seal](img:00)".into()).unwrap(),
+            audience: Audience::Users(vec![uid(2), uid(3)]),
+            version: 7,
+            conflict_of: Some(nid(5)),
+        }
     }
 
     fn all_events() -> Vec<CampaignEvent> {
@@ -132,6 +149,19 @@ mod tests {
                     combat_visibility: CombatVisibility::Hidden,
                 },
             },
+            CampaignEvent::NoteCreated { note: note() },
+            CampaignEvent::NoteEdited {
+                id: nid(4),
+                title: NoteTitle::new("Letter").unwrap(),
+                body: NoteBody::new("Burn after reading.".into()).unwrap(),
+                version: 8,
+            },
+            CampaignEvent::NoteAudienceChanged {
+                id: nid(4),
+                audience: Audience::Party,
+                previous: Audience::Private,
+            },
+            CampaignEvent::NoteDeleted { id: nid(4) },
         ]
     }
 
@@ -171,6 +201,34 @@ mod tests {
             ClientMsg::Command(Command {
                 id: cmd_id(7),
                 kind: CommandKind::Campaign {
+                    campaign_id: cid(2),
+                    op,
+                },
+            })
+        }));
+        let note_ops = vec![
+            NoteOp::Create {
+                id: nid(4),
+                title: NoteTitle::new("Map").unwrap(),
+                body: NoteBody::default(),
+                audience: Audience::Private,
+            },
+            NoteOp::Edit {
+                id: nid(4),
+                base_version: 3,
+                title: NoteTitle::new("Map").unwrap(),
+                body: NoteBody::new("North is *up*.".into()).unwrap(),
+            },
+            NoteOp::SetAudience {
+                id: nid(4),
+                audience: Audience::Users(vec![uid(2)]),
+            },
+            NoteOp::Delete { id: nid(4) },
+        ];
+        msgs.extend(note_ops.into_iter().map(|op| {
+            ClientMsg::Command(Command {
+                id: cmd_id(8),
+                kind: CommandKind::Note {
                     campaign_id: cid(2),
                     op,
                 },
@@ -245,9 +303,33 @@ mod tests {
     }
 
     #[allow(dead_code)]
-    fn exhaustive(c: &ClientMsg, s: &ServerMsg) {
+    fn exhaustive(c: &ClientMsg, s: &ServerMsg, k: &CommandKind, e: &CampaignEvent, n: &NoteOp) {
         match c {
             ClientMsg::Hello(_) | ClientMsg::Command(_) | ClientMsg::Ping { .. } => {}
+        }
+        match k {
+            CommandKind::CreateCampaign { .. }
+            | CommandKind::JoinCampaign { .. }
+            | CommandKind::Campaign { .. }
+            | CommandKind::Note { .. } => {}
+        }
+        match e {
+            CampaignEvent::Created { .. }
+            | CampaignEvent::Renamed { .. }
+            | CampaignEvent::CoverChanged { .. }
+            | CampaignEvent::MemberJoined { .. }
+            | CampaignEvent::InviteRegenerated { .. }
+            | CampaignEvent::SettingsChanged { .. }
+            | CampaignEvent::NoteCreated { .. }
+            | CampaignEvent::NoteEdited { .. }
+            | CampaignEvent::NoteAudienceChanged { .. }
+            | CampaignEvent::NoteDeleted { .. } => {}
+        }
+        match n {
+            NoteOp::Create { .. }
+            | NoteOp::Edit { .. }
+            | NoteOp::SetAudience { .. }
+            | NoteOp::Delete { .. } => {}
         }
         match s {
             ServerMsg::HelloOk(_)

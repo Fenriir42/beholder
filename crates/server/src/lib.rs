@@ -4,6 +4,7 @@ pub mod db;
 pub mod http;
 pub mod hub;
 pub mod images;
+pub mod notes;
 pub mod permissions;
 pub mod rate_limit;
 pub mod ws;

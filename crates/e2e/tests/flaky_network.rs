@@ -277,14 +277,21 @@ async fn no_lost_or_duplicated_commands_and_clients_converge() {
     let (head_seq, server_campaign) = head;
     assert_eq!(server_campaign.title.as_str(), final_title);
 
-    let dm_expected = permissions::campaign_for(Role::Dm, &server_campaign);
+    let viewer = |role| {
+        let m = server_campaign.members.iter().find(|m| m.role == role);
+        permissions::Viewer {
+            user: m.map(|m| m.user_id).expect("member with role"),
+            role,
+        }
+    };
+    let dm_expected = permissions::campaign_for(viewer(Role::Dm), &server_campaign);
     wait_until(&dm, &mut dm_events, &mut dm_rejects, "dm converge", |v| {
         v.campaigns.len() == 1
             && v.campaigns[0].seq == head_seq
             && v.campaigns[0].campaign == dm_expected
     })
     .await;
-    let player_expected = permissions::campaign_for(Role::Player, &server_campaign);
+    let player_expected = permissions::campaign_for(viewer(Role::Player), &server_campaign);
     assert_eq!(player_expected.invite_code, None);
     wait_until(
         &player,

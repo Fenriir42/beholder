@@ -2,7 +2,8 @@ use core::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ids::{CampaignId, ImageHash, UserId};
+use crate::ids::{CampaignId, ImageHash, NoteId, UserId};
+use crate::note::{Audience, Note, NoteBody, NoteTitle};
 use crate::user::{DisplayName, ValidationError, clean_text};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -158,12 +159,42 @@ impl CampaignOp {
 // Stored as postcard: only append variants, never change one (ADR-0003).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CampaignEvent {
-    Created { title: CampaignTitle, dm: Member },
-    Renamed { title: CampaignTitle },
-    CoverChanged { cover: Option<ImageHash> },
-    MemberJoined { member: Member },
-    InviteRegenerated { code: InviteCode },
-    SettingsChanged { settings: CampaignSettings },
+    Created {
+        title: CampaignTitle,
+        dm: Member,
+    },
+    Renamed {
+        title: CampaignTitle,
+    },
+    CoverChanged {
+        cover: Option<ImageHash>,
+    },
+    MemberJoined {
+        member: Member,
+    },
+    InviteRegenerated {
+        code: InviteCode,
+    },
+    SettingsChanged {
+        settings: CampaignSettings,
+    },
+    NoteCreated {
+        note: Note,
+    },
+    NoteEdited {
+        id: NoteId,
+        title: NoteTitle,
+        body: NoteBody,
+        version: u32,
+    },
+    NoteAudienceChanged {
+        id: NoteId,
+        audience: Audience,
+        previous: Audience,
+    },
+    NoteDeleted {
+        id: NoteId,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -174,6 +205,7 @@ pub struct Campaign {
     pub settings: CampaignSettings,
     pub invite_code: Option<InviteCode>,
     pub members: Vec<Member>,
+    pub notes: Vec<Note>,
 }
 
 impl Campaign {
@@ -185,6 +217,7 @@ impl Campaign {
             settings: CampaignSettings::default(),
             invite_code: None,
             members: vec![dm],
+            notes: Vec::new(),
         }
     }
 
@@ -207,7 +240,49 @@ impl Campaign {
             }
             CampaignEvent::InviteRegenerated { code } => self.invite_code = Some(*code),
             CampaignEvent::SettingsChanged { settings } => self.settings = *settings,
+            CampaignEvent::NoteCreated { note } => {
+                match self.notes.binary_search_by_key(&note.id, |n| n.id) {
+                    Ok(i) => self.notes[i] = note.clone(),
+                    Err(i) => self.notes.insert(i, note.clone()),
+                }
+            }
+            CampaignEvent::NoteEdited {
+                id,
+                title,
+                body,
+                version,
+            } => {
+                if let Some(n) = self.note_mut(*id) {
+                    n.title = title.clone();
+                    n.body = body.clone();
+                    n.version = *version;
+                }
+            }
+            CampaignEvent::NoteAudienceChanged { id, audience, .. } => {
+                if let Some(n) = self.note_mut(*id) {
+                    n.audience = audience.clone();
+                }
+            }
+            CampaignEvent::NoteDeleted { id } => {
+                if let Ok(i) = self.notes.binary_search_by_key(id, |n| n.id) {
+                    self.notes.remove(i);
+                }
+            }
         }
+    }
+
+    pub fn note(&self, id: NoteId) -> Option<&Note> {
+        self.notes
+            .binary_search_by_key(&id, |n| n.id)
+            .ok()
+            .map(|i| &self.notes[i])
+    }
+
+    fn note_mut(&mut self, id: NoteId) -> Option<&mut Note> {
+        self.notes
+            .binary_search_by_key(&id, |n| n.id)
+            .ok()
+            .map(|i| &mut self.notes[i])
     }
 
     pub fn role_of(&self, user: UserId) -> Option<Role> {
@@ -307,6 +382,52 @@ mod tests {
         assert_eq!(c.role_of(p.user_id), Some(Role::Player));
         assert_eq!(c.dm(), Some(&dm));
         assert_eq!(c.role_of(UserId(Uuid::nil())), None);
+    }
+
+    #[test]
+    fn note_events_fold_in_id_order() {
+        let dm = member(1, Role::Dm);
+        let mut c = Campaign::new(
+            CampaignId(Uuid::from_bytes([9; 16])),
+            CampaignTitle::new("A").unwrap(),
+            dm.clone(),
+        );
+        let note = |n: u8| Note {
+            id: NoteId(Uuid::from_bytes([n; 16])),
+            author: dm.user_id,
+            title: NoteTitle::new("T").unwrap(),
+            body: NoteBody::default(),
+            audience: Audience::Private,
+            version: 1,
+            conflict_of: None,
+        };
+        let (b, a) = (note(2), note(1));
+        for e in [
+            CampaignEvent::NoteCreated { note: b.clone() },
+            CampaignEvent::NoteCreated { note: a.clone() },
+            CampaignEvent::NoteEdited {
+                id: a.id,
+                title: NoteTitle::new("Edited").unwrap(),
+                body: NoteBody::new("x".into()).unwrap(),
+                version: 2,
+            },
+            CampaignEvent::NoteAudienceChanged {
+                id: b.id,
+                audience: Audience::Party,
+                previous: Audience::Private,
+            },
+            CampaignEvent::NoteCreated { note: b.clone() },
+        ] {
+            c.apply(&e);
+        }
+        assert_eq!(c.notes.len(), 2);
+        assert_eq!(c.notes[0].id, a.id, "sorted by id, not arrival");
+        assert_eq!(c.notes[0].title.as_str(), "Edited");
+        assert_eq!(c.notes[0].version, 2);
+        assert_eq!(c.note(b.id), Some(&b), "a repeated create is an upsert");
+        c.apply(&CampaignEvent::NoteDeleted { id: a.id });
+        c.apply(&CampaignEvent::NoteDeleted { id: a.id });
+        assert_eq!(c.notes, vec![b]);
     }
 
     #[test]

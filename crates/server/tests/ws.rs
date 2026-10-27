@@ -4,8 +4,9 @@ use std::net::SocketAddr;
 use std::time::Duration;
 
 use beholder_core::{
-    CampaignEvent, CampaignId, CampaignOp, CampaignTitle, CommandId, DisplayName, InviteCode, Seq,
-    UnixMillis, Username,
+    Audience, CampaignEvent, CampaignId, CampaignOp, CampaignSettings, CampaignTitle, CommandId,
+    DisplayName, InviteCode, NoteBody, NoteId, NoteOp, NoteTitle, Seq, UnixMillis, UserId,
+    Username,
 };
 use beholder_protocol::{
     ClientMsg, Command, CommandKind, Hello, HelloError, PROTOCOL_VERSION, RejectReason, ServerMsg,
@@ -148,6 +149,14 @@ impl Client {
             _ => None,
         })
         .await
+    }
+
+    async fn drain(&mut self) {
+        while self.try_recv(Duration::from_millis(300)).await.is_some() {}
+    }
+
+    fn saw(&self, text: &str) -> bool {
+        self.saw_bytes(text.as_bytes())
     }
 
     fn saw_bytes(&self, needle: &[u8]) -> bool {
@@ -383,4 +392,149 @@ async fn ping_is_answered_and_presence_is_shared() {
         _ => None,
     })
     .await;
+}
+
+async fn join(player: &mut Client, code: InviteCode) -> UserId {
+    let id = player.command(CommandKind::JoinCampaign { code }).await;
+    player
+        .wait_for(|m| matches!(m, ServerMsg::Snapshot { .. }).then_some(()))
+        .await;
+    player.ack(id).await;
+    let token_user = player
+        .raw
+        .iter()
+        .find_map(|b| match postcard::from_bytes::<ServerMsg>(b) {
+            Ok(ServerMsg::Snapshot { campaign, .. }) => campaign.members.last().map(|m| m.user_id),
+            _ => None,
+        });
+    token_user.unwrap()
+}
+
+async fn note(c: &mut Client, campaign_id: CampaignId, op: NoteOp) -> Option<Seq> {
+    let id = c.command(CommandKind::Note { campaign_id, op }).await;
+    c.ack(id).await
+}
+
+fn create(id: NoteId, body: &str, audience: Audience) -> NoteOp {
+    NoteOp::Create {
+        id,
+        title: NoteTitle::new("Note").unwrap(),
+        body: NoteBody::new(body.into()).unwrap(),
+        audience,
+    }
+}
+
+#[tokio::test]
+async fn notes_reach_only_their_audience() {
+    let h = start().await;
+    let (dm_t, p1_t, p2_t) = (
+        h.user("dmaster").await,
+        h.user("alice").await,
+        h.user("bob").await,
+    );
+    let mut dm = Client::connect(h.addr, &dm_t, vec![]).await;
+    let (cid, code) = create_campaign(&mut dm).await;
+    let mut p1 = Client::connect(h.addr, &p1_t, vec![]).await;
+    let alice = join(&mut p1, code).await;
+    let mut p2 = Client::connect(h.addr, &p2_t, vec![]).await;
+    join(&mut p2, code).await;
+
+    let dm_only = NoteId(Uuid::now_v7());
+    note(
+        &mut dm,
+        cid,
+        create(dm_only, "SECRET-DM-NOTE", Audience::Private),
+    )
+    .await;
+    note(
+        &mut p1,
+        cid,
+        create(NoteId(Uuid::now_v7()), "SECRET-ALICE", Audience::Private),
+    )
+    .await;
+    let for_alice = create(
+        NoteId(Uuid::now_v7()),
+        "FOR-ALICE",
+        Audience::Users(vec![alice]),
+    );
+    note(&mut dm, cid, for_alice).await;
+    let edit = NoteOp::Edit {
+        id: dm_only,
+        base_version: 1,
+        title: NoteTitle::new("Note").unwrap(),
+        body: NoteBody::new("SECRET-DM-EDIT".into()).unwrap(),
+    };
+    let last = note(&mut dm, cid, edit).await.unwrap();
+    for c in [&mut dm, &mut p1, &mut p2] {
+        c.drain().await;
+    }
+
+    let mut replay = Client::connect(h.addr, &p2_t, vec![(cid, Seq(last.0 - 3))]).await;
+    let mut fresh = Client::connect(h.addr, &p2_t, vec![]).await;
+    for c in [&mut replay, &mut fresh] {
+        c.drain().await;
+    }
+    for secret in [
+        "SECRET-DM-NOTE",
+        "SECRET-DM-EDIT",
+        "SECRET-ALICE",
+        "FOR-ALICE",
+    ] {
+        for (name, c) in [("live", &p2), ("replay", &replay), ("snapshot", &fresh)] {
+            assert!(!c.saw(secret), "bob ({name}) received {secret}");
+        }
+    }
+    assert!(!p1.saw("SECRET-DM-NOTE") && !p1.saw("SECRET-DM-EDIT"));
+    assert!(p1.saw("FOR-ALICE"));
+    assert!(
+        !dm.saw("SECRET-ALICE"),
+        "DM reads private notes only when enabled"
+    );
+
+    let enable = dm
+        .command(CommandKind::Campaign {
+            campaign_id: cid,
+            op: CampaignOp::UpdateSettings(CampaignSettings {
+                dm_can_read_private_notes: true,
+                ..CampaignSettings::default()
+            }),
+        })
+        .await;
+    dm.ack(enable).await;
+    dm.drain().await;
+    assert!(
+        dm.saw("SECRET-ALICE"),
+        "enabling the setting sends the DM a snapshot"
+    );
+
+    let reveal = |audience| NoteOp::SetAudience {
+        id: dm_only,
+        audience,
+    };
+    note(&mut dm, cid, reveal(Audience::Party)).await;
+    let revealed = p2
+        .wait_for(|m| match m {
+            ServerMsg::Events { events, .. } => events.iter().find_map(|e| match &e.event {
+                CampaignEvent::NoteCreated { note } if note.id == dm_only => Some(note.clone()),
+                _ => None,
+            }),
+            _ => None,
+        })
+        .await;
+    assert_eq!(
+        revealed.body.as_str(),
+        "SECRET-DM-EDIT",
+        "a reveal sends the current text"
+    );
+
+    note(&mut dm, cid, reveal(Audience::Private)).await;
+    p2.wait_for(|m| match m {
+        ServerMsg::Events { events, .. } => events
+            .iter()
+            .any(|e| e.event == CampaignEvent::NoteDeleted { id: dm_only })
+            .then_some(()),
+        _ => None,
+    })
+    .await;
+    assert!(!p2.saw("SECRET-ALICE"));
 }

@@ -1,5 +1,16 @@
-use beholder_core::{Campaign, CampaignEvent, CampaignId, CampaignOp, Role, Seq, UserId};
+use std::collections::HashMap;
+
+use beholder_core::{
+    Audience, Campaign, CampaignEvent, CampaignId, CampaignOp, CampaignSettings, Note, NoteId,
+    Role, Seq, UserId,
+};
 use beholder_protocol::{EventEnvelope, ServerMsg};
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Viewer {
+    pub user: UserId,
+    pub role: Role,
+}
 
 pub fn can_apply(role: Role, op: &CampaignOp) -> bool {
     match op {
@@ -10,34 +21,105 @@ pub fn can_apply(role: Role, op: &CampaignOp) -> bool {
     }
 }
 
-pub fn event_for(viewer: Role, event: &CampaignEvent) -> Option<CampaignEvent> {
+fn reads(viewer: Viewer, settings: &CampaignSettings, author: UserId, audience: &Audience) -> bool {
+    author == viewer.user
+        || audience.includes(viewer.user)
+        || (*audience == Audience::Private
+            && viewer.role == Role::Dm
+            && settings.dm_can_read_private_notes)
+}
+
+pub fn can_read_note(viewer: Viewer, settings: &CampaignSettings, note: &Note) -> bool {
+    reads(viewer, settings, note.author, &note.audience)
+}
+
+pub fn can_edit_note(viewer: Viewer, note: &Note) -> bool {
+    note.author == viewer.user || note.audience.includes(viewer.user)
+}
+
+pub fn can_manage_note(viewer: Viewer, note: &Note) -> bool {
+    note.author == viewer.user
+}
+
+pub struct Scope<'a> {
+    pub settings: CampaignSettings,
+    pub notes: &'a HashMap<NoteId, Note>,
+}
+
+pub fn event_for(
+    viewer: Viewer,
+    scope: &Scope<'_>,
+    event: &CampaignEvent,
+) -> Option<CampaignEvent> {
+    let settings = &scope.settings;
     match event {
-        CampaignEvent::InviteRegenerated { .. } => (viewer == Role::Dm).then(|| event.clone()),
+        CampaignEvent::InviteRegenerated { .. } => (viewer.role == Role::Dm).then(|| event.clone()),
         CampaignEvent::Created { .. }
         | CampaignEvent::Renamed { .. }
         | CampaignEvent::CoverChanged { .. }
         | CampaignEvent::MemberJoined { .. }
         | CampaignEvent::SettingsChanged { .. } => Some(event.clone()),
+        CampaignEvent::NoteCreated { note } => {
+            can_read_note(viewer, settings, note).then(|| event.clone())
+        }
+        CampaignEvent::NoteEdited { id, .. } | CampaignEvent::NoteDeleted { id } => {
+            let note = scope.notes.get(id)?;
+            can_read_note(viewer, settings, note).then(|| event.clone())
+        }
+        CampaignEvent::NoteAudienceChanged {
+            id,
+            audience,
+            previous,
+        } => {
+            let note = scope.notes.get(id)?;
+            let before = reads(viewer, settings, note.author, previous);
+            let after = reads(viewer, settings, note.author, audience);
+            match (before, after) {
+                (true, true) => Some(event.clone()),
+                (false, true) => Some(CampaignEvent::NoteCreated {
+                    note: Note {
+                        audience: audience.clone(),
+                        ..note.clone()
+                    },
+                }),
+                (true, false) => Some(CampaignEvent::NoteDeleted { id: *id }),
+                (false, false) => None,
+            }
+        }
     }
 }
 
-pub fn campaign_for(viewer: Role, campaign: &Campaign) -> Campaign {
-    let mut c = campaign.clone();
-    if viewer != Role::Dm {
-        c.invite_code = None;
+pub fn campaign_for(viewer: Viewer, campaign: &Campaign) -> Campaign {
+    Campaign {
+        id: campaign.id,
+        title: campaign.title.clone(),
+        cover: campaign.cover,
+        settings: campaign.settings,
+        invite_code: campaign.invite_code.filter(|_| viewer.role == Role::Dm),
+        members: campaign.members.clone(),
+        notes: campaign
+            .notes
+            .iter()
+            .filter(|n| can_read_note(viewer, &campaign.settings, n))
+            .cloned()
+            .collect(),
     }
-    c
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Outgoing(ServerMsg);
 
 impl Outgoing {
-    pub fn events(viewer: Role, campaign_id: CampaignId, events: &[EventEnvelope]) -> Option<Self> {
+    pub fn events(
+        viewer: Viewer,
+        scope: &Scope<'_>,
+        campaign_id: CampaignId,
+        events: &[EventEnvelope],
+    ) -> Option<Self> {
         let events: Vec<_> = events
             .iter()
             .filter_map(|e| {
-                event_for(viewer, &e.event).map(|event| EventEnvelope {
+                event_for(viewer, scope, &e.event).map(|event| EventEnvelope {
                     seq: e.seq,
                     ts: e.ts,
                     actor: e.actor,
@@ -51,7 +133,7 @@ impl Outgoing {
         }))
     }
 
-    pub fn snapshot(viewer: Role, seq: Seq, campaign: &Campaign) -> Self {
+    pub fn snapshot(viewer: Viewer, seq: Seq, campaign: &Campaign) -> Self {
         Self(ServerMsg::Snapshot {
             seq,
             campaign: campaign_for(viewer, campaign),
@@ -98,12 +180,228 @@ mod tests {
     use super::*;
     use beholder_core::{
         CampaignSettings, CampaignTitle, CombatVisibility, DisplayName, ImageHash, InviteCode,
-        Member, UnixMillis, UserId,
+        Member, NoteBody, NoteTitle, UnixMillis, UserId,
     };
     use beholder_protocol::HelloError;
     use uuid::Uuid;
 
     const ROLES: [Role; 2] = [Role::Dm, Role::Player];
+
+    fn viewer(role: Role) -> Viewer {
+        let n = if role == Role::Dm { 1 } else { 2 };
+        Viewer {
+            user: member(n, role).user_id,
+            role,
+        }
+    }
+
+    fn no_notes() -> HashMap<NoteId, Note> {
+        HashMap::new()
+    }
+
+    fn scope(notes: &HashMap<NoteId, Note>, dm_reads: bool) -> Scope<'_> {
+        Scope {
+            settings: CampaignSettings {
+                dm_can_read_private_notes: dm_reads,
+                combat_visibility: CombatVisibility::Exact,
+            },
+            notes,
+        }
+    }
+
+    const DM: u8 = 1;
+    const P1: u8 = 2;
+    const P2: u8 = 3;
+
+    fn uid(n: u8) -> UserId {
+        UserId(Uuid::from_bytes([n; 16]))
+    }
+
+    fn v(n: u8) -> Viewer {
+        Viewer {
+            user: uid(n),
+            role: if n == DM { Role::Dm } else { Role::Player },
+        }
+    }
+
+    fn note(author: u8, audience: Audience) -> Note {
+        let tag = match &audience {
+            Audience::Private => 0,
+            Audience::Party => 1,
+            Audience::Users(u) => 2 + u.first().map_or(0, |x| x.as_bytes()[0]),
+        };
+        let mut id = [0; 16];
+        id[0] = author;
+        id[1] = tag;
+        Note {
+            id: NoteId(Uuid::from_bytes(id)),
+            author: uid(author),
+            title: NoteTitle::new("secret").unwrap(),
+            body: NoteBody::new("the vampire is the priest".into()).unwrap(),
+            audience,
+            version: 1,
+            conflict_of: None,
+        }
+    }
+
+    // (note, dm_can_read_private_notes, [DM sees, P1 sees, P2 sees])
+    fn read_matrix() -> Vec<(Note, bool, [bool; 3])> {
+        let mut rows = Vec::new();
+        for dm_reads in [false, true] {
+            rows.extend([
+                (note(DM, Audience::Private), dm_reads, [true, false, false]),
+                (note(DM, Audience::Party), dm_reads, [true, true, true]),
+                (
+                    note(DM, Audience::Users(vec![uid(P2)])),
+                    dm_reads,
+                    [true, false, true],
+                ),
+                (
+                    note(P1, Audience::Private),
+                    dm_reads,
+                    [dm_reads, true, false],
+                ),
+                (note(P1, Audience::Party), dm_reads, [true, true, true]),
+                (
+                    note(P1, Audience::Users(vec![uid(P2)])),
+                    dm_reads,
+                    [false, true, true],
+                ),
+                (
+                    note(P1, Audience::Users(vec![uid(DM)])),
+                    dm_reads,
+                    [true, true, false],
+                ),
+            ]);
+        }
+        rows
+    }
+
+    #[test]
+    fn note_read_matrix() {
+        for (n, dm_reads, expected) in read_matrix() {
+            let notes = no_notes();
+            let sc = scope(&notes, dm_reads);
+            for (who, want) in [DM, P1, P2].into_iter().zip(expected) {
+                assert_eq!(
+                    can_read_note(v(who), &sc.settings, &n),
+                    want,
+                    "viewer {who} dm_reads {dm_reads} {:?} by {}",
+                    n.audience,
+                    n.author
+                );
+                let created = CampaignEvent::NoteCreated { note: n.clone() };
+                assert_eq!(event_for(v(who), &sc, &created).is_some(), want);
+                let index = HashMap::from([(n.id, n.clone())]);
+                let sc = scope(&index, dm_reads);
+                for e in [
+                    CampaignEvent::NoteEdited {
+                        id: n.id,
+                        title: n.title.clone(),
+                        body: n.body.clone(),
+                        version: 2,
+                    },
+                    CampaignEvent::NoteDeleted { id: n.id },
+                ] {
+                    assert_eq!(event_for(v(who), &sc, &e).is_some(), want, "{e:?}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn note_edit_and_manage_matrix() {
+        // (note, [DM, P1, P2] may edit); only the author manages.
+        let rows = [
+            (note(P1, Audience::Private), [false, true, false]),
+            (note(P1, Audience::Party), [true, true, true]),
+            (
+                note(P1, Audience::Users(vec![uid(P2)])),
+                [false, true, true],
+            ),
+            (note(DM, Audience::Private), [true, false, false]),
+        ];
+        for (n, edit) in rows {
+            for (who, want) in [DM, P1, P2].into_iter().zip(edit) {
+                assert_eq!(
+                    can_edit_note(v(who), &n),
+                    want,
+                    "edit {who} {:?}",
+                    n.audience
+                );
+                assert_eq!(can_manage_note(v(who), &n), n.author == uid(who));
+            }
+        }
+        let private = note(P1, Audience::Private);
+        let dm = v(DM);
+        let notes = no_notes();
+        assert!(can_read_note(dm, &scope(&notes, true).settings, &private));
+        assert!(!can_edit_note(dm, &private), "DM read access is read-only");
+    }
+
+    #[test]
+    fn reveal_upserts_for_gainers_and_removes_for_losers() {
+        let revealed = note(DM, Audience::Users(vec![uid(P1)]));
+        let index = HashMap::from([(revealed.id, revealed.clone())]);
+        let sc = scope(&index, false);
+        let change = CampaignEvent::NoteAudienceChanged {
+            id: revealed.id,
+            audience: Audience::Users(vec![uid(P1)]),
+            previous: Audience::Users(vec![uid(P2)]),
+        };
+        assert_eq!(event_for(v(DM), &sc, &change), Some(change.clone()));
+        assert_eq!(
+            event_for(v(P1), &sc, &change),
+            Some(CampaignEvent::NoteCreated {
+                note: revealed.clone()
+            })
+        );
+        assert_eq!(
+            event_for(v(P2), &sc, &change),
+            Some(CampaignEvent::NoteDeleted { id: revealed.id })
+        );
+        let stranger = Viewer {
+            user: uid(9),
+            role: Role::Player,
+        };
+        assert_eq!(event_for(stranger, &sc, &change), None);
+        assert_eq!(
+            event_for(v(P1), &scope(&no_notes(), false), &change),
+            None,
+            "unknown note: nothing is sent"
+        );
+    }
+
+    #[test]
+    fn snapshot_filters_notes_per_viewer() {
+        let mut c = Campaign::new(
+            beholder_core::CampaignId(Uuid::from_bytes([3; 16])),
+            CampaignTitle::new("T").unwrap(),
+            member(DM, Role::Dm),
+        );
+        for (n, _, _) in read_matrix().into_iter().take(7) {
+            c.apply(&CampaignEvent::NoteCreated { note: n });
+        }
+        for dm_reads in [false, true] {
+            c.settings.dm_can_read_private_notes = dm_reads;
+            for who in [DM, P1, P2] {
+                let got = campaign_for(v(who), &c);
+                let want: Vec<_> = c
+                    .notes
+                    .iter()
+                    .filter(|n| can_read_note(v(who), &c.settings, n))
+                    .cloned()
+                    .collect();
+                assert_eq!(got.notes, want);
+                let leaked = got.notes.iter().any(|n| {
+                    n.audience == Audience::Private
+                        && n.author != uid(who)
+                        && !(who == DM && dm_reads)
+                });
+                assert!(!leaked, "viewer {who} got someone else's private note");
+            }
+        }
+    }
 
     fn member(n: u8, role: Role) -> Member {
         Member {
@@ -197,7 +495,8 @@ mod tests {
     fn event_visibility() {
         for (event, dm, player) in event_matrix() {
             for (role, expected) in [(Role::Dm, dm), (Role::Player, player)] {
-                let got = event_for(role, &event);
+                let notes = no_notes();
+                let got = event_for(viewer(role), &scope(&notes, false), &event);
                 assert_eq!(got.is_some(), expected, "{role:?} {event:?}");
                 if let Some(got) = got {
                     assert_eq!(got, event, "visible events are passed unchanged");
@@ -214,9 +513,9 @@ mod tests {
             member(1, Role::Dm),
         );
         c.invite_code = Some(code());
-        assert_eq!(campaign_for(Role::Dm, &c).invite_code, Some(code()));
-        assert_eq!(campaign_for(Role::Player, &c).invite_code, None);
-        let mut rest = campaign_for(Role::Player, &c);
+        assert_eq!(campaign_for(viewer(Role::Dm), &c).invite_code, Some(code()));
+        assert_eq!(campaign_for(viewer(Role::Player), &c).invite_code, None);
+        let mut rest = campaign_for(viewer(Role::Player), &c);
         rest.invite_code = c.invite_code;
         assert_eq!(rest, c, "nothing else is hidden from players");
     }
@@ -235,7 +534,8 @@ mod tests {
             })
             .collect();
         for role in ROLES {
-            let Some(out) = Outgoing::events(role, id, &envs) else {
+            let notes = no_notes();
+            let Some(out) = Outgoing::events(viewer(role), &scope(&notes, false), id, &envs) else {
                 panic!("{role:?} sees some events");
             };
             let ServerMsg::Events { events, .. } = out.msg() else {
@@ -252,7 +552,11 @@ mod tests {
             actor: member(1, Role::Dm).user_id,
             event: CampaignEvent::InviteRegenerated { code: code() },
         }];
-        assert_eq!(Outgoing::events(Role::Player, id, &only_code), None);
+        let notes = no_notes();
+        assert_eq!(
+            Outgoing::events(viewer(Role::Player), &scope(&notes, false), id, &only_code),
+            None
+        );
     }
 
     #[test]

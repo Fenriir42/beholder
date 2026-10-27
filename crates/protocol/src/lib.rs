@@ -7,12 +7,12 @@ pub mod http;
 use core::fmt;
 
 use beholder_core::{
-    Campaign, CampaignEvent, CampaignId, CampaignOp, CampaignTitle, CommandId, InviteCode, Seq,
-    UnixMillis, User, UserId, ValidationError,
+    Campaign, CampaignEvent, CampaignId, CampaignOp, CampaignTitle, CommandId, InviteCode, NoteOp,
+    Seq, UnixMillis, User, UserId, ValidationError,
 };
 use serde::{Deserialize, Serialize};
 
-pub const PROTOCOL_VERSION: u16 = 1;
+pub const PROTOCOL_VERSION: u16 = 2;
 
 pub const PROTOCOL_HEADER: &str = "x-beholder-protocol";
 
@@ -68,6 +68,10 @@ pub enum CommandKind {
     Campaign {
         campaign_id: CampaignId,
         op: CampaignOp,
+    },
+    Note {
+        campaign_id: CampaignId,
+        op: NoteOp,
     },
 }
 

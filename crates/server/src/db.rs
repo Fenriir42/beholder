@@ -3,7 +3,10 @@ use std::sync::{Arc, Mutex};
 
 use rusqlite::Connection;
 
-const MIGRATIONS: &[&str] = &[include_str!("../migrations/0001_init.sql")];
+const MIGRATIONS: &[&str] = &[
+    include_str!("../migrations/0001_init.sql"),
+    include_str!("../migrations/0002_notes.sql"),
+];
 
 #[derive(Debug, thiserror::Error)]
 pub enum DbError {

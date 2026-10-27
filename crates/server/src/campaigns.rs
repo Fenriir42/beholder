@@ -1,14 +1,15 @@
 use beholder_core::{
     Campaign, CampaignEvent, CampaignId, CampaignOp, CampaignSettings, CampaignTitle,
-    CombatVisibility, CommandId, DisplayName, ImageHash, InviteCode, Member, Role, Seq, UnixMillis,
-    User, UserId, ValidationError,
+    CombatVisibility, CommandId, DisplayName, ImageHash, InviteCode, Member, NoteId, Role, Seq,
+    UnixMillis, User, UserId, ValidationError,
 };
 use beholder_protocol::{Command, CommandKind, EventEnvelope, RejectReason};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde::{Deserialize, Serialize};
 
 use crate::db::DbError;
-use crate::permissions;
+use crate::notes;
+use crate::permissions::{self, Viewer};
 
 pub const DEDUP_WINDOW_MS: i64 = 7 * 24 * 3600 * 1000;
 
@@ -194,7 +195,43 @@ fn execute(
                 joined: None,
             }))
         }
+        CommandKind::Note { campaign_id, op } => {
+            let Some(role) = role_of(tx, *campaign_id, actor.id)? else {
+                return Ok(Err(RejectReason::NotFound));
+            };
+            let viewer = Viewer {
+                user: actor.id,
+                role,
+            };
+            let settings = load_settings(tx, *campaign_id)?;
+            let decided = notes::decide(tx, viewer, *campaign_id, &settings, op, NoteId(cmd_id.0))?;
+            let event = match decided {
+                Ok(e) => e,
+                Err(reason) => return Ok(Err(reason)),
+            };
+            let events = match event {
+                Some(e) => vec![log.emit(*campaign_id, e)?],
+                None => Vec::new(),
+            };
+            Ok(Ok(Executed {
+                campaign_id: *campaign_id,
+                events,
+                joined: None,
+            }))
+        }
     }
+}
+
+pub fn load_settings(conn: &Connection, id: CampaignId) -> Result<CampaignSettings, DbError> {
+    let (dm_read, vis): (bool, i64) = conn.query_row(
+        "SELECT dm_can_read_private_notes, combat_visibility FROM campaigns WHERE id = ?1",
+        [id.as_bytes()],
+        |r| Ok((r.get(0)?, r.get(1)?)),
+    )?;
+    Ok(CampaignSettings {
+        dm_can_read_private_notes: dm_read,
+        combat_visibility: int_to_visibility(vis)?,
+    })
 }
 
 struct Log<'a> {
@@ -296,6 +333,10 @@ fn project(
                 ],
             )?;
         }
+        CampaignEvent::NoteCreated { .. }
+        | CampaignEvent::NoteEdited { .. }
+        | CampaignEvent::NoteAudienceChanged { .. }
+        | CampaignEvent::NoteDeleted { .. } => notes::project(tx, campaign_id, event)?,
     }
     Ok(())
 }
@@ -361,6 +402,7 @@ pub fn load_campaign(
             .transpose()
             .map_err(|_| DbError::Corrupt("invite_code"))?,
         members,
+        notes: notes::campaign_notes(conn, id)?,
     };
     Ok(Some((Seq(head), campaign)))
 }
@@ -401,7 +443,16 @@ pub fn catch_up(conn: &Connection, id: CampaignId, after: Seq) -> Result<CatchUp
                 event: postcard::from_bytes(&body)?,
             })
         })
-        .collect::<Result<_, DbError>>()?;
+        .collect::<Result<Vec<_>, DbError>>()?;
+    // Replay is filtered with today's audiences and settings, which is only right if none changed in range.
+    if events.iter().any(|e| {
+        matches!(
+            e.event,
+            CampaignEvent::NoteAudienceChanged { .. } | CampaignEvent::SettingsChanged { .. }
+        )
+    }) {
+        return Ok(CatchUp::Snapshot);
+    }
     Ok(CatchUp::Events(events))
 }
 
@@ -458,7 +509,7 @@ fn image_exists(tx: &Transaction<'_>, hash: ImageHash) -> Result<bool, DbError> 
         .is_some())
 }
 
-fn role_of(
+pub(crate) fn role_of(
     tx: &Transaction<'_>,
     campaign: CampaignId,
     user: UserId,
@@ -531,7 +582,7 @@ fn int_to_visibility(v: i64) -> Result<CombatVisibility, DbError> {
 mod tests {
     use super::*;
     use crate::db::Db;
-    use beholder_core::Username;
+    use beholder_core::{Audience, NoteBody, NoteOp, NoteTitle, Username};
     use uuid::Uuid;
 
     fn setup() -> (Connection, User, User) {
@@ -613,21 +664,189 @@ mod tests {
                 op: CampaignOp::RegenerateInvite,
             },
         );
+        let (party, secret, gone) = (nid(), nid(), nid());
+        for (who, op) in [
+            (&player, create_note(party, Audience::Party)),
+            (&dm, edit_note(party, 1, "edited by the DM")),
+            (&dm, create_note(secret, Audience::Private)),
+            (
+                &dm,
+                NoteOp::SetAudience {
+                    id: secret,
+                    audience: Audience::Party,
+                },
+            ),
+            (&player, create_note(gone, Audience::Private)),
+            (&player, NoteOp::Delete { id: gone }),
+            (&player, edit_note(party, 1, "stale edit")),
+        ] {
+            let h = run(&mut c, who, note_cmd(id, op));
+            assert!(matches!(h.reply, Reply::Ack(Some(_))), "{h:?}");
+        }
 
         let (head, projected) = load_campaign(&c, id).unwrap().unwrap();
-        let CatchUp::Events(events) = catch_up(&c, id, Seq(1)).unwrap() else {
-            panic!("expected events");
-        };
-        let CampaignEvent::Created { title, dm: first } = &catch_up_all(&c, id)[0].event else {
+        let events = catch_up_all(&c, id);
+        let CampaignEvent::Created { title, dm: first } = &events[0].event else {
             panic!("first event must be Created");
         };
         let mut folded = Campaign::new(id, title.clone(), first.clone());
         for e in &events {
             folded.apply(&e.event);
         }
-        assert_eq!(head, Seq(6));
+        assert_eq!(Some(head), events.last().map(|e| e.seq));
         assert_eq!(projected, folded);
         assert_ne!(projected.invite_code, Some(code));
+        assert_eq!(projected.notes.len(), 3, "two notes plus one conflict copy");
+    }
+
+    fn nid() -> NoteId {
+        NoteId(Uuid::now_v7())
+    }
+
+    fn note_cmd(campaign_id: CampaignId, op: NoteOp) -> CommandKind {
+        CommandKind::Note { campaign_id, op }
+    }
+
+    fn create_note(id: NoteId, audience: Audience) -> NoteOp {
+        NoteOp::Create {
+            id,
+            title: NoteTitle::new("Clue").unwrap(),
+            body: NoteBody::new("the priest".into()).unwrap(),
+            audience,
+        }
+    }
+
+    fn edit_note(id: NoteId, base_version: u32, body: &str) -> NoteOp {
+        NoteOp::Edit {
+            id,
+            base_version,
+            title: NoteTitle::new("Clue").unwrap(),
+            body: NoteBody::new(body.into()).unwrap(),
+        }
+    }
+
+    #[test]
+    fn note_commands() {
+        let (mut c, dm, player) = setup();
+        let id = create(&mut c, &dm);
+        let (_, state) = load_campaign(&c, id).unwrap().unwrap();
+        run(
+            &mut c,
+            &player,
+            CommandKind::JoinCampaign {
+                code: state.invite_code.unwrap(),
+            },
+        );
+        let mut reply = |who: &User, op| run(&mut c, who, note_cmd(id, op)).reply;
+        let dm_only = nid();
+        assert!(matches!(
+            reply(&dm, create_note(dm_only, Audience::Private)),
+            Reply::Ack(Some(_))
+        ));
+        assert_eq!(
+            reply(&dm, create_note(dm_only, Audience::Party)),
+            Reply::Reject(RejectReason::IdConflict)
+        );
+        assert_eq!(
+            reply(&player, edit_note(dm_only, 1, "peek")),
+            Reply::Reject(RejectReason::NotFound),
+            "a hidden note is indistinguishable from a missing one"
+        );
+        assert_eq!(
+            reply(&player, NoteOp::Delete { id: dm_only }),
+            Reply::Reject(RejectReason::NotFound)
+        );
+
+        let shared = nid();
+        assert!(matches!(
+            reply(&dm, create_note(shared, Audience::Party)),
+            Reply::Ack(Some(_))
+        ));
+        assert!(matches!(
+            reply(&player, edit_note(shared, 1, "mine now")),
+            Reply::Ack(Some(_))
+        ));
+        assert_eq!(
+            reply(
+                &player,
+                NoteOp::SetAudience {
+                    id: shared,
+                    audience: Audience::Private
+                }
+            ),
+            Reply::Reject(RejectReason::Forbidden),
+            "only the author changes the audience"
+        );
+        assert_eq!(
+            reply(&player, NoteOp::Delete { id: shared }),
+            Reply::Reject(RejectReason::Forbidden)
+        );
+        assert_eq!(
+            reply(
+                &dm,
+                NoteOp::SetAudience {
+                    id: shared,
+                    audience: Audience::Party
+                }
+            ),
+            Reply::Ack(None),
+            "an unchanged audience emits nothing"
+        );
+        let stranger = UserId(Uuid::now_v7());
+        assert_eq!(
+            reply(
+                &dm,
+                NoteOp::SetAudience {
+                    id: shared,
+                    audience: Audience::Users(vec![stranger])
+                }
+            ),
+            Reply::Reject(RejectReason::NotFound),
+            "audiences only name members"
+        );
+
+        let h = run(&mut c, &dm, note_cmd(id, edit_note(shared, 1, "stale")));
+        let [
+            EventEnvelope {
+                event: CampaignEvent::NoteCreated { note: copy },
+                ..
+            },
+        ] = h.events.as_slice()
+        else {
+            panic!("a stale edit creates a conflict copy: {h:?}");
+        };
+        assert_eq!(copy.conflict_of, Some(shared));
+        assert_eq!(copy.audience, Audience::Private);
+        assert_eq!(copy.author, dm.id);
+        let (_, state) = load_campaign(&c, id).unwrap().unwrap();
+        assert_eq!(
+            state.note(shared).map(|n| n.body.as_str()),
+            Some("mine now"),
+            "the original keeps the newer text"
+        );
+    }
+
+    #[test]
+    fn catch_up_snapshots_across_visibility_changes() {
+        let (mut c, dm, _) = setup();
+        let id = create(&mut c, &dm);
+        let n = nid();
+        run(&mut c, &dm, note_cmd(id, create_note(n, Audience::Private)));
+        run(&mut c, &dm, note_cmd(id, edit_note(n, 1, "v2")));
+        assert!(matches!(catch_up(&c, id, Seq(2)).unwrap(), CatchUp::Events(e) if e.len() == 2));
+        run(
+            &mut c,
+            &dm,
+            note_cmd(
+                id,
+                NoteOp::SetAudience {
+                    id: n,
+                    audience: Audience::Party,
+                },
+            ),
+        );
+        assert_eq!(catch_up(&c, id, Seq(2)).unwrap(), CatchUp::Snapshot);
+        assert!(matches!(catch_up(&c, id, Seq(5)).unwrap(), CatchUp::Events(e) if e.is_empty()));
     }
 
     fn catch_up_all(c: &Connection, id: CampaignId) -> Vec<EventEnvelope> {

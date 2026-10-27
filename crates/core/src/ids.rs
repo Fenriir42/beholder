@@ -31,6 +31,7 @@ macro_rules! uuid_id {
 uuid_id!(UserId);
 uuid_id!(CampaignId);
 uuid_id!(CommandId);
+uuid_id!(NoteId);
 
 impl CommandId {
     pub fn unix_millis(&self) -> Option<u64> {

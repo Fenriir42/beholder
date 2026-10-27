@@ -6,7 +6,7 @@ use beholder_core::{Campaign, CampaignId, Role, Seq, UserId};
 use beholder_protocol::{EventEnvelope, codec};
 use tokio::sync::mpsc;
 
-use crate::permissions::Outgoing;
+use crate::permissions::{Outgoing, Scope, Viewer};
 
 pub const QUEUE_FRAMES: usize = 256;
 
@@ -85,14 +85,33 @@ impl Hub {
         }
     }
 
-    pub fn publish_events(&self, campaign: CampaignId, events: &[EventEnvelope]) {
+    pub fn publish_events(
+        &self,
+        campaign: CampaignId,
+        scope: &Scope<'_>,
+        events: &[EventEnvelope],
+    ) {
         let mut inner = self.lock();
-        let mut frames: HashMap<Role, Option<Bytes>> = HashMap::new();
-        let targets: Vec<(ConnId, Role)> = subscribers(&inner, campaign).collect();
-        for (id, role) in targets {
-            let frame = frames.entry(role).or_insert_with(|| {
-                Outgoing::events(role, campaign, events).and_then(|o| encode(&o))
+        let mut frames: HashMap<UserId, Option<Bytes>> = HashMap::new();
+        let targets: Vec<(ConnId, Viewer)> = subscribers(&inner, campaign).collect();
+        for (id, viewer) in targets {
+            let frame = frames.entry(viewer.user).or_insert_with(|| {
+                Outgoing::events(viewer, scope, campaign, events).and_then(|o| encode(&o))
             });
+            if let Some(frame) = frame {
+                push(&mut inner, id, frame.clone());
+            }
+        }
+    }
+
+    pub fn send_snapshots(&self, seq: Seq, campaign: &Campaign) {
+        let mut inner = self.lock();
+        let mut frames: HashMap<UserId, Option<Bytes>> = HashMap::new();
+        let targets: Vec<(ConnId, Viewer)> = subscribers(&inner, campaign.id).collect();
+        for (id, viewer) in targets {
+            let frame = frames
+                .entry(viewer.user)
+                .or_insert_with(|| encode(&Outgoing::snapshot(viewer, seq, campaign)));
             if let Some(frame) = frame {
                 push(&mut inner, id, frame.clone());
             }
@@ -121,7 +140,7 @@ impl Hub {
                 })
                 .collect()
         };
-        let snapshot = Outgoing::snapshot(role, seq, campaign);
+        let snapshot = Outgoing::snapshot(Viewer { user, role }, seq, campaign);
         let presence = self.presence(campaign);
         for id in ids {
             self.send(id, &snapshot);
@@ -145,11 +164,12 @@ impl Hub {
     }
 }
 
-fn subscribers(inner: &Inner, campaign: CampaignId) -> impl Iterator<Item = (ConnId, Role)> + '_ {
-    inner
-        .conns
-        .iter()
-        .filter_map(move |(id, c)| c.campaigns.get(&campaign).map(|r| (*id, *r)))
+fn subscribers(inner: &Inner, campaign: CampaignId) -> impl Iterator<Item = (ConnId, Viewer)> + '_ {
+    inner.conns.iter().filter_map(move |(id, c)| {
+        c.campaigns
+            .get(&campaign)
+            .map(|&role| (*id, Viewer { user: c.user, role }))
+    })
 }
 
 fn encode(out: &Outgoing) -> Option<Bytes> {

@@ -4,7 +4,7 @@ use beholder_core::{Campaign, CampaignId, CommandId, Seq, User};
 use beholder_protocol::{Command, EventEnvelope};
 use rusqlite::{Connection, OptionalExtension, params};
 
-const SCHEMA_VERSION: i64 = 1;
+const SCHEMA_VERSION: i64 = 2;
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB NOT NULL) WITHOUT ROWID;

@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use axum::body::Bytes;
 use axum::extract::ws::{Message, WebSocket};
-use beholder_core::{CampaignId, Role, Seq, UserId};
+use beholder_core::{CampaignEvent, CampaignId, Role, Seq, UserId};
 use beholder_protocol::{
     ClientMsg, Command, CommandKind, Hello, HelloError, HelloOk, PROTOCOL_VERSION, RejectReason,
     ServerMsg, codec,
@@ -16,7 +16,8 @@ use tokio::time::{Instant, sleep_until, timeout};
 use crate::campaigns::{self, CatchUp, Handled, Reply};
 use crate::db::DbError;
 use crate::hub::{ConnId, QUEUE_FRAMES};
-use crate::permissions::Outgoing;
+use crate::notes;
+use crate::permissions::{Outgoing, Scope, Viewer};
 use crate::{AppState, auth, now};
 
 pub const IDLE_TIMEOUT: Duration = Duration::from_secs(35);
@@ -121,17 +122,26 @@ fn open_session(
         let Some((seq, campaign)) = campaigns::load_campaign(conn, campaign_id)? else {
             continue;
         };
+        let viewer = Viewer {
+            user: session.user.id,
+            role,
+        };
         let catch_up = match known_seq(hello, campaign_id) {
             Some(known) => campaigns::catch_up(conn, campaign_id, known)?,
             None => CatchUp::Snapshot,
         };
         match catch_up {
             CatchUp::Events(events) => {
-                if let Some(out) = Outgoing::events(role, campaign_id, &events) {
+                let touched = notes::touched_notes(conn, events.iter().map(|e| &e.event))?;
+                let scope = Scope {
+                    settings: campaign.settings,
+                    notes: &touched,
+                };
+                if let Some(out) = Outgoing::events(viewer, &scope, campaign_id, &events) {
                     hub.send(conn_id, &out);
                 }
             }
-            CatchUp::Snapshot => hub.send(conn_id, &Outgoing::snapshot(role, seq, &campaign)),
+            CatchUp::Snapshot => hub.send(conn_id, &Outgoing::snapshot(viewer, seq, &campaign)),
         }
         hub.subscribe(conn_id, campaign_id, role);
         hub.send(conn_id, &hub.presence(&campaign));
@@ -238,8 +248,23 @@ fn publish(
     let Some(campaign_id) = handled.campaign_id else {
         return Ok(());
     };
+    let touched = notes::touched_notes(conn, handled.events.iter().map(|e| &e.event))?;
+    let scope = Scope {
+        settings: campaigns::load_settings(conn, campaign_id)?,
+        notes: &touched,
+    };
     // Events go to existing subscribers first, so the new member's snapshot already includes them.
-    state.hub.publish_events(campaign_id, &handled.events);
+    state
+        .hub
+        .publish_events(campaign_id, &scope, &handled.events);
+    let settings_changed = handled
+        .events
+        .iter()
+        .any(|e| matches!(e.event, CampaignEvent::SettingsChanged { .. }));
+    if settings_changed && let Some((seq, campaign)) = campaigns::load_campaign(conn, campaign_id)?
+    {
+        state.hub.send_snapshots(seq, &campaign);
+    }
     if let Some(role) = handled.joined
         && let Some((seq, campaign)) = campaigns::load_campaign(conn, campaign_id)?
     {

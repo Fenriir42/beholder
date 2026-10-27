@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use beholder_core::{Campaign, CampaignId, Member, Role, Seq, User, UserId};
+use beholder_core::{Campaign, CampaignId, Member, NoteId, Role, Seq, User, UserId};
 use beholder_protocol::{Command, CommandKind};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -8,6 +8,7 @@ pub struct CampaignView {
     pub campaign: Campaign,
     pub seq: Seq,
     pub pending: bool,
+    pub pending_notes: Vec<NoteId>,
     pub online: Vec<UserId>,
 }
 
@@ -30,6 +31,7 @@ pub fn compute(
             campaign,
             seq,
             pending: false,
+            pending_notes: Vec::new(),
             online: Vec::new(),
         })
         .collect();
@@ -50,6 +52,7 @@ pub fn compute(
                     campaign: Campaign::new(*campaign_id, title.clone(), dm),
                     seq: Seq(0),
                     pending: true,
+                    pending_notes: Vec::new(),
                     online: Vec::new(),
                 });
             }
@@ -63,6 +66,21 @@ pub fn compute(
                     view.campaign.apply(&event);
                 }
                 view.pending = true;
+            }
+            CommandKind::Note { campaign_id, op } => {
+                let (Some(me), Some(view)) = (
+                    &user,
+                    campaigns.iter_mut().find(|c| c.campaign.id == *campaign_id),
+                ) else {
+                    continue;
+                };
+                let id = op.note_id();
+                if let Some(event) = op.predicted_event(me.id, view.campaign.note(id)) {
+                    view.campaign.apply(&event);
+                }
+                if !view.pending_notes.contains(&id) {
+                    view.pending_notes.push(id);
+                }
             }
         }
     }
@@ -163,6 +181,47 @@ mod tests {
         assert_eq!(v.campaigns[0].seq, Seq(0));
         assert_eq!(v.campaigns[0].campaign.role_of(me().id), Some(Role::Dm));
         assert_eq!(v.pending_joins, 1);
+    }
+
+    #[test]
+    fn pending_note_edits_chain_on_predicted_versions() {
+        use beholder_core::{Audience, NoteBody, NoteOp, NoteTitle};
+        let base = confirmed("A");
+        let campaign_id = base.1.id;
+        let id = NoteId(Uuid::from_bytes([4; 16]));
+        let title = NoteTitle::new("Map").unwrap();
+        let note = |n, op| cmd(n, CommandKind::Note { campaign_id, op });
+        let edit = |base_version, text: &str| NoteOp::Edit {
+            id,
+            base_version,
+            title: title.clone(),
+            body: NoteBody::new(text.into()).unwrap(),
+        };
+        let outbox = [
+            note(
+                1,
+                NoteOp::Create {
+                    id,
+                    title: title.clone(),
+                    body: NoteBody::default(),
+                    audience: Audience::Party,
+                },
+            ),
+            note(2, edit(1, "first")),
+            note(3, edit(2, "second")),
+            note(4, edit(2, "stale")),
+        ];
+        let v = compute(Some(me()), vec![base], &outbox, &HashMap::new());
+        let c = &v.campaigns[0];
+        let n = c.campaign.note(id).unwrap();
+        assert_eq!(n.body.as_str(), "second", "a stale edit isn't predicted");
+        assert_eq!(n.version, 3);
+        assert_eq!(n.author, me().id);
+        assert_eq!(c.pending_notes, vec![id]);
+        assert!(
+            !c.pending,
+            "note edits don't mark campaign settings pending"
+        );
     }
 
     #[test]
