@@ -14,12 +14,13 @@ beholder-protocol.workspace = true
 fluent-bundle = "0.16.0"
 js-sys = "0.3.106"
 leptos = { version = "0.8.22", default-features = false, features = ["csr"] }
+pulldown-cmark = { version = "0.13.5", default-features = false, features = ["html"] }
 serde.workspace = true
 serde-wasm-bindgen = "0.6.5"
 unic-langid = { version = "0.9.6", default-features = false }
 wasm-bindgen = "0.2.129"
 wasm-bindgen-futures = "0.4.79"
-web-sys = { version = "0.3.106", features = ["Blob", "Event", "EventTarget", "File", "FileList", "HtmlInputElement", "Navigator", "Window"] }
+web-sys = { version = "0.3.106", features = ["Blob", "Event", "EventTarget", "File", "FileList", "HtmlInputElement", "HtmlTextAreaElement", "Navigator", "Window"] }
 
 [lints]
 workspace = true

@@ -1,4 +1,4 @@
-use beholder_core::{Campaign, User, UserId, ValidationError};
+use beholder_core::{Campaign, NoteId, User, UserId, ValidationError};
 use beholder_protocol::RejectReason;
 use beholder_protocol::http::{AuthError, ImageError};
 use serde::{Deserialize, Serialize};
@@ -31,6 +31,7 @@ pub enum ConnState {
 pub struct CampaignView {
     pub campaign: Campaign,
     pub pending: bool,
+    pub pending_notes: Vec<NoteId>,
     pub online: Vec<UserId>,
 }
 

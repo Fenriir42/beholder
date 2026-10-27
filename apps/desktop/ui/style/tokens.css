@@ -76,6 +76,8 @@
   --sidebar-w: 248px;
   --banner-h: 150px;
   --card-min: 240px;
+  --notes-list-w: 320px;
+  --prose-w: 72ch;
   --text-sm: 13px;
   --text-md: 15px;
   --text-lg: 18px;

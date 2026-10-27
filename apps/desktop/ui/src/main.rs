@@ -2,6 +2,7 @@ mod app;
 mod i18n;
 mod icons;
 mod ipc;
+mod markdown;
 mod screens;
 
 fn main() {

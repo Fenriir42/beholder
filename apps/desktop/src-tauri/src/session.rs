@@ -109,6 +109,7 @@ pub fn view_data(client: &Client) -> Result<ViewData, IpcError> {
             .map(|c| CampaignView {
                 campaign: c.campaign,
                 pending: c.pending,
+                pending_notes: c.pending_notes,
                 online: c.online,
             })
             .collect(),

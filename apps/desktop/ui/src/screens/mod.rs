@@ -1,6 +1,7 @@
 mod auth;
 mod campaign;
 mod library;
+mod notes;
 mod server;
 
 pub use auth::AuthScreen;

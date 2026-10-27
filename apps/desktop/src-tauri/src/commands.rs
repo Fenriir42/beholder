@@ -1,6 +1,6 @@
 use beholder_core::{
-    CampaignId, CampaignOp, CampaignSettings, CampaignTitle, DisplayName, InviteCode, Password,
-    Username,
+    Audience, CampaignId, CampaignOp, CampaignSettings, CampaignTitle, DisplayName, ImageHash,
+    InviteCode, NoteBody, NoteId, NoteOp, NoteTitle, Password, Username,
 };
 use beholder_ipc::{Boot, ConnState, IpcError, ViewData};
 use beholder_protocol::CommandKind;
@@ -199,26 +199,116 @@ pub fn regenerate_invite(shell: State<'_, Shell>, campaign_id: String) -> Result
     campaign_op(&shell, &campaign_id, CampaignOp::RegenerateInvite)
 }
 
-#[tauri::command(rename_all = "snake_case")]
-pub async fn upload_cover(shell: State<'_, Shell>, request: Request<'_>) -> Result<(), IpcError> {
+async fn upload(shell: &Shell, request: &Request<'_>) -> Result<ImageHash, IpcError> {
     let InvokeBody::Raw(bytes) = request.body() else {
         return Err(IpcError::Image(
             beholder_protocol::http::ImageError::Unsupported,
         ));
     };
+    let session = shell.session()?;
+    let token = lock(&session.token).clone();
+    let http = beholder_client_core::http::Http::new(&session.server_url);
+    let bytes = bytes.clone();
+    tauri::async_runtime::spawn_blocking(move || http.upload_image(&token, &bytes))
+        .await
+        .map_err(|_| IpcError::Server)?
+        .map_err(http_error)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn upload_cover(shell: State<'_, Shell>, request: Request<'_>) -> Result<(), IpcError> {
     let id = request
         .headers()
         .get("campaign-id")
         .and_then(|v| v.to_str().ok())
         .ok_or(IpcError::Server)?
         .to_owned();
-    let session = shell.session()?;
-    let token = lock(&session.token).clone();
-    let http = beholder_client_core::http::Http::new(&session.server_url);
-    let bytes = bytes.clone();
-    let hash = tauri::async_runtime::spawn_blocking(move || http.upload_image(&token, &bytes))
-        .await
-        .map_err(|_| IpcError::Server)?
-        .map_err(http_error)?;
+    let hash = upload(&shell, &request).await?;
     campaign_op(&shell, &id, CampaignOp::SetCover { cover: Some(hash) })
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn upload_image(
+    shell: State<'_, Shell>,
+    request: Request<'_>,
+) -> Result<String, IpcError> {
+    Ok(upload(&shell, &request).await?.to_hex())
+}
+
+fn note_id(s: &str) -> Result<NoteId, IpcError> {
+    s.parse()
+        .map(NoteId)
+        .map_err(|_| IpcError::Invalid(beholder_core::ValidationError::Character))
+}
+
+fn note_op(shell: &Shell, campaign_id: &str, op: NoteOp) -> Result<(), IpcError> {
+    submit(
+        shell,
+        CommandKind::Note {
+            campaign_id: self::campaign_id(campaign_id)?,
+            op,
+        },
+    )
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn create_note(
+    shell: State<'_, Shell>,
+    campaign_id: String,
+    title: String,
+    audience: Audience,
+) -> Result<String, IpcError> {
+    let id = NoteId(uuid::Uuid::now_v7());
+    let op = NoteOp::Create {
+        id,
+        title: NoteTitle::new(&title).map_err(IpcError::Invalid)?,
+        body: NoteBody::default(),
+        audience,
+    };
+    note_op(&shell, &campaign_id, op)?;
+    Ok(id.to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn edit_note(
+    shell: State<'_, Shell>,
+    campaign_id: String,
+    note_id: String,
+    base_version: u32,
+    title: String,
+    body: String,
+) -> Result<(), IpcError> {
+    let op = NoteOp::Edit {
+        id: self::note_id(&note_id)?,
+        base_version,
+        title: NoteTitle::new(&title).map_err(IpcError::Invalid)?,
+        body: NoteBody::new(body).map_err(IpcError::Invalid)?,
+    };
+    note_op(&shell, &campaign_id, op)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn set_note_audience(
+    shell: State<'_, Shell>,
+    campaign_id: String,
+    note_id: String,
+    audience: Audience,
+) -> Result<(), IpcError> {
+    let op = NoteOp::SetAudience {
+        id: self::note_id(&note_id)?,
+        audience,
+    };
+    note_op(&shell, &campaign_id, op)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn delete_note(
+    shell: State<'_, Shell>,
+    campaign_id: String,
+    note_id: String,
+) -> Result<(), IpcError> {
+    let op = NoteOp::Delete {
+        id: self::note_id(&note_id)?,
+    };
+    note_op(&shell, &campaign_id, op)
 }

@@ -63,6 +63,11 @@ fn main() {
             commands::update_settings,
             commands::regenerate_invite,
             commands::upload_cover,
+            commands::upload_image,
+            commands::create_note,
+            commands::edit_note,
+            commands::set_note_audience,
+            commands::delete_note,
         ])
         .run(tauri::generate_context!());
     if let Err(e) = result {

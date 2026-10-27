@@ -1,4 +1,4 @@
-use beholder_core::{CampaignId, CampaignSettings, CombatVisibility, Role};
+use beholder_core::{CampaignId, CampaignSettings, CombatVisibility, NoteId, Role};
 use beholder_ipc::CampaignView;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -6,7 +6,14 @@ use wasm_bindgen::JsCast;
 
 use crate::app::{ConnBanner, ConnPill, Screen, error_key, image_url, use_app};
 use crate::i18n::use_i18n;
+use crate::screens::notes::{Notes, NotesPreview};
 use crate::{icons, ipc};
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Section {
+    Home,
+    Notes,
+}
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Tab {
@@ -38,6 +45,12 @@ pub fn CampaignScreen(id: CampaignId) -> impl IntoView {
     let ctx = use_app();
     let i18n = use_i18n();
     let tab = RwSignal::new(Tab::Characters);
+    let section = RwSignal::new(Section::Home);
+    let selected_note = RwSignal::new(None::<NoteId>);
+    let open_note = Callback::new(move |id: NoteId| {
+        selected_note.set(Some(id));
+        section.set(Section::Notes);
+    });
     let campaign = Memo::new(move |_| {
         ctx.view
             .get()
@@ -54,10 +67,13 @@ pub fn CampaignScreen(id: CampaignId) -> impl IntoView {
             == Some(Role::Dm)
     });
 
-    let nav_item = move |label: &'static str, icon: AnyView, active: bool| {
+    let nav_item = move |label: &'static str, icon: AnyView, target: Option<Section>| {
+        let enabled = target.is_some();
         view! {
-            <button class:active=active disabled=!active
-                title=move || if active { String::new() } else { i18n.t("coming-soon") }>
+            <button class:active=move || target == Some(section.get()) disabled=!enabled
+                aria-current=move || (target == Some(section.get())).then_some("page")
+                title=move || if enabled { String::new() } else { i18n.t("coming-soon") }
+                on:click=move |_| if let Some(t) = target { section.set(t) }>
                 {icon}
                 <span>{move || i18n.t(label)}</span>
             </button>
@@ -84,25 +100,35 @@ pub fn CampaignScreen(id: CampaignId) -> impl IntoView {
                     }
                 })}
                 <nav>
-                    {nav_item("nav-home", icons::home().into_any(), true)}
-                    {nav_item("nav-sheet", icons::sheet().into_any(), false)}
-                    {nav_item("nav-notes", icons::notes().into_any(), false)}
-                    {nav_item("nav-compendium", icons::book().into_any(), false)}
-                    {nav_item("nav-combat", icons::swords().into_any(), false)}
-                    {nav_item("nav-dice", icons::dice().into_any(), false)}
+                    {nav_item("nav-home", icons::home().into_any(), Some(Section::Home))}
+                    {nav_item("nav-sheet", icons::sheet().into_any(), None)}
+                    {nav_item("nav-notes", icons::notes().into_any(), Some(Section::Notes))}
+                    {nav_item("nav-compendium", icons::book().into_any(), None)}
+                    {nav_item("nav-combat", icons::swords().into_any(), None)}
+                    {nav_item("nav-dice", icons::dice().into_any(), None)}
                 </nav>
                 <div class="bottom"><ConnPill/></div>
             </aside>
             <div class="main">
                 <ConnBanner/>
-                {move || campaign.get().map(|c| view! { <Home c=c tab=tab is_dm=is_dm/> })}
+                {move || match section.get() {
+                    Section::Home => (move || campaign.get().map(|c| view! {
+                        <Home c=c tab=tab is_dm=is_dm open_note=open_note/>
+                    })).into_any(),
+                    Section::Notes => view! { <Notes id=id selected=selected_note/> }.into_any(),
+                }}
             </div>
         </div>
     }
 }
 
 #[component]
-fn Home(c: CampaignView, tab: RwSignal<Tab>, is_dm: Memo<bool>) -> impl IntoView {
+fn Home(
+    c: CampaignView,
+    tab: RwSignal<Tab>,
+    is_dm: Memo<bool>,
+    open_note: Callback<NoteId>,
+) -> impl IntoView {
     let ctx = use_app();
     let i18n = use_i18n();
     let hero = c
@@ -163,9 +189,7 @@ fn Home(c: CampaignView, tab: RwSignal<Tab>, is_dm: Memo<bool>) -> impl IntoView
                 Tab::Characters => view! {
                     <div class="empty">{icons::sheet()}<p>{move || i18n.t("characters-empty")}</p></div>
                 }.into_any(),
-                Tab::Notes => view! {
-                    <div class="empty">{icons::notes()}<p>{move || i18n.t("notes-empty")}</p></div>
-                }.into_any(),
+                Tab::Notes => view! { <NotesPreview c=c2.clone() on_open=open_note/> }.into_any(),
                 Tab::Party => view! { <Party c=c2.clone()/> }.into_any(),
                 Tab::Settings => view! { <Settings c=c2.clone() editable=is_dm.get()/> }.into_any(),
             }}

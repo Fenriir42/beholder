@@ -43,20 +43,33 @@ pub async fn call0<R: DeserializeOwned>(cmd: &str) -> Result<R, IpcError> {
     from_js(out)
 }
 
-pub async fn upload_cover(campaign_id: &str, file: web_sys::File) -> Result<(), IpcError> {
+async fn upload<R: DeserializeOwned>(
+    cmd: &str,
+    headers: &[(&str, &str)],
+    file: web_sys::File,
+) -> Result<R, IpcError> {
     let buf = JsFuture::from(file.array_buffer())
         .await
         .map_err(|_| IpcError::Storage)?;
     let body = js_sys::Uint8Array::new(&buf);
-    let headers = js_sys::Object::new();
-    js_sys::Reflect::set(&headers, &"campaign-id".into(), &campaign_id.into())
-        .map_err(|_| IpcError::Storage)?;
+    let h = js_sys::Object::new();
+    for (k, v) in headers {
+        js_sys::Reflect::set(&h, &(*k).into(), &(*v).into()).map_err(|_| IpcError::Storage)?;
+    }
     let options = js_sys::Object::new();
-    js_sys::Reflect::set(&options, &"headers".into(), &headers).map_err(|_| IpcError::Storage)?;
-    let out = tauri_invoke_raw("upload_cover", body.into(), options.into())
+    js_sys::Reflect::set(&options, &"headers".into(), &h).map_err(|_| IpcError::Storage)?;
+    let out = tauri_invoke_raw(cmd, body.into(), options.into())
         .await
         .map_err(error)?;
     from_js(out)
+}
+
+pub async fn upload_cover(campaign_id: &str, file: web_sys::File) -> Result<(), IpcError> {
+    upload("upload_cover", &[("campaign-id", campaign_id)], file).await
+}
+
+pub async fn upload_image(file: web_sys::File) -> Result<String, IpcError> {
+    upload("upload_image", &[], file).await
 }
 
 pub fn listen<T: DeserializeOwned + 'static>(event: &'static str, mut f: impl FnMut(T) + 'static) {
