@@ -20,3 +20,4 @@ Les textes complets sont dans `docs/decisions/` (en anglais). Chacun couvre le c
 | 0009 | Déploiement : image musl statique sur `scratch`, limites mémoire dans compose, Caddy en HTTP/1+2, installateurs construits par la CI. |
 | 0010 | Documentation avec Astro Starlight, en local pour l'instant, sur un Node installé dans le dossier utilisateur. |
 | 0011 | Notes : filtrage et partage des trames par utilisateur, révélation par ajout/suppression, rattrapage par instantané quand la visibilité change, copies de conflit, protocole v2, Markdown assaini avec pulldown-cmark. |
+| 0012 | Compendium : SRD copié depuis 5e-srd-api (5e-database est archivé), convertisseur `beholder-xtask` réservé au développement, paquet reproductible versionné, servi immuable avec Range, recherche FTS5 sur le client. |

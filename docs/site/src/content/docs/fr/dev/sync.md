@@ -42,6 +42,10 @@ Chaque campagne a un journal en ajout seul, avec un `seq` strictement croissant.
 - Une commande dont l'horodatage UUIDv7 a plus de 7 jours est rejetée comme `Expired`, car le serveur ne peut plus prouver qu'il ne l'a pas déjà vue.
 - L'UI affiche **l'état confirmé + les commandes en attente**. Un `Reject` retire la commande et la vue est recalculée : c'est tout le mécanisme d'annulation.
 
+## Paquets du compendium
+
+Le contenu des règles ne passe pas par le WebSocket. Chaque source est un paquet préconstruit, identifié par son empreinte (postcard + zstd, ADR-0012). Après la connexion, le client lit `GET /api/compendium` (la liste des sources et leur SHA-256), télécharge les paquets qu'il n'a pas depuis `GET /api/compendium/{sha256}` (immuable, reprise possible avec `Range`), vérifie l'empreinte et indexe les entrées dans sa base SQLite locale avec FTS5. La recherche ne touche jamais le réseau.
+
 ## Garanties d'ordre
 
 Tout accès à la base passe par une seule connexion (`Db::call`). Le commit d'une commande et sa diffusion se font dans le même appel, de même que le rattrapage et l'abonnement d'une nouvelle connexion. Un client ne peut donc ni manquer un événement ni le recevoir dans le désordre.

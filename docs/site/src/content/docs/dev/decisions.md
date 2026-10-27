@@ -20,3 +20,4 @@ The full records are in `docs/decisions/`. Each one covers context, decision, al
 | 0009 | Deployment: static musl image on `scratch`, compose memory limits, Caddy HTTP/1+2, CI-built installers. |
 | 0010 | Documentation with Astro Starlight, local only, on a user-local Node. |
 | 0011 | Notes: per-user filtering and frame sharing, reveal as upsert/removal, snapshot catch-up across visibility changes, conflict copies, protocol v2, sanitized Markdown with pulldown-cmark. |
+| 0012 | Compendium: SRD vendored from 5e-srd-api (5e-database is archived), dev-only `beholder-xtask` converter, committed reproducible bundle, served immutable with Range, FTS5 search on the client. |

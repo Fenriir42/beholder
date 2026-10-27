@@ -2,7 +2,7 @@
 title: Mauvaise connexion et jeu hors ligne
 description: Ce que signifient l'indicateur et le bandeau de connexion, et ce que deviennent vos modifications hors ligne.
 sidebar:
-  order: 4
+  order: 5
 ---
 
 Beholder est conçu pour les connexions qui vont et viennent. Tout ce que vous faites est d'abord enregistré sur votre ordinateur, puis envoyé au serveur dès que possible.

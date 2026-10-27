@@ -135,7 +135,7 @@ This is a core feature: the app must stay smooth on an unstable VPN.
 The goal is a full compendium without typing everything by hand. The app bundles only content that may legally be redistributed, and makes it fast to bring in content the group owns. Every entry is tagged with its source, and the UI always shows it.
 
 1. **SRD 5.2** (official core rules, always on)
-   - It comes from `5e-bits/5e-database`, folder `src/2024/en/`: 12 classes, 12 subclasses, 9 species, 339 spells, 341 monsters, plus feats, backgrounds, items and features.
+   - It comes from `5e-bits/5e-database`, folder `src/2024/en/` (now archived; the same data lives in `5e-bits/5e-srd-api` under `packages/5e-database/`, see ADR-0012): 12 classes, 12 subclasses, 9 species, 339 spells, 341 monsters, plus feats, backgrounds, items and features.
    - Vendor it at a **pinned commit**, convert it into our own types with a small `xtask`, and validate the result. The repo's code is MIT and the content is CC-BY-4.0.
    - **Required attribution** (Credits screen and docs): *"This work includes material from the System Reference Document 5.2.1 ("SRD 5.2.1") by Wizards of the Coast LLC, available at https://www.dndbeyond.com/srd. The SRD 5.2.1 is licensed under the Creative Commons Attribution 4.0 International License, available at https://creativecommons.org/licenses/by/4.0/legalcode."*
 2. **Open-licensed third-party content** (optional, the DM toggles each source per campaign)

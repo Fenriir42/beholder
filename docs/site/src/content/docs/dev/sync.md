@@ -42,6 +42,10 @@ Each campaign has an append-only log with a monotonically increasing `seq`. A co
 - A command whose UUIDv7 timestamp is older than 7 days is rejected as `Expired`, because the server can no longer prove it hasn't seen it.
 - The UI shows **confirmed state + pending commands**. A `Reject` removes the command and the view is recomputed. That's the whole rollback.
 
+## Compendium bundles
+
+Rules content doesn't travel over the WebSocket. Each source is a prebuilt, content-hashed bundle (postcard + zstd, ADR-0012). After connecting, the client fetches `GET /api/compendium` (the list of sources and their SHA-256), downloads any bundle it doesn't have from `GET /api/compendium/{sha256}` (immutable, resumable with `Range`), verifies the hash, and indexes the entries in its local SQLite with FTS5. Search never touches the network.
+
 ## Ordering guarantees
 
 All database work goes through one connection (`Db::call`). A command's commit and its fan-out happen in the same call, and so do a new connection's catch-up and subscription. So a client can't miss an event or receive one out of order.

@@ -12,6 +12,9 @@ Phase 3 starts with the SRD 5.2 compendium (SPEC §5.2). SPEC names `5e-bits/5e-
 - **The bundle is committed.** The server embeds it, and neither the server build nor CI runs the converter. CI runs `cargo xtask srd --check`, which rebuilds the bundle and fails if it differs from the committed file. The bundle is byte-reproducible (tested).
 - `serde_json` is reused at the version Tauri already locks, so the workspace gains no new crate.
 
+- **Distribution:** the server embeds the bundle and serves it as-is. `GET /api/compendium` lists sources (id, name, rules version, SHA-256, size). `GET /api/compendium/{sha256}` returns the bytes with `Cache-Control: private, max-age=31536000, immutable` and open-ended `Range` support. Both need a session, because library bundles (slice 3c) will hold the group's private content.
+- **Client:** after each successful connection, until a sync succeeds, a blocking task downloads changed bundles (resuming with `Range`, with backoff), verifies the SHA-256 and the format, and replaces that source's entries in one transaction. Entries live in the local SQLite next to an FTS5 index (`unicode61`, diacritics removed, prefix indexes). The tables are created with `IF NOT EXISTS`, so adding them didn't bump the cache schema or wipe the outbox. Searches use FTS5 with bm25 ranking (name weighted) and filter facets in Rust; names that start with the query come first.
+
 ## Alternatives
 
 - **Typed structs for all 25 upstream schemas:** more code than the converter itself, for a one-way conversion that validation already guards.
