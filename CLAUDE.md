@@ -90,6 +90,8 @@ Don't run any of the following unless asked: release builds, `cargo tauri build`
 - Make small commits that each compile and pass tests, using Conventional Commits (`feat(server): …`, `fix(client-core): …`). Never push, force-push or rewrite history unless asked.
 - Write a short ADR in `docs/decisions/NNNN-title.md` for each significant decision: a new crate, a protocol, sync or storage design, or any deviation from SPEC. Cover the context, the decision, the alternatives and the consequences.
 - When a task ends, report what changed, how you verified it, what you deferred, and any size changes.
+- When a slice or phase lands, or a limitation is added or fixed, update the Roadmap page (`docs/site/src/content/docs/roadmap.md` and its French copy) in the same change.
+- Report WASM size after `wasm-bindgen` and `wasm-opt -Oz` (what ships), not the raw release build.
 
 ---
 

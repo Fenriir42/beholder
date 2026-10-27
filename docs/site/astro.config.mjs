@@ -16,6 +16,7 @@ export default defineConfig({
       },
       customCss: ['./src/styles/theme.css'],
       sidebar: [
+        { label: 'Roadmap', translations: { fr: 'Feuille de route' }, link: '/roadmap/' },
         {
           label: 'Players',
           translations: { fr: 'Joueurs' },

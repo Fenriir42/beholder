@@ -1,0 +1,81 @@
+---
+title: Feuille de route
+description: Ce que Beholder sait faire aujourd'hui, ce qui est en cours et ce qui est prévu.
+---
+
+Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à jour à chaque étape terminée.
+
+## Terminé
+
+### Phase 1 : fondations
+- Serveur Rust (axum + SQLite) et application de bureau (Tauri 2 + Leptos) pour Linux et Windows.
+- Comptes avec nom d'utilisateur et mot de passe, sessions gardées dans le trousseau du système.
+- Campagnes : création, invitation par code, nouveau code, image de couverture, titre.
+- Règles de campagne : le MJ peut-il lire les notes privées des joueurs, et ce que les joueurs voient en combat.
+- Synchronisation pensée pour les mauvaises connexions : modifications enregistrées sur votre ordinateur puis envoyées dès que possible, jamais appliquées deux fois ; fonctionnement hors ligne depuis le cache local ; pastille et bandeau de connexion.
+- Interface en anglais et en français, modifiable à tout moment.
+- Image serveur, Docker Compose avec Caddy, installateurs construits par la CI.
+
+### Phase 2 : notes et documents
+- Notes en Markdown avec images.
+- Publics : privé, MJ uniquement, tout le groupe, ou membres choisis. Le serveur n'envoie jamais une note hors de son public.
+- **Révéler** au groupe en un clic ; un document révélé apparaît aussitôt chez tous.
+- Édition à plusieurs pour les notes partagées, avec copies de conflit au lieu de texte perdu.
+
+### Phase 3 : compendium (en cours)
+- **SRD 5.2** (règles 2024) : tous les sorts, monstres, objets, classes, sous-classes, espèces, historiques, dons, aptitudes, traits et états, consultables hors ligne.
+- **Livres Open5e :** Kobold Press, Black Flag, Level Up A5E, SRD 5.1 et d'autres, 20 livres en tout.
+- Le MJ choisit les sources de règles par campagne ; les joueurs ne téléchargent que celles-là.
+- Même nom dans plusieurs sources : affiché une fois selon la priorité, les autres versions sous « Aussi dans ».
+- Écran de crédits avec toutes les mentions de licence.
+
+## En cours
+
+### Phase 3, suite
+- **Bibliothèque du serveur :** les entrées propres à votre groupe (création maison et contenu des livres que vous possédez), avec un éditeur à formulaires et l'import/export JSON et YAML. Les entrées de la bibliothèque passent en priorité en cas de nom en double.
+
+## Prévu
+
+### Phase 3, reste
+- **Import par collage :** coller un profil ou un chapitre entier, relire les entrées détectées, en accepter tout ou partie.
+- **Import en masse :** gros fichiers JSON avec profils de correspondance, annulables d'un bloc ; import depuis un dépôt externe à l'installation du serveur.
+
+### Phase 4 : fiches de personnage
+- Fiches assistées : l'application calcule modificateurs, maîtrise, sauvegardes, compétences, emplacements de sorts et CA ; vous choisissez espèce, classe, historique et dons dans le compendium.
+
+### Phase 5 : dés
+- Jets depuis la fiche, journal de jets partagé, jets secrets du MJ, saisie de dés physiques.
+
+### Phase 6 : suivi de combat
+- Initiative, tours, PV et états, avec la santé des monstres exacte, vague ou masquée pour les joueurs.
+
+### Phase 7 : connexion Discord
+- Se connecter avec Discord et le lier à un compte existant.
+
+### Plus tard
+- Application Android.
+- Un bot Discord qui lance les dés avec les modificateurs de la fiche, synchronisé avec l'application.
+- D'autres systèmes de jeu (par ex. Imperium Maledictum, L'Appel de Cthulhu) ; chaque source est déjà marquée de son système.
+- Des systèmes de jeu maison définis dans l'application.
+- Des scripts pour personnaliser le comportement d'une campagne.
+- Un système de mods et d'extensions pour toute l'application.
+
+## Limites connues
+
+- Les liens des notes et du compendium ne sont pas encore cliquables.
+- Les notes d'une campagne doivent tenir dans un message de synchronisation de 4 Mo (plusieurs centaines de notes habituelles).
+- Les notes tapées hors ligne sont mises en file avec un enregistrement par pause de frappe.
+- Les entrées du glossaire des règles (propriétés d'armes, bottes d'armes, compétences) ne sont pas encore dans le compendium.
+- Les mentions OGL des livres Open5e sont générées à partir de leurs métadonnées, pas copiées des livres.
+- Une mise à jour de l'application peut réinitialiser son cache local et perdre les modifications encore en attente hors ligne à ce moment.
+
+## Tailles
+
+Mesurées sous Linux, compilations de production.
+
+| Élément | Taille |
+|---|---:|
+| Interface (WASM, après `wasm-opt -Oz`) | 940 Ko (384 Ko compressé) |
+| Téléchargement du SRD 5.2 | 200 Ko |
+| Les 20 livres Open5e | 1,6 Mo |
+| RAM du serveur, au repos / en pointe (envoi d'une image de 40 MP) | 6 Mo / 157 Mo |
