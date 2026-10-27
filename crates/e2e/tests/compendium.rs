@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use beholder_client_core::cache::Cache;
 use beholder_client_core::{Client, ClientEvent, CompendiumState};
+use beholder_core::CampaignOp;
 use beholder_core::compendium::{Kind, SearchQuery};
 use beholder_core::{CampaignId, CampaignTitle, DisplayName, UnixMillis, Username};
 use beholder_protocol::CommandKind;
@@ -38,11 +39,11 @@ async fn client_downloads_indexes_and_searches_the_srd() {
         })
         .await
         .unwrap();
-
     let (client, mut events) = Client::start(&url, Cache::open_in_memory().unwrap(), token);
+    let campaign_id = CampaignId(uuid::Uuid::now_v7());
     client
         .submit(CommandKind::CreateCampaign {
-            campaign_id: CampaignId(uuid::Uuid::now_v7()),
+            campaign_id,
             title: CampaignTitle::new("Lookup").unwrap(),
         })
         .unwrap();
@@ -84,5 +85,42 @@ async fn client_downloads_indexes_and_searches_the_srd() {
         .unwrap()
         .unwrap();
     assert!(entry.text.contains("**AC**"));
+
+    let both = vec!["srd-5.2".to_owned(), "srd-2014".to_owned()];
+    client
+        .submit(CommandKind::Campaign {
+            campaign_id,
+            op: CampaignOp::SetSources {
+                sources: both.clone(),
+            },
+        })
+        .unwrap();
+    let synced = tokio::time::timeout(Duration::from_secs(30), async {
+        loop {
+            if client.compendium_sources().unwrap().len() == 2 {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(50)).await;
+        }
+    })
+    .await;
+    assert!(synced.is_ok(), "enabling a source downloads it");
+    let hits = client
+        .search(
+            &SearchQuery {
+                text: "fireball".into(),
+                kind: Some(Kind::Spell),
+                sources: both,
+                ..SearchQuery::default()
+            },
+            10,
+        )
+        .unwrap();
+    let fireball = hits.iter().find(|h| h.name == "Fireball").unwrap();
+    assert_eq!(
+        fireball.source, "srd-5.2",
+        "the 2024 SRD wins the name clash"
+    );
+    assert_eq!(fireball.others, 1);
     client.shutdown();
 }

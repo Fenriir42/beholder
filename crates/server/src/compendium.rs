@@ -1,10 +1,16 @@
 use axum::body::Bytes;
 use beholder_core::compendium::{BUNDLE_FORMAT, SourceMeta};
-use beholder_protocol::http::{MAX_BUNDLE_BYTES, SourceInfo};
+use beholder_protocol::http::SourceInfo;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
 const SRD: &[u8] = include_bytes!("../../../data/srd-5.2/srd.bundle");
+
+mod bundled {
+    include!(concat!(env!("OUT_DIR"), "/bundles.rs"));
+}
+
+const HEAD_BYTES: u64 = 512 * 1024;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BundleError {
@@ -28,9 +34,11 @@ pub struct Library {
 
 impl Library {
     pub fn builtin() -> Result<Self, BundleError> {
-        Ok(Self {
-            sources: vec![describe(Bytes::from_static(SRD))?],
-        })
+        let mut sources = vec![describe(Bytes::from_static(SRD))?];
+        for b in bundled::OPEN5E {
+            sources.push(describe(Bytes::from_static(b))?);
+        }
+        Ok(Self { sources })
     }
 
     pub fn index(&self) -> Vec<SourceInfo> {
@@ -50,7 +58,11 @@ impl Library {
 }
 
 fn describe(bytes: Bytes) -> Result<(SourceInfo, Bytes), BundleError> {
-    let raw = zstd::bulk::decompress(&bytes, MAX_BUNDLE_BYTES)?;
+    let mut raw = Vec::new();
+    std::io::Read::read_to_end(
+        &mut std::io::Read::take(zstd::stream::read::Decoder::new(&bytes[..])?, HEAD_BYTES),
+        &mut raw,
+    )?;
     let (head, _) = postcard::take_from_bytes::<Head>(&raw)?;
     if head.format != BUNDLE_FORMAT {
         return Err(BundleError::Format(head.format));
@@ -85,8 +97,10 @@ mod tests {
     fn builtin_srd_is_valid() {
         let lib = Library::builtin().unwrap();
         let index = lib.index();
-        assert_eq!(index.len(), 1);
+        assert!(index.len() > 1, "SRD plus the Open5e sources");
         assert_eq!(index[0].id, "srd-5.2");
+        assert!(lib.has("tob3") && lib.has("vom"));
+        assert!(!lib.has("tob"), "superseded edition is skipped");
         assert_eq!(index[0].sha256.len(), 64);
         assert_eq!(
             lib.bundle(&index[0].sha256).map(|b| b.len() as u64),

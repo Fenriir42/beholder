@@ -29,6 +29,8 @@ jobs:
         run: cargo test --workspace --locked
       - name: SRD bundle matches vendored data
         run: cargo run --locked -q -p beholder-xtask -- srd --check
+      - name: Open5e bundles match the pinned upstream commit
+        run: cargo run --locked -q -p beholder-xtask -- open5e --check
       - name: wasm32 compatibility
         run: cargo check --locked -p beholder-core -p beholder-protocol -p beholder-ui --target wasm32-unknown-unknown
 

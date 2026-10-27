@@ -1,6 +1,9 @@
 .git
 target
-data
+data/*
+!data/srd-5.2
+data/srd-5.2/upstream
+!data/open5e
 data-dev
 apps/desktop/ui/dist
 apps/desktop/src-tauri/gen
