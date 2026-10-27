@@ -5,7 +5,17 @@ sidebar:
   order: 6
 ---
 
-The server library is imported and exported as a `beholder-library` file, in JSON or YAML (chosen from the file extension: `.yaml`/`.yml` is YAML, anything else JSON). The code is `crates/client-core/src/library_file.rs`.
+This page is the standard for **Beholder library files, version 1**: the only format the server library imports and exports. A file in another layout (for example the `dnd-data` JSON files) is refused with "This file isn't a Beholder library file" until it's converted; see [Converting dnd-data files](#converting-dnd-data-files).
+
+- **Encoding:** UTF-8, JSON or YAML. The app picks the parser from the file extension: `.yaml` or `.yml` is YAML, anything else JSON.
+- **Machine-readable schema:** [`beholder-library-1.schema.json`](/schemas/beholder-library-1.schema.json) (JSON Schema 2020-12). Editors such as VS Code can validate a file against it.
+- **Reference implementation:** `crates/client-core/src/library_file.rs`.
+
+## Versioning
+
+- `version` changes only for incompatible changes: a field renamed, removed or given a new meaning.
+- New optional fields can be added within version 1. Readers ignore fields they don't know, so older apps keep reading newer version-1 files.
+- An app refuses a file whose `version` is newer than it supports, rather than guessing.
 
 ```yaml
 format: beholder-library
@@ -68,3 +78,25 @@ Facet strings are limited to 80 characters and a spell to 32 classes. Unknown fi
 - Each entry becomes a new library entry with a new id, sent as a normal command through the outbox, so an interrupted import resumes after reconnecting.
 - An entry with the same kind, name (case-insensitive), book and rules version as one already in the library is skipped.
 - An entry that fails validation is reported with its position, name and reason; the others are imported.
+- Entries are sent in batches of up to 500 (and about 1 MB), so files with tens of thousands of entries import in a few dozen commands.
+
+## Converting dnd-data files
+
+The JSON files from the `dnd-data` repository (`spells.json`, `monsters.json`, `items.json`, `classes.json`, `species.json`, `backgrounds.json`, each an array of `{ name, description, properties, publisher, book }`) can be converted with:
+
+```sh
+cargo xtask dnd-data
+```
+
+It reads those files from `data/` and writes one library file per category to `data/converted/` (git-ignored, never committed), then validates every converted entry and prints how many would be rejected and why.
+
+| Source file | Kind | Fields taken from |
+|---|---|---|
+| `spells.json` | `spell` | `Level` (or "cantrip"), `School`, `Classes` or the "(Ranger, Wizard)" at the start of the description, ritual and concentration from the casting time and duration |
+| `monsters.json` | `monster` | `Challenge Rating` (0 to 30, else the description's "Challenge X", else 0), `Size` (the first one), `Type` |
+| `items.json` | `magic-item`, or `equipment` without a real rarity | `Item Type`, `Item Rarity`, `Requires Attunement` |
+| `classes.json`, `species.json`, `backgrounds.json` | `class`, `species`, `background` | none |
+
+Every entry keeps its `book`. The rules version is `2024` when the book name contains 2024, `level-up` for Level Up books, `2014` otherwise.
+
+The descriptions in these files have lost their line breaks. The converter restores what it can detect reliably: monster section headings (Traits, Actions, Legendary Actions…), bold action and trait labels written as "Name . text", spell header lines (Casting Time, Range, Components, Duration, Classes) and higher-level paragraphs. The rest stays as one paragraph.

@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "beholder-library-1.schema.json",
+  "title": "Beholder library file, version 1",
+  "type": "object",
+  "required": ["format", "version", "entries"],
+  "properties": {
+    "format": { "const": "beholder-library" },
+    "version": { "const": 1 },
+    "entries": { "type": "array", "items": { "$ref": "#/$defs/entry" } }
+  },
+  "$defs": {
+    "line": { "type": "string", "minLength": 1, "pattern": "^[^\\u0000-\\u001f\\u007f]*\\S[^\\u0000-\\u001f\\u007f]*$" },
+    "facet": { "type": "string", "minLength": 1, "maxLength": 80 },
+    "entry": {
+      "type": "object",
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": {
+          "enum": ["spell", "monster", "magic-item", "equipment", "class", "subclass", "species", "background", "feat", "feature", "trait", "condition"]
+        },
+        "name": { "allOf": [{ "$ref": "#/$defs/line" }, { "maxLength": 120 }] },
+        "book": { "allOf": [{ "$ref": "#/$defs/line" }, { "maxLength": 120 }] },
+        "rules": { "enum": ["2024", "2014", "level-up", "a5e"] },
+        "text": { "type": "string", "maxLength": 65536 },
+        "level": { "type": "integer", "minimum": 0, "maximum": 20 },
+        "school": { "$ref": "#/$defs/facet" },
+        "classes": { "type": "array", "maxItems": 32, "items": { "$ref": "#/$defs/facet" } },
+        "ritual": { "type": "boolean" },
+        "concentration": { "type": "boolean" },
+        "cr": { "type": "string", "pattern": "^\\s*(\\d+(\\.\\d+)?|\\d+\\s*/\\s*[248])\\s*$" },
+        "creature_type": { "$ref": "#/$defs/facet" },
+        "size": { "$ref": "#/$defs/facet" },
+        "rarity": { "$ref": "#/$defs/facet" },
+        "category": { "$ref": "#/$defs/facet" },
+        "attunement": { "type": "boolean" },
+        "class": { "$ref": "#/$defs/facet" }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "spell" } } }, "then": { "required": ["school"], "properties": { "level": { "maximum": 9 } } } },
+        { "if": { "properties": { "kind": { "const": "monster" } } }, "then": { "required": ["cr", "creature_type", "size"] } },
+        { "if": { "properties": { "kind": { "const": "magic-item" } } }, "then": { "required": ["rarity", "category"] } },
+        { "if": { "properties": { "kind": { "enum": ["equipment", "feat"] } } }, "then": { "required": ["category"] } },
+        { "if": { "properties": { "kind": { "const": "subclass" } } }, "then": { "required": ["class"] } },
+        { "if": { "properties": { "kind": { "const": "feature" } } }, "then": { "required": ["class", "level"], "properties": { "level": { "minimum": 1 } } } }
+      ]
+    }
+  }
+}

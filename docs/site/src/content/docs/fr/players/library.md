@@ -33,4 +33,8 @@ Le MJ peut aussi masquer une entrée aux joueurs d'une campagne : ouvrez l'entr�
 - **Exporter en JSON** ou **Exporter en YAML** enregistre toute la bibliothèque dans votre dossier Téléchargements et affiche le nom du fichier.
 - **Importer** lit un fichier au même format. Les entrées déjà présentes (même type, nom, livre et version des règles) sont ignorées. Les entrées qui posent problème sont listées avec la raison, et les autres sont importées.
 
-Le format est décrit dans [Format des fichiers de bibliothèque](/fr/dev/library-format/).
+Le format est décrit dans [Format des fichiers de bibliothèque](/fr/dev/library-format/). Les imports de plusieurs dizaines de milliers d'entrées ne posent pas de problème : elles partent par lots, et un bandeau indique combien sont encore en route vers le serveur.
+
+### Importer les fichiers dnd-data
+
+Les fichiers d'une autre structure sont refusés tant qu'ils ne sont pas convertis. Pour les fichiers JSON de `dnd-data` rangés dans `data/`, lancez `cargo xtask dnd-data` dans le dossier du projet : la commande écrit des fichiers prêts à importer dans `data/converted/` (un par catégorie). Importez-les un par un depuis le Compendium. Voir [Convertir les fichiers dnd-data](/fr/dev/library-format/#convertir-les-fichiers-dnd-data) pour le détail.

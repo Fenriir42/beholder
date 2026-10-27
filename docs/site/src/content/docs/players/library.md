@@ -33,4 +33,8 @@ The DM can also hide single entries from the players of one campaign: open the e
 - **Export JSON** or **Export YAML** saves the whole library to your Downloads folder and shows the file name.
 - **Import** reads a file in the same format. Entries already in the library (same type, name, book and rules version) are skipped. Entries with a problem are listed with the reason, and the rest are imported.
 
-The format is described in [Library file format](/dev/library-format/).
+The format is described in [Library file format](/dev/library-format/). Imports of tens of thousands of entries are fine: they're sent in batches, and a banner shows how many are still on their way to the server.
+
+### Importing the dnd-data files
+
+Files in another layout are refused until they're converted. For the `dnd-data` JSON files kept in `data/`, run `cargo xtask dnd-data` in the project folder: it writes ready-to-import files to `data/converted/` (one per category). Import them one at a time from the Compendium. See [Converting dnd-data files](/dev/library-format/#converting-dnd-data-files) for what's converted and how.

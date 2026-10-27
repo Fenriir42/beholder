@@ -32,13 +32,15 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 
 ## In progress
 
+- **Large imports:** tens of thousands of entries per file, sent in batches. A converter turns the `dnd-data` JSON files into library files, and the library file format is a documented standard with a JSON Schema.
+
 ### Phase 3, continued
 - **Paste import:** paste a stat block or a whole chapter, review the parsed entries, accept some or all.
 
 ## Planned
 
 ### Phase 3, remaining
-- **Bulk import:** large JSON files with mapping profiles, undoable as a batch; the setup-time import from an external repository.
+- **Bulk import, rest:** JSON files of any shape read through mapping profiles, undoing a whole import in one action, and the setup-time import from an external repository.
 
 ### Phase 4: Character sheets
 - Assisted sheets: the app computes modifiers, proficiency, saves, skills, spell slots and AC; you choose species, class, background and feats from the compendium.
@@ -69,6 +71,7 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 - The OGL notices of Open5e books are generated from their metadata, not copied from the books.
 - Updating the app can reset its local cache, dropping changes still queued offline at that moment.
 - Library export saves to the Downloads folder; there's no save dialog yet.
+- Converted `dnd-data` descriptions keep their flattened text where no structure could be detected.
 - Hiding single entries works for the server library only, not for the SRD or Open5e books.
 
 ## Sizes

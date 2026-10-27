@@ -32,13 +32,15 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 
 ## En cours
 
+- **Gros imports :** des dizaines de milliers d'entrées par fichier, envoyées par lots. Un convertisseur transforme les fichiers JSON de `dnd-data` en fichiers de bibliothèque, et le format des fichiers de bibliothèque est une norme documentée, avec un schéma JSON.
+
 ### Phase 3, suite
 - **Import par collage :** coller un profil ou un chapitre entier, relire les entrées détectées, en accepter tout ou partie.
 
 ## Prévu
 
 ### Phase 3, reste
-- **Import en masse :** gros fichiers JSON avec profils de correspondance, annulables d'un bloc ; import depuis un dépôt externe à l'installation du serveur.
+- **Import en masse, la suite :** fichiers JSON de toute structure lus via des profils de correspondance, annulation d'un import entier en une action, et import depuis un dépôt externe à l'installation du serveur.
 
 ### Phase 4 : fiches de personnage
 - Fiches assistées : l'application calcule modificateurs, maîtrise, sauvegardes, compétences, emplacements de sorts et CA ; vous choisissez espèce, classe, historique et dons dans le compendium.
@@ -69,6 +71,7 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 - Les mentions OGL des livres Open5e sont générées à partir de leurs métadonnées, pas copiées des livres.
 - Une mise à jour de l'application peut réinitialiser son cache local et perdre les modifications encore en attente hors ligne à ce moment.
 - L'export de la bibliothèque enregistre dans le dossier Téléchargements ; il n'y a pas encore de fenêtre d'enregistrement.
+- Les descriptions converties depuis `dnd-data` gardent leur texte aplati quand aucune structure n'a pu être détectée.
 - Masquer une entrée ne fonctionne que pour la bibliothèque du serveur, pas pour le SRD ni les livres Open5e.
 
 ## Tailles
