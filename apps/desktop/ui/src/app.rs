@@ -2,7 +2,7 @@ use std::cell::Cell;
 use std::rc::Rc;
 
 use beholder_core::{CampaignId, ValidationError};
-use beholder_ipc::{Boot, ConnState, IpcError, Rejected, ViewData, events};
+use beholder_ipc::{Boot, CompendiumStatus, ConnState, IpcError, Rejected, ViewData, events};
 use beholder_protocol::RejectReason;
 use beholder_protocol::http::{AuthError, ImageError};
 use leptos::prelude::*;
@@ -28,6 +28,7 @@ pub struct AppCtx {
     pub view: RwSignal<ViewData>,
     pub conn: RwSignal<ConnState>,
     pub toast: RwSignal<Option<&'static str>>,
+    pub compendium: RwSignal<Option<CompendiumStatus>>,
     refresh: StoredValue<Rc<Refresher>, LocalStorage>,
 }
 
@@ -121,6 +122,7 @@ pub fn App() -> impl IntoView {
         view: RwSignal::new(ViewData::default()),
         conn: RwSignal::new(ConnState::Connecting),
         toast: RwSignal::new(None),
+        compendium: RwSignal::new(None),
         refresh: StoredValue::new_local(Rc::new(Refresher::default())),
     };
     provide_context(ctx);
@@ -134,6 +136,9 @@ pub fn App() -> impl IntoView {
         ctx.view.set(ViewData::default());
         ctx.screen.set(Screen::Auth);
         ctx.notify("err-signed-out");
+    });
+    ipc::listen(events::COMPENDIUM, move |s: CompendiumStatus| {
+        ctx.compendium.set(Some(s))
     });
     ipc::listen(events::UPDATE_REQUIRED, move |_: u16| {
         ctx.notify("err-update")

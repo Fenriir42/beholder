@@ -6,6 +6,7 @@ use wasm_bindgen::JsCast;
 
 use crate::app::{ConnBanner, ConnPill, Screen, error_key, image_url, use_app};
 use crate::i18n::use_i18n;
+use crate::screens::compendium::Compendium;
 use crate::screens::notes::{Notes, NotesPreview};
 use crate::{icons, ipc};
 
@@ -13,6 +14,7 @@ use crate::{icons, ipc};
 enum Section {
     Home,
     Notes,
+    Compendium,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -103,7 +105,7 @@ pub fn CampaignScreen(id: CampaignId) -> impl IntoView {
                     {nav_item("nav-home", icons::home().into_any(), Some(Section::Home))}
                     {nav_item("nav-sheet", icons::sheet().into_any(), None)}
                     {nav_item("nav-notes", icons::notes().into_any(), Some(Section::Notes))}
-                    {nav_item("nav-compendium", icons::book().into_any(), None)}
+                    {nav_item("nav-compendium", icons::book().into_any(), Some(Section::Compendium))}
                     {nav_item("nav-combat", icons::swords().into_any(), None)}
                     {nav_item("nav-dice", icons::dice().into_any(), None)}
                 </nav>
@@ -116,6 +118,7 @@ pub fn CampaignScreen(id: CampaignId) -> impl IntoView {
                         <Home c=c tab=tab is_dm=is_dm open_note=open_note/>
                     })).into_any(),
                     Section::Notes => view! { <Notes id=id selected=selected_note/> }.into_any(),
+                    Section::Compendium => view! { <Compendium/> }.into_any(),
                 }}
             </div>
         </div>
