@@ -121,7 +121,8 @@ fn convert(file: &str, r: &Value) -> Option<Value> {
     if name.is_empty() {
         return None;
     }
-    let description = r["description"].as_str().unwrap_or_default().trim();
+    let cleaned_description = clean_description(r["description"].as_str().unwrap_or_default());
+    let description = cleaned_description.trim();
     let book = r["book"]
         .as_str()
         .map(|b| short(b.trim(), 120))
@@ -136,7 +137,7 @@ fn convert(file: &str, r: &Value) -> Option<Value> {
         "spells" => spell(r, description, &mut e),
         "monsters" => monster(r, description, &mut e),
         "items" => item(r, description, &mut e),
-        "classes" => ("class", restore_labels(description)),
+        "classes" => ("class", restore_labels(&restore_features(description))),
         "species" => ("species", restore_labels(description)),
         _ => ("background", restore_labels(description)),
     };
@@ -347,7 +348,9 @@ fn item(r: &Value, description: &str, e: &mut Map<String, Value>) -> (&'static s
         None => "equipment",
     };
     header.push('*');
-    (kind, format!("{header}\n\n{}", restore_labels(description)))
+    let name = r["name"].as_str().unwrap_or_default().trim();
+    let body = strip_item_header(description, name);
+    (kind, format!("{header}\n\n{}", restore_labels(&body)))
 }
 
 fn restore_sections(d: &str) -> String {
@@ -372,10 +375,183 @@ fn restore_sections(d: &str) -> String {
     s
 }
 
+const BOILERPLATE: &str = "These D&D 5E Free Basic Rules only contain a fraction";
+
+const INLINE_LABELS: [&str; 12] = [
+    "Hit",
+    "Miss",
+    "Hit or Miss",
+    "Failure",
+    "Success",
+    "Trigger",
+    "Response",
+    "Melee Weapon Attack",
+    "Ranged Weapon Attack",
+    "Melee Spell Attack",
+    "Ranged Spell Attack",
+    "Melee or Ranged Weapon Attack",
+];
+
+const SENTENCE_STARTS: [&str; 30] = [
+    "You",
+    "Your",
+    "When",
+    "As",
+    "If",
+    "The",
+    "At",
+    "Starting",
+    "Beginning",
+    "Whenever",
+    "While",
+    "In",
+    "Once",
+    "Choose",
+    "This",
+    "These",
+    "A",
+    "An",
+    "Each",
+    "Some",
+    "Many",
+    "Until",
+    "For",
+    "On",
+    "By",
+    "After",
+    "Before",
+    "Whether",
+    "Although",
+    "Most",
+];
+
+const CONNECTORS: [&str; 11] = [
+    "of", "the", "and", "a", "an", "to", "in", "on", "with", "for", "or",
+];
+
+fn clean_description(d: &str) -> String {
+    let mut s: String = d
+        .chars()
+        .filter(|c| !matches!(c, '\u{200B}'..='\u{200D}' | '\u{2060}' | '\u{FEFF}'))
+        .collect();
+    if let Some(i) = s.find(BOILERPLATE)
+        && let Some(j) = s[i..].find("to fight!")
+    {        s.replace_range(i..i + j + "to fight!".len(), "");
+    }
+    s.replace(" , ", ", ").replace(" ; ", "; ")
+}
+
+fn is_heading_word(w: &str, first: bool) -> bool {
+    let starts_upper = w.starts_with(|c: char| c.is_uppercase());
+    if first {
+        return starts_upper && !SENTENCE_STARTS.contains(&w);
+    }
+    (starts_upper && !SENTENCE_STARTS.contains(&w)) || CONNECTORS.contains(&w)
+}
+
+fn heading_len(words: &[&str]) -> usize {
+    let mut n = 0;
+    while n < words.len() && n < 7 && is_heading_word(words[n], n == 0) {
+        n += 1;
+    }
+    while n > 0 && CONNECTORS.contains(&words[n - 1]) {
+        n -= 1;
+    }
+    n
+}
+
+fn restore_features(d: &str) -> String {
+    let mut out = String::with_capacity(d.len() + 512);
+    let mut rest = d;
+    while let Some(i) = rest.find("Level ") {
+        let after = &rest[i + 6..];
+        let digits = after.chars().take_while(char::is_ascii_digit).count();
+        if digits == 0 || !after[digits..].starts_with(": ") {
+            out.push_str(&rest[..i + 6]);
+            rest = after;
+            continue;
+        }
+        let body = &after[digits + 2..];
+        let words: Vec<&str> = body.split(' ').collect();
+        let n = heading_len(&words);
+        if n == 0 {
+            out.push_str(&rest[..i + 6]);
+            rest = after;
+            continue;
+        }
+        out.push_str(rest[..i].trim_end());
+        let heading = words[..n].join(" ");
+        out.push_str(&format!(
+            "\n\n### Level {}: {heading}\n\n",
+            &after[..digits]
+        ));
+        let consumed: usize = words[..n].iter().map(|w| w.len() + 1).sum();
+        rest = body.get(consumed.min(body.len())..).unwrap_or_default();
+    }
+    out.push_str(rest);
+    restore_level_phrases(&out)
+}
+
+fn restore_level_phrases(d: &str) -> String {
+    const MARKERS: [&str; 6] = [
+        "At ",
+        "Beginning at ",
+        "Starting at ",
+        "When you reach ",
+        "Starting when ",
+        "Beginning when ",
+    ];
+    let mut cuts: Vec<(usize, usize)> = Vec::new();
+    for marker in MARKERS {
+        let mut from = 0;
+        while let Some(i) = d[from..].find(marker).map(|i| i + from) {
+            from = i + marker.len();            let tail: String = d[from..].chars().take(40).collect();
+            if !tail.contains(" level")
+                || !tail.starts_with(|c: char| c.is_ascii_digit() || c == 'y')
+            {
+                continue;
+            }
+            let before = &d[..i];
+            let boundary = [". ", "\n"]
+                .iter()
+                .filter_map(|p| before.rfind(p).map(|j| j + p.len()))
+                .max()
+                .unwrap_or(0);
+            let words: Vec<&str> = before[boundary..].split_whitespace().collect();
+            if words.is_empty() || heading_len(&words) != words.len() {
+                continue;
+            }
+            cuts.push((boundary, i));
+        }
+    }
+    cuts.sort_unstable();
+    cuts.dedup();
+    let mut out = String::with_capacity(d.len() + cuts.len() * 8);
+    let mut last = 0;
+    for (start, marker) in cuts {
+        if start < last {
+            continue;
+        }
+        out.push_str(d[last..start].trim_end());
+        out.push_str(&format!("\n\n### {}\n\n", d[start..marker].trim()));
+        last = marker;
+    }
+    out.push_str(&d[last..]);
+    out
+}
+
 fn restore_labels(d: &str) -> String {
     let mut out = String::with_capacity(d.len() + 256);
     let mut rest = d;
-    while let Some(i) = rest.find(" . ") {
+    loop {
+        let dot = rest.find(" . ");
+        let colon = rest.find(" : ");
+        let (i, sep) = match (dot, colon) {
+            (Some(a), Some(b)) if b < a => (b, ':'),
+            (Some(a), _) => (a, '.'),
+            (None, Some(b)) => (b, ':'),
+            (None, None) => break,
+        };
         let (before, after) = (&rest[..i], &rest[i + 3..]);
         let boundary = [". ", "! ", "? ", "\n"]
             .iter()
@@ -387,7 +563,10 @@ fn restore_labels(d: &str) -> String {
             && label.len() <= 70
             && label.split_whitespace().count() <= 8
             && label.starts_with(|c: char| c.is_uppercase());
-        if is_label {
+        if is_label && INLINE_LABELS.contains(&label) {
+            out.push_str(&before[..boundary]);
+            out.push_str(&format!("*{label}:* "));
+        } else if is_label {
             out.push_str(before[..boundary].trim_end());
             if !out.is_empty() {
                 out.push_str("\n\n");
@@ -395,12 +574,36 @@ fn restore_labels(d: &str) -> String {
             out.push_str(&format!("**{label}.** "));
         } else {
             out.push_str(before);
-            out.push_str(". ");
+            out.push(sep);
+            out.push(' ');
         }
         rest = after;
     }
     out.push_str(rest);
     out
+}
+
+fn strip_item_header(d: &str, name: &str) -> String {
+    let Some(rest) = d.strip_prefix(name).map(str::trim_start) else {
+        return d.to_owned();
+    };
+    let window: String = rest.chars().take(140).collect::<String>().to_lowercase();
+    let mut cut = None;
+    for r in RARITIES {
+        if let Some(i) = window.find(r) {
+            let end = i + r.len();
+            let end = if window[end..].starts_with(" (requires attunement") {
+                window[end..].find(')').map_or(end, |j| end + j + 1)
+            } else {
+                end
+            };
+            cut = Some(cut.map_or(end, |c: usize| c.max(end)));
+        }
+    }
+    match cut {
+        Some(c) if rest.is_char_boundary(c) => rest[c..].trim_start().to_owned(),
+        _ => d.to_owned(),
+    }
 }
 
 #[cfg(test)]
@@ -419,7 +622,7 @@ mod tests {
             t.contains("## Actions\n\n**Multiattack.** Two attacks."),
             "{t}"
         );
-        assert!(t.contains("**Talon.** Melee"), "{t}");
+        assert!(t.contains("**Talon.** *Melee Weapon Attack:* +6"), "{t}");
     }
 
     #[test]
@@ -439,6 +642,71 @@ mod tests {
         assert_eq!(e["school"], json!("Abjuration"));
         assert_eq!(e["classes"], json!(["Ranger", "Wizard"]));
         assert_eq!(e["ritual"], json!(true));
+    }
+
+    #[test]
+    fn boilerplate_and_invisible_characters_go() {
+        let d = "These D&D 5E Free Basic Rules only contain a fraction of the races ... to fight! Elf Traits charges\u{2060} toward";        assert_eq!(clean_description(d), " Elf Traits charges toward");
+        assert_eq!(clean_description("Short Rest , and Bludgeoning , Piercing"), "Short Rest, and Bludgeoning, Piercing");
+    }
+
+    #[test]
+    fn colon_labels_and_inline_attack_labels() {
+        let t = restore_labels(&restore_sections(
+            "Traits Nimble Escape : Disengage as a bonus action. Scimitar : Melee Weapon Attack: +4 to hit. Hit : 5 (1d6 + 2) damage.",
+        ));
+        assert!(
+            t.contains("## Traits\n\n**Nimble Escape.** Disengage"),
+            "{t}"
+        );
+        assert!(t.contains("\n\n**Scimitar.** Melee"), "{t}");
+        assert!(t.contains("*Hit:* 5 (1d6 + 2)"), "{t}");
+        let t = restore_labels("A guardian. Talon . Melee Weapon Attack : +6 to hit.");
+        assert!(
+            t.contains("\n\n**Talon.** *Melee Weapon Attack:* +6 to hit."),
+            "{t}"
+        );
+    }
+
+    #[test]
+    fn class_features_become_headings() {
+        let t = restore_features(
+            "Intro. Level 1: Rage You can imbue yourself. Level 3: Barbarian Subclass You gain a subclass.",
+        );
+        assert!(t.contains("\n\n### Level 1: Rage\n\nYou can imbue"), "{t}");
+        assert!(
+            t.contains("### Level 3: Barbarian Subclass\n\nYou gain"),
+            "{t}"
+        );
+        let t = restore_features(
+            "You can rage. Persistent Rage Beginning at 15th level, your rage is fierce. Primal Champion At 20th level, you embody power.",
+        );
+        assert!(
+            t.contains("\n\n### Persistent Rage\n\nBeginning at 15th level"),
+            "{t}"
+        );
+        assert!(
+            t.contains("\n\n### Primal Champion\n\nAt 20th level"),
+            "{t}"
+        );
+    }
+
+    #[test]
+    fn item_headers_are_not_repeated() {
+        let d = "Bag of Holding Wondrous item, uncommon This bag has an interior space.";
+        assert_eq!(
+            strip_item_header(d, "Bag of Holding"),
+            "This bag has an interior space."
+        );
+        let d = "Flame Tongue Weapon (any sword), rare (requires attunement) You can use a bonus action.";
+        assert_eq!(
+            strip_item_header(d, "Flame Tongue"),
+            "You can use a bonus action."
+        );
+        assert_eq!(
+            strip_item_header("Rope, hempen. 50 feet.", "Torch"),
+            "Rope, hempen. 50 feet."
+        );
     }
 
     #[test]
