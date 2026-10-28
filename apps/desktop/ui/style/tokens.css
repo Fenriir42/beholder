@@ -75,6 +75,8 @@
   --space-6: 32px;
   --topbar-h: 56px;
   --sidebar-w: 248px;
+  --sheet-side-w: 240px;
+  --sheet-panel-w: clamp(300px, 30vw, 440px);
   --banner-h: 150px;
   --card-min: 240px;  --notes-list-w: clamp(240px, 22vw, 340px);
   --prose-w: 100ch;

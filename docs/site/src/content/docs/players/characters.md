@@ -11,9 +11,25 @@ Each player can have several characters in a campaign, with one **active** at a 
 
 On the campaign home, open the **Characters** tab. Type a name, pick the rules version (2024 or 2014), and click **New character**: the sheet opens. Your first character is active; use **Set active** to switch to another one. **Character sheet** in the campaign sidebar always opens your active character.
 
-## The sheet
+## Playing with the sheet
 
-Every field saves as soon as you leave it, even offline (changes are sent when the connection comes back). The app computes:
+The sheet opens in a play view, laid out like D&D Beyond:
+
+- **Top:** AC, initiative, speed, proficiency, and hit points. Type an amount and click **Damage** (temporary HP go first), **Heal**, or **Set temp**. The six ability modifiers sit underneath, with conditions and exhaustion when you have any.
+- **Left:** saving throws and skills with their bonuses (○ not proficient, ● proficient, ◆ expertise) and passive scores.
+- **Tabs:**
+  - **Actions:** your equipped items, limited-use resources with − and + buttons, hit dice and death saves.
+  - **Spells:** spell save DC and attack, spell slots as dots you click to spend (●) or restore (○), level filters and a search box. Each spell shows its school, concentration and ritual when it's in the compendium, and the dot before it marks it prepared. **Add spells** lists your classes' spells up to the highest level you can cast. Untick the filter to see every spell, or add one that isn't in the compendium as typed.
+  - **Inventory:** money, and items with quantity − and + and an "equipped" box. **Add items** searches magic items and equipment.
+  - **Features & traits:** species, background, classes and subclasses, feats and features. **Add features and feats** searches the compendium.
+  - **Notes:** free text.
+- **Right:** clicking any spell, item, feature, species or class opens its compendium entry beside the sheet, with **Prepare**/**Unprepare** and **Remove** where they apply. Names typed without a link (for example from an imported file) are matched to the compendium by name. On narrow windows the panel slides over the sheet.
+
+## Editing the character
+
+**Edit character** at the top opens the build view: name and rules version, species and background, classes (level, hit die, kind of spellcaster, spellcasting ability), ability scores and saving throw proficiencies, skill proficiencies, armor and speed, maximum HP, resources, feats and features, plus **Export** and **Delete**. Click **Done** to go back to the play view. Every field saves as soon as you leave it, even offline (changes are sent when the connection comes back).
+
+The app computes:
 
 - ability modifiers, saving throws and skills, with proficiency, **expertise** and **Jack of All Trades**;
 - passive Perception, Insight and Investigation, and initiative;

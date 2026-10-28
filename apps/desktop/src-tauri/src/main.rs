@@ -72,6 +72,7 @@ fn main() {
             commands::delete_note,
             commands::compendium_search,
             commands::compendium_entry,
+            commands::compendium_resolve,
             commands::compendium_credits,
             commands::compendium_available,
             commands::set_sources,

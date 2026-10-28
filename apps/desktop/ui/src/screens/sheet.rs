@@ -1,5 +1,5 @@
 use beholder_core::character::{
-    Character, CharacterChange, CharacterOp, ClassLevel, Counter, HitPoints, Item, KnownSpell, Link,
+    Character, CharacterChange, CharacterOp, ClassLevel, Counter, HitPoints, Link,
 };
 use beholder_core::compendium::{Hit, Kind, RulesVersion, SearchQuery};
 use beholder_core::rules::{Ability, ArmorFormula, Caster, Proficiency, Skill, class_defaults};
@@ -43,7 +43,8 @@ struct SearchArgs {
     query: SearchQuery,
 }
 
-const ABILITY_KEYS: [&str; 6] = ["ab-str", "ab-dex", "ab-con", "ab-int", "ab-wis", "ab-cha"];
+pub(crate) const ABILITY_KEYS: [&str; 6] =
+    ["ab-str", "ab-dex", "ab-con", "ab-int", "ab-wis", "ab-cha"];
 
 const CASTERS: [(Caster, &str); 6] = [
     (Caster::None, "caster-none"),
@@ -54,7 +55,7 @@ const CASTERS: [(Caster, &str); 6] = [
     (Caster::Pact, "caster-pact"),
 ];
 
-fn skill_key(s: Skill) -> &'static str {
+pub(crate) fn skill_key(s: Skill) -> &'static str {
     match s {
         Skill::Acrobatics => "skill-acrobatics",
         Skill::AnimalHandling => "skill-animal-handling",
@@ -77,7 +78,7 @@ fn skill_key(s: Skill) -> &'static str {
     }
 }
 
-fn signed(v: impl Into<i32>) -> String {
+pub(crate) fn signed(v: impl Into<i32>) -> String {
     let v = v.into();
     if v >= 0 {
         format!("+{v}")
@@ -94,15 +95,17 @@ pub fn class_line(classes: &[(String, u8)]) -> String {
         .join(" / ")
 }
 
-fn ability_from(v: &str) -> Option<Ability> {
+pub(crate) fn ability_from(v: &str) -> Option<Ability> {
     Ability::ALL.into_iter().find(|a| format!("{a:?}") == v)
 }
 
-fn num<T: std::str::FromStr>(ev: &leptos::ev::Event) -> Option<T> {
+pub(crate) fn num<T: std::str::FromStr>(ev: &leptos::ev::Event) -> Option<T> {
     event_target_value(ev).trim().parse().ok()
 }
 
-fn on_num<T: std::str::FromStr>(f: impl Fn(T) + 'static) -> impl Fn(leptos::ev::Event) + 'static {
+pub(crate) fn on_num<T: std::str::FromStr>(
+    f: impl Fn(T) + 'static,
+) -> impl Fn(leptos::ev::Event) + 'static {
     move |ev| {
         if let Some(v) = num::<T>(&ev) {
             f(v);
@@ -110,7 +113,7 @@ fn on_num<T: std::str::FromStr>(f: impl Fn(T) + 'static) -> impl Fn(leptos::ev::
     }
 }
 
-fn send(campaign: CampaignId, op: CharacterOp) {
+pub(crate) fn send(campaign: CampaignId, op: CharacterOp) {
     let ctx = use_app();
     spawn_local(async move {
         let args = OpArgs {
@@ -320,39 +323,7 @@ fn LinkInput(
 }
 
 #[component]
-pub fn Sheet(id: CampaignId, selected: RwSignal<Option<CharacterId>>) -> impl IntoView {
-    let ctx = use_app();
-    let i18n = use_i18n();
-    let character = Memo::new(move |_| {
-        let me = ctx.view.with(|v| v.user.as_ref().map(|u| u.id));
-        ctx.view.with(|v| {
-            let c = v.campaigns.iter().find(|c| c.campaign.id == id)?;
-            match selected.get() {
-                Some(sel) => c.campaign.character(sel).cloned(),
-                None => c
-                    .campaign
-                    .characters
-                    .iter()
-                    .find(|ch| Some(ch.owner) == me && ch.active)
-                    .cloned(),
-            }
-        })
-    });
-    move || match character.get() {
-        Some(ch) => view! { <SheetBody campaign=id ch=ch/> }.into_any(),
-        None => view! {
-            <section class="home">
-                <div class="empty">
-                    <p>{move || i18n.t("sheet-none")}</p>
-                </div>
-            </section>
-        }
-        .into_any(),
-    }
-}
-
-#[component]
-fn SheetBody(campaign: CampaignId, ch: Character) -> impl IntoView {
+pub fn EditSheet(campaign: CampaignId, ch: Character) -> impl IntoView {
     let ctx = use_app();
     let i18n = use_i18n();
     let exported = RwSignal::new(None::<String>);
@@ -393,22 +364,14 @@ fn SheetBody(campaign: CampaignId, ch: Character) -> impl IntoView {
     };
 
     view! {
-        <section class="home sheet">
+        <section class="sheet-edit">
             {header}
             <Classes campaign=campaign ch=ch.clone()/>
             <Abilities campaign=campaign ch=ch.clone()/>
             <Combat campaign=campaign ch=ch.clone()/>
             <Skills campaign=campaign ch=ch.clone()/>
-            <Spellcasting campaign=campaign ch=ch.clone()/>
             <Counters campaign=campaign ch=ch.clone()/>
-            <Inventory campaign=campaign ch=ch.clone()/>
             <Links campaign=campaign ch=ch.clone()/>
-            <fieldset class="sheet-section">
-                <legend>{move || i18n.t("sheet-notes")}</legend>
-                <textarea class="note-body" prop:value=ch.notes.clone()
-                    aria-label=move || i18n.t("sheet-notes")
-                    on:change=move |ev| change(CharacterChange::Notes(event_target_value(&ev)))></textarea>
-            </fieldset>
             <div class="toolbar">
                 {move || exported.get().map(|p| view! { <span class="muted small">{p}</span> })}
                 <span class="grow"></span>
@@ -827,139 +790,6 @@ fn Combat(campaign: CampaignId, ch: Character) -> impl IntoView {
     }
 }
 
-fn ordinal_key(level: usize) -> String {
-    format!("slot-{level}")
-}
-
-#[component]
-fn Spellcasting(campaign: CampaignId, ch: Character) -> impl IntoView {
-    let i18n = use_i18n();
-    let id = ch.id;
-    let change = move |c: CharacterChange| send(campaign, CharacterOp::Change { id, change: c });
-    let casting = ch
-        .classes
-        .iter()
-        .filter_map(|c| {
-            c.spell_ability.map(|a| {
-                (
-                    c.class.name.clone(),
-                    ch.spell_save_dc(a),
-                    ch.spell_attack(a),
-                )
-            })
-        })
-        .map(|(name, dc, attack)| {
-            view! {
-                <p>{move || i18n.tr("sheet-casting-line", &[
-                    ("class", name.clone().into()),
-                    ("dc", dc.into()),
-                    ("attack", signed(attack).into()),
-                ])}</p>
-            }
-        })
-        .collect_view();
-    let slots = ch.spell_slots();
-    let spent = ch.slots_spent;
-    let slot_inputs = slots
-        .iter()
-        .enumerate()
-        .filter(|(_, n)| **n > 0)
-        .map(|(i, &n)| {
-            view! {
-                <label class="filter">
-                    <span>{move || i18n.tr(&ordinal_key(i + 1), &[("total", n.into())])}</span>
-                    <input type="number" min="0" max=n.to_string() prop:value=spent[i].to_string()
-                        on:change=on_num(move |v: u8| {
-                            let mut s = spent;
-                            s[i] = v.min(n);
-                            change(CharacterChange::SlotsSpent(s));
-                        })/>
-                </label>
-            }
-        })
-        .collect_view();
-    let pact = ch.pact_slots().map(|(count, level)| {
-        view! {
-            <label class="filter">
-                <span>{move || i18n.tr("sheet-pact", &[("count", count.into()), ("level", level.into())])}</span>
-                <input type="number" min="0" max=count.to_string() prop:value=ch.pact_spent.to_string()
-                    on:change=on_num(move |v: u8| { change(CharacterChange::PactSpent(v.min(count))) })/>
-            </label>
-        }
-    });
-    let spells = ch.spells.clone();
-    let set = move |list: Vec<KnownSpell>| change(CharacterChange::Spells(list));
-    let stored = StoredValue::new(spells.clone());
-    let rows = spells
-        .iter()
-        .enumerate()
-        .map(|(i, s)| {
-            let list = stored;
-            let edit = move |f: Box<dyn FnOnce(&mut KnownSpell)>| {
-                let mut l = list.get_value();
-                if let Some(s) = l.get_mut(i) {
-                    f(s);
-                }
-                set(l);
-            };
-            let on_link = Callback::new(move |link: Option<Link>| {
-                edit(Box::new(move |s| {
-                    if let Some(link) = link {
-                        s.spell = link;
-                    }
-                }));
-            });
-            let remove = {
-                let list = stored;
-                move |_| {
-                    let mut l = list.get_value();
-                    l.remove(i);
-                    set(l);
-                }
-            };
-            view! {
-                <div class="filters sheet-class">
-                    <LinkInput campaign=campaign kind=Some(Kind::Spell) value=Some(s.spell.clone()) label="kind-spell" on_set=on_link/>
-                    <label class="filter"><span>{move || i18n.t("cmp-level")}</span>
-                        <input type="number" min="0" max="9" prop:value=s.level.to_string()
-                            on:change=on_num(move |v: u8| { edit(Box::new(move |s| s.level = v.min(9))) })/></label>
-                    <label class="choice small">
-                        <input type="checkbox" prop:checked=s.prepared
-                            on:change=move |ev| { let on = event_target_checked(&ev); edit(Box::new(move |s| s.prepared = on)) }/>
-                        {move || i18n.t("sheet-prepared")}
-                    </label>
-                    <button type="button" class="ghost" on:click=remove>{move || i18n.t("sheet-remove")}</button>
-                </div>
-            }
-        })
-        .collect_view();
-    let add = {
-        let list = stored;
-        move |_| {
-            let mut l = list.get_value();
-            l.push(KnownSpell {
-                spell: Link {
-                    name: i18n.t("kind-spell"),
-                    source: None,
-                    key: None,
-                },
-                level: 0,
-                prepared: false,
-            });
-            set(l);
-        }
-    };
-    view! {
-        <fieldset class="sheet-section">
-            <legend>{move || i18n.t("sheet-spells")}</legend>
-            {casting}
-            <div class="filters">{slot_inputs}{pact}</div>
-            {rows}
-            <div><button type="button" on:click=add>{move || i18n.t("sheet-add-spell")}</button></div>
-        </fieldset>
-    }
-}
-
 #[component]
 fn Counters(campaign: CampaignId, ch: Character) -> impl IntoView {
     let i18n = use_i18n();
@@ -1028,103 +858,6 @@ fn Counters(campaign: CampaignId, ch: Character) -> impl IntoView {
             <legend>{move || i18n.t("sheet-counters")}</legend>
             {rows}
             <div><button type="button" on:click=add>{move || i18n.t("sheet-add-counter")}</button></div>
-        </fieldset>
-    }
-}
-
-#[component]
-fn Inventory(campaign: CampaignId, ch: Character) -> impl IntoView {
-    let i18n = use_i18n();
-    let id = ch.id;
-    let change = move |c: CharacterChange| send(campaign, CharacterOp::Change { id, change: c });
-    let items = ch.inventory.clone();
-    let set = move |list: Vec<Item>| change(CharacterChange::Inventory(list));
-    let stored = StoredValue::new(items.clone());
-    let rows = items
-        .iter()
-        .enumerate()
-        .map(|(i, it)| {
-            let list = stored;
-            let edit = move |f: Box<dyn FnOnce(&mut Item)>| {
-                let mut l = list.get_value();
-                if let Some(it) = l.get_mut(i) {
-                    f(it);
-                }
-                set(l);
-            };
-            let on_link = Callback::new(move |link: Option<Link>| {
-                edit(Box::new(move |it| {
-                    if let Some(link) = link {
-                        it.item = link;
-                    }
-                }));
-            });
-            let remove = {
-                let list = stored;
-                move |_| {
-                    let mut l = list.get_value();
-                    l.remove(i);
-                    set(l);
-                }
-            };
-            view! {
-                <div class="filters sheet-class">
-                    <LinkInput campaign=campaign kind=None value=Some(it.item.clone()) label="sheet-item" on_set=on_link/>
-                    <label class="filter"><span>{move || i18n.t("sheet-quantity")}</span>
-                        <input type="number" min="0" prop:value=it.quantity.to_string()
-                            on:change=on_num(move |v: u32| { edit(Box::new(move |it| it.quantity = v)) })/></label>
-                    <label class="filter"><span>{move || i18n.t("sheet-item-note")}</span>
-                        <input type="text" maxlength="120" prop:value=it.note.clone()
-                            on:change=move |ev| { let v = event_target_value(&ev); edit(Box::new(move |it| it.note = v)) }/></label>
-                    <label class="choice small">
-                        <input type="checkbox" prop:checked=it.equipped
-                            on:change=move |ev| { let on = event_target_checked(&ev); edit(Box::new(move |it| it.equipped = on)) }/>
-                        {move || i18n.t("sheet-equipped")}
-                    </label>
-                    <button type="button" class="ghost" on:click=remove>{move || i18n.t("sheet-remove")}</button>
-                </div>
-            }
-        })
-        .collect_view();
-    let add = {
-        let list = stored;
-        move |_| {
-            let mut l = list.get_value();
-            l.push(Item {
-                item: Link {
-                    name: i18n.t("sheet-item"),
-                    source: None,
-                    key: None,
-                },
-                quantity: 1,
-                equipped: false,
-                note: String::new(),
-            });
-            set(l);
-        }
-    };
-    let currency = ch.currency;
-    let coins = ["coin-cp", "coin-sp", "coin-ep", "coin-gp", "coin-pp"]
-        .into_iter()
-        .enumerate()
-        .map(|(i, key)| {
-            view! {
-                <label class="filter"><span>{move || i18n.t(key)}</span>
-                    <input type="number" min="0" prop:value=currency[i].to_string()
-                        on:change=on_num(move |v: u32| {
-                            let mut c = currency;
-                            c[i] = v;
-                            change(CharacterChange::Currency(c));
-                        })/></label>
-            }
-        })
-        .collect_view();
-    view! {
-        <fieldset class="sheet-section">
-            <legend>{move || i18n.t("sheet-inventory")}</legend>
-            <div class="filters">{coins}</div>
-            {rows}
-            <div><button type="button" on:click=add>{move || i18n.t("sheet-add-item")}</button></div>
         </fieldset>
     }
 }

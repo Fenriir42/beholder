@@ -8,6 +8,7 @@ mod notes;
 mod paste;
 mod server;
 mod sheet;
+mod sheet_view;
 
 pub use auth::AuthScreen;
 pub use campaign::CampaignScreen;

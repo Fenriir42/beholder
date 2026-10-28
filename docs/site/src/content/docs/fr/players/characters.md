@@ -11,9 +11,25 @@ Chaque joueur peut avoir plusieurs personnages dans une campagne, dont un seul *
 
 Sur l'accueil de la campagne, ouvrez l'onglet **Personnages**. Tapez un nom, choisissez la version des règles (2024 ou 2014) et cliquez sur **Nouveau personnage** : la fiche s'ouvre. Votre premier personnage est actif ; utilisez **Rendre actif** pour passer à un autre. **Fiche de personnage** dans la barre latérale de la campagne ouvre toujours votre personnage actif.
 
-## La fiche
+## Jouer avec la fiche
 
-Chaque champ s'enregistre dès que vous le quittez, même hors ligne (les modifications partent quand la connexion revient). L'application calcule :
+La fiche s'ouvre en vue de jeu, organisée comme D&D Beyond :
+
+- **En haut :** CA, initiative, vitesse, maîtrise et points de vie. Tapez une quantité et cliquez sur **Dégâts** (les PV temporaires partent d'abord), **Soins** ou **PV temporaires**. Les six modificateurs de caractéristique sont dessous, avec les états et l'épuisement quand il y en a.
+- **À gauche :** jets de sauvegarde et compétences avec leurs bonus (○ sans maîtrise, ● maîtrise, ◆ expertise) et valeurs passives.
+- **Onglets :**
+  - **Actions :** vos objets équipés, les ressources à usage limité avec des boutons − et +, les dés de vie et les jets contre la mort.
+  - **Sorts :** DD et attaque des sorts, emplacements en points à cliquer pour les dépenser (●) ou les récupérer (○), filtres par niveau et recherche. Chaque sort affiche son école, la concentration et le rituel quand il est dans le compendium, et le point devant indique s'il est préparé. **Ajouter des sorts** liste les sorts de vos classes jusqu'au plus haut niveau que vous pouvez lancer. Décochez le filtre pour tous les voir, ou ajoutez tel quel un sort absent du compendium.
+  - **Inventaire :** argent, et objets avec quantité − et + et une case « équipé ». **Ajouter des objets** cherche parmi les objets magiques et l'équipement.
+  - **Aptitudes et traits :** espèce, historique, classes et sous-classes, dons et aptitudes. **Ajouter aptitudes et dons** cherche dans le compendium.
+  - **Notes :** texte libre.
+- **À droite :** cliquer sur un sort, un objet, une aptitude, une espèce ou une classe ouvre sa fiche du compendium à côté de la feuille, avec **Préparer**/**Ne plus préparer** et **Retirer** quand c'est utile. Les noms saisis sans lien (par exemple depuis un fichier importé) sont retrouvés dans le compendium par leur nom. Sur les fenêtres étroites, le panneau glisse par-dessus la fiche.
+
+## Modifier le personnage
+
+**Modifier le personnage**, en haut, ouvre la vue de construction : nom et version des règles, espèce et historique, classes (niveau, dé de vie, type de lanceur, caractéristique d'incantation), caractéristiques et maîtrise des sauvegardes, maîtrise des compétences, armure et vitesse, PV maximum, ressources, dons et aptitudes, plus **Exporter** et **Supprimer**. Cliquez sur **Terminé** pour revenir à la vue de jeu. Chaque champ s'enregistre dès que vous le quittez, même hors ligne (les modifications partent quand la connexion revient).
+
+L'application calcule :
 
 - les modificateurs, les jets de sauvegarde et les compétences, avec maîtrise, **expertise** et **Touche-à-tout** ;
 - la Perception, l'Intuition et l'Investigation passives, et l'initiative ;

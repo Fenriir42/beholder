@@ -11,7 +11,8 @@ use beholder_core::{
 };
 use beholder_core::{ImportId, LibraryId};
 use beholder_ipc::{
-    Boot, BulkOpened, BulkScanView, ConnState, Credits, EntryView, IpcError, PasteItem, ViewData,
+    Boot, BulkOpened, BulkScanView, ConnState, Credits, EntryView, IpcError, PasteItem,
+    ResolveItem, ViewData,
 };
 use beholder_protocol::CommandKind;
 use beholder_protocol::http::{AuthResponse, LoginRequest, RegisterRequest};
@@ -336,6 +337,44 @@ pub fn compendium_search(
         .client
         .search(&query, SEARCH_LIMIT)
         .map_err(|_| IpcError::Storage)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn compendium_resolve(
+    shell: State<'_, Shell>,
+    items: Vec<ResolveItem>,
+    sources: Vec<String>,
+    hidden: Vec<String>,
+) -> Result<Vec<Option<Hit>>, IpcError> {
+    let client = shell.session()?.client;
+    items
+        .into_iter()
+        .take(1000)
+        .map(|item| {
+            let kinds: Vec<Option<Kind>> = if item.kinds.is_empty() {
+                vec![None]
+            } else {
+                item.kinds.into_iter().map(Some).collect()
+            };
+            for kind in kinds {
+                let query = SearchQuery {
+                    text: item.name.clone(),
+                    kind,
+                    sources: sources.clone(),
+                    hidden: hidden.clone(),
+                    ..SearchQuery::default()
+                };
+                let hits = client.search(&query, 10).map_err(|_| IpcError::Storage)?;
+                if let Some(h) = hits
+                    .into_iter()
+                    .find(|h| h.name.trim().eq_ignore_ascii_case(item.name.trim()))
+                {
+                    return Ok(Some(h));
+                }
+            }
+            Ok(None)
+        })
+        .collect()
 }
 
 #[tauri::command(rename_all = "snake_case")]

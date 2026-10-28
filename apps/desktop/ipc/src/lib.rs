@@ -75,6 +75,12 @@ pub struct Credits {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ResolveItem {
+    pub name: String,
+    pub kinds: Vec<Kind>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PasteItem {
     pub entry: Pasted,
     pub duplicate: bool,

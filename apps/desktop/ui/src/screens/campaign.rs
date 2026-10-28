@@ -8,7 +8,8 @@ use crate::app::{ConnBanner, ConnPill, Screen, error_key, image_url, use_app};
 use crate::i18n::use_i18n;
 use crate::screens::compendium::{Compendium, SourcesSetting};
 use crate::screens::notes::{Notes, NotesPreview};
-use crate::screens::sheet::{CharacterList, Sheet, summary_line};
+use crate::screens::sheet::{CharacterList, summary_line};
+use crate::screens::sheet_view::Sheet;
 use crate::{icons, ipc};
 
 #[derive(Clone, Copy, PartialEq, Eq)]

@@ -279,3 +279,50 @@ select option, select optgroup { color: var(--text); background: var(--surface-r
 .stats { display: flex; gap: var(--space-3); flex-wrap: wrap; }
 .stat { display: flex; flex-direction: column; align-items: center; min-width: 88px; padding: var(--space-2) var(--space-3); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); }
 .stat strong { font-size: var(--text-xl); }
+
+/* Character sheet: play view */
+.play { display: flex; flex-direction: column; gap: var(--space-4); padding: var(--space-5); }
+.play-head { display: flex; align-items: center; gap: var(--space-3); }
+.play-title { flex: 1; min-width: 0; }
+.play-title h1 { margin: 0; font-family: var(--font-display); }
+.play-title p { margin: 0; }
+.vitals { display: flex; flex-direction: column; gap: var(--space-3); }
+.hp-box { display: flex; flex-direction: column; gap: var(--space-1); padding: var(--space-2) var(--space-3); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); }
+.hp-value { font-size: var(--text-xl); }
+.hp-amount { width: 5em; }
+.abilities-strip { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: var(--space-2); }
+.ability-chip { display: flex; flex-direction: column; align-items: center; padding: var(--space-2); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-character); }
+.ability-chip strong { font-size: var(--text-xl); }
+.play-layout { display: grid; grid-template-columns: var(--sheet-side-w) minmax(0, 1fr); gap: var(--space-4); align-items: start; }
+.play-layout.with-panel { grid-template-columns: var(--sheet-side-w) minmax(0, 1fr) var(--sheet-panel-w); }
+.play-side h3, .tab-body h3 { margin: var(--space-3) 0 var(--space-2); font-size: var(--text-md); color: var(--text-2); }
+.plain-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.plain-list li { display: flex; align-items: center; gap: var(--space-2); min-height: 32px; border-bottom: 1px solid var(--border); }
+.mark { width: 1.2em; text-align: center; color: var(--accent); }
+.play-main { min-width: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.tab-body { display: flex; flex-direction: column; gap: var(--space-2); }
+.link-row { background: none; border: none; text-align: left; display: flex; align-items: center; gap: var(--space-2); padding: 0; min-height: var(--touch); color: var(--text); cursor: pointer; }
+.row.link-row { padding: var(--space-3); background: var(--surface); border: 1px solid var(--border); width: 100%; }
+.spell-row { padding: var(--space-1) var(--space-3); }
+.pip { min-width: var(--touch); min-height: var(--touch); padding: 0; border: none; background: none; color: var(--accent); font-size: var(--text-lg); }
+.pip.used { color: var(--text-muted); }
+.slots { display: flex; flex-direction: column; gap: var(--space-1); }
+.slot-row { display: flex; align-items: center; gap: var(--space-1); flex-wrap: wrap; }
+.slot-row > span { min-width: 9em; }
+.casting { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+.stat.inline { flex-direction: row; gap: var(--space-2); min-width: 0; }
+.level-filter { min-height: var(--touch); border-radius: 999px; }
+.level-filter.active { border-color: var(--accent); color: var(--text); background: var(--surface-raised); }
+.coins { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.play-panel { position: sticky; top: var(--space-3); max-height: calc(100vh - var(--topbar-h) - var(--space-6)); overflow: auto; padding: var(--space-4); background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: var(--radius-card); display: flex; flex-direction: column; gap: var(--space-2); }
+.play-panel h2 { margin: 0; font-family: var(--font-display); }
+.sheet-edit { display: flex; flex-direction: column; gap: var(--space-4); }
+
+@media (max-width: 1100px) {
+  .play-layout.with-panel { grid-template-columns: var(--sheet-side-w) minmax(0, 1fr); }
+  .play-panel { position: fixed; top: var(--topbar-h); right: 0; bottom: 0; width: min(var(--sheet-panel-w), 100vw); max-height: none; border-radius: 0; z-index: 10; }
+}
+@media (max-width: 860px) {
+  .play-layout, .play-layout.with-panel { grid-template-columns: minmax(0, 1fr); }
+  .abilities-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
