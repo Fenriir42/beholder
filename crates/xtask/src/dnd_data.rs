@@ -48,7 +48,7 @@ pub fn convert_all(dir: &Path) -> Result<Vec<Converted>> {
         let mut rows: Vec<Value> =
             serde_json::from_str(&text).with_context(|| path.display().to_string())?;
         rows.iter_mut().for_each(numbers_as_text);
-        let entries: Vec<Value> = rows.iter().filter_map(|r| convert(name, r)).collect();
+        let entries: Vec<Value> = rows.iter().flat_map(|r| convert(name, r)).collect();
         let n = entries.len();
         let file = json!({ "format": "beholder-library", "version": 1, "entries": entries });
         out.push(Converted {
@@ -108,7 +108,25 @@ fn rules_of(book: &str) -> &'static str {
     }
 }
 
-fn convert(file: &str, r: &Value) -> Option<Value> {
+fn convert(file: &str, r: &Value) -> Vec<Value> {
+    let Some(entry) = convert_one(file, r) else {
+        return Vec::new();
+    };
+    if file == "classes" {
+        return split_free_subclass(entry)
+            .into_iter()
+            .map(|mut e| {
+                if let Some(o) = e.as_object_mut() {
+                    o.remove("source_text");
+                }
+                e
+            })
+            .collect();
+    }
+    vec![entry]
+}
+
+fn convert_one(file: &str, r: &Value) -> Option<Value> {
     let cleaned: String = r["name"]
         .as_str()?
         .chars()
@@ -137,12 +155,15 @@ fn convert(file: &str, r: &Value) -> Option<Value> {
         "spells" => spell(r, description, &mut e),
         "monsters" => monster(r, description, &mut e),
         "items" => item(r, description, &mut e),
-        "classes" => ("class", restore_labels(&restore_features(description))),
+        "classes" => ("class", class_text(description)),
         "species" => ("species", restore_labels(description)),
         _ => ("background", restore_labels(description)),
     };
     e.insert("kind".into(), json!(kind));
     e.insert("text".into(), json!(truncate_bytes(&text, 64 * 1024)));
+    if file == "classes" {
+        e.insert("source_text".into(), json!(description));
+    }
     Some(Value::Object(e))
 }
 
@@ -436,7 +457,8 @@ fn clean_description(d: &str) -> String {
         .collect();
     if let Some(i) = s.find(BOILERPLATE)
         && let Some(j) = s[i..].find("to fight!")
-    {        s.replace_range(i..i + j + "to fight!".len(), "");
+    {
+        s.replace_range(i..i + j + "to fight!".len(), "");
     }
     s.replace(" , ", ", ").replace(" ; ", "; ")
 }
@@ -505,7 +527,8 @@ fn restore_level_phrases(d: &str) -> String {
     for marker in MARKERS {
         let mut from = 0;
         while let Some(i) = d[from..].find(marker).map(|i| i + from) {
-            from = i + marker.len();            let tail: String = d[from..].chars().take(40).collect();
+            from = i + marker.len();
+            let tail: String = d[from..].chars().take(40).collect();
             if !tail.contains(" level")
                 || !tail.starts_with(|c: char| c.is_ascii_digit() || c == 'y')
             {
@@ -583,6 +606,121 @@ fn restore_labels(d: &str) -> String {
     out
 }
 
+const FREE_RULES_2014: &str = "Free Basic Rules (2014)";
+
+const FREE_SUBCLASSES: [(&str, &str); 12] = [
+    ("Barbarian", "Path of the Berserker"),
+    ("Bard", "College of Lore"),
+    ("Cleric", "Life Domain"),
+    ("Druid", "Circle of the Land"),
+    ("Fighter", "Champion"),
+    ("Monk", "Way of the Open Hand"),
+    ("Paladin", "Oath of Devotion"),
+    ("Ranger", "Hunter"),
+    ("Rogue", "Thief"),
+    ("Sorcerer", "Draconic Bloodline"),
+    ("Warlock", "The Fiend"),
+    ("Wizard", "School of Evocation"),
+];
+
+const SUBCLASS_BOOKS: [&str; 14] = [
+    "Xanathar's Guide to Everything",
+    "Sword Coast Adventurer's Guide",
+    "Tasha's Cauldron of Everything",
+    "Explorer's Guide to Wildemount",
+    "Mythic Odysseys of Theros",
+    "Van Richten's Guide to Ravenloft",
+    "Fizban's Treasury of Dragons",
+    "Strixhaven: A Curriculum of Chaos",
+    "Guildmasters' Guide to Ravnica",
+    "Dungeon Master's Guide",
+    "The Book of Many Things",
+    "Bigby Presents: Glory of the Giants",
+    "Acquisitions Incorporated",
+    "Player's Handbook",
+];
+
+const NAMES_ONLY: &str = "*Only the names are in this file; their rules aren't included.*";
+
+fn class_text(d: &str) -> String {
+    let tail_from = d.len() * 4 / 5;
+    let text = match d[tail_from..].rfind(" Subclasses ").map(|i| i + tail_from) {
+        Some(i) if d.is_char_boundary(i) => {
+            let mut names = d[i + " Subclasses ".len()..].to_owned();
+            for book in SUBCLASS_BOOKS {
+                names = names.replace(&format!(" {book} "), &format!("\n\n**{book}:** "));
+            }
+            format!("{}\n\n### Subclasses\n\n{NAMES_ONLY}\n\n{names}", &d[..i])
+        }
+        _ => d.to_owned(),
+    };
+    restore_labels(&restore_features(&text))
+}
+
+fn subclass_start(d: &str, name: &str) -> Option<usize> {
+    let mut from = 0;
+    while let Some(i) = d[from..].find(name).map(|i| i + from) {
+        from = i + name.len();
+        let before = d[..i].to_lowercase();
+        let after = &d[from..];
+        if i * 5 > d.len() * 2
+            && !before.ends_with("the ")
+            && !before.ends_with("a ")
+            && !before.ends_with("of ")
+            && after.starts_with(' ')
+            && after[1..].starts_with(|c: char| c.is_uppercase())
+        {
+            return Some(i);
+        }
+    }
+    None
+}
+
+fn split_free_subclass(mut class: Value) -> Vec<Value> {
+    let (Some(name), Some(book)) = (
+        class["name"].as_str().map(str::to_owned),
+        class["book"].as_str().map(str::to_owned),
+    ) else {
+        return vec![class];
+    };
+    let Some((_, sub)) = FREE_SUBCLASSES.iter().find(|(c, _)| *c == name) else {
+        return vec![class];
+    };
+    if book != FREE_RULES_2014 {
+        return vec![class];
+    }
+    let raw = class["source_text"].as_str().unwrap_or_default().to_owned();
+    let Some(start) = subclass_start(&raw, sub) else {
+        return vec![class];
+    };
+    let head = raw[..start].trim_end();
+    let split = head.rfind(". ").map_or(0, |j| j + 2);
+    let words: Vec<&str> = head[split..].split_whitespace().collect();
+    let class_part = if !words.is_empty() && heading_len(&words) == words.len() {
+        format!(
+            "{}\n\n### {}\n\n**Subclass in this book:** {sub} (a separate entry).",
+            class_text(head[..split].trim_end()),
+            words.join(" ")
+        )
+    } else {
+        format!(
+            "{}\n\n**Subclass in this book:** {sub} (a separate entry).",
+            class_text(head)
+        )
+    };
+    let sub_part = restore_labels(&restore_features(raw[start + sub.len()..].trim()));
+    class["text"] = json!(truncate_bytes(&class_part, 64 * 1024));
+    let subclass = json!({
+        "kind": "subclass",
+        "name": sub,
+        "class": name,
+        "book": book,
+        "rules": "2014",
+        "text": truncate_bytes(&sub_part, 64 * 1024),
+    });
+    vec![class, subclass]
+}
+
 fn strip_item_header(d: &str, name: &str) -> String {
     let Some(rest) = d.strip_prefix(name).map(str::trim_start) else {
         return d.to_owned();
@@ -646,8 +784,12 @@ mod tests {
 
     #[test]
     fn boilerplate_and_invisible_characters_go() {
-        let d = "These D&D 5E Free Basic Rules only contain a fraction of the races ... to fight! Elf Traits charges\u{2060} toward";        assert_eq!(clean_description(d), " Elf Traits charges toward");
-        assert_eq!(clean_description("Short Rest , and Bludgeoning , Piercing"), "Short Rest, and Bludgeoning, Piercing");
+        let d = "These D&D 5E Free Basic Rules only contain a fraction of the races ... to fight! Elf Traits charges\u{2060} toward";
+        assert_eq!(clean_description(d), " Elf Traits charges toward");
+        assert_eq!(
+            clean_description("Short Rest , and Bludgeoning , Piercing"),
+            "Short Rest, and Bludgeoning, Piercing"
+        );
     }
 
     #[test]
@@ -688,6 +830,48 @@ mod tests {
         assert!(
             t.contains("\n\n### Primal Champion\n\nAt 20th level"),
             "{t}"
+        );
+    }
+
+    #[test]
+    fn free_rules_subclasses_are_split_out() {
+        let raw = &format!(
+            "{}Rage In battle you fight. Primal Paths Path of the Berserker For some barbarians, rage is a means to an end. Frenzy Starting when you choose this path at 3rd level, you can go into a frenzy.",
+            "Barbarians are fierce warriors of the wild lands. ".repeat(6)
+        );
+        let class = json!({ "kind": "class", "name": "Barbarian", "book": FREE_RULES_2014, "text": "", "source_text": raw });
+        let out = split_free_subclass(class);
+        assert_eq!(out.len(), 2);
+        assert!(
+            out[0]["text"]
+                .as_str()
+                .unwrap()
+                .contains("**Subclass in this book:** Path of the Berserker")
+        );
+        assert!(!out[0]["text"].as_str().unwrap().contains("means to an end"));
+        assert_eq!(out[1]["kind"], json!("subclass"));
+        assert_eq!(out[1]["class"], json!("Barbarian"));
+        assert!(
+            out[1]["text"]
+                .as_str()
+                .unwrap()
+                .starts_with("For some barbarians"),
+            "{}",
+            out[1]["text"]
+        );
+        let other = json!({ "kind": "class", "name": "Barbarian", "book": "Player's Handbook", "text": "", "source_text": raw });
+        assert_eq!(
+            split_free_subclass(other).len(),
+            1,
+            "only the Free Basic Rules embed a subclass"
+        );
+        let names = class_text(&format!(
+            "{} Subclasses Path of the Berserker Path of the Totem Warrior",
+            "x ".repeat(200)
+        ));
+        assert!(
+            names.contains("### Subclasses\n\n*Only the names"),
+            "{names}"
         );
     }
 
