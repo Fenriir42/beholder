@@ -45,8 +45,10 @@ Rien pour l'instant : la phase 4 est la suivante.
 ### Phase 5 : dés
 - Jets depuis la fiche, journal de jets partagé, jets secrets du MJ, saisie de dés physiques.
 
-### Phase 6 : suivi de combat
+### Phase 6 : suivi de combat et carte de combat
 - Initiative, tours, PV et états, avec la santé des monstres exacte, vague ou masquée pour les joueurs.
+- **Carte de combat :** une grille carrée avec des formes simples pour commencer (pions, murs, zones). Le MJ contrôle tout : il ajoute, déplace, nomme, supprime, masque ou révèle n'importe quelle forme ; les formes masquées n'arrivent jamais dans l'application des joueurs. Chaque joueur ne déplace que le pion de son personnage actif, et chaque joueur a sa propre couleur, avec les initiales du personnage sur le pion pour que la couleur ne soit pas le seul repère. Les pions peuvent être liés aux combattants du suivi.
+- Plus tard pour la carte : images de fond, brouillard de guerre, mesure et gabarits de zone, images de pions.
 
 ### Phase 7 : connexion Discord
 - Se connecter avec Discord et le lier à un compte existant.

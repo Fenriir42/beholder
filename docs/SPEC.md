@@ -188,6 +188,16 @@ The goal is a full compendium without typing everything by hand. The app bundles
   - PC HP is always exact.
 - The server filters all of this per recipient (see principle 4).
 
+#### Battle map
+
+- A square **grid map** shown next to the tracker, built from **basic shapes** first (tokens such as circles and squares, plus simple area shapes like walls or zones). Images and models come later.
+- **The DM controls everything:** creates and resizes the map, adds, moves, recolours, labels and removes any shape, and can **hide** a shape or **reveal** it. Hidden shapes are never sent to players (principle 4), the same as hidden combatants.
+- **Players control only the token linked to their active character.** They can move it; everything else on the map is read-only for them.
+- **Each player has their own colour**, used for their character's token, so everyone recognises whose token is whose. Colours come from a fixed palette in the design tokens, and a token also shows a label (the character's initials or name), so colour is never the only cue.
+- Tokens can be linked to tracker combatants: adding a combatant can place its token, and hiding or revealing one does the same to the other.
+- Every change (add, move, hide, reveal, remove) is a command like any other: queued offline, deduplicated, and broadcast as events, so moves stay consistent on unstable connections.
+- Later: background images under the grid, fog of war, measuring and area templates, token images.
+
 ### 5.5 Dice
 
 - A dice-notation parser in `core`: `NdM`, `+/-` modifiers, keep highest/lowest (`2d20kh1`), advantage/disadvantage shortcuts.
@@ -279,7 +289,7 @@ The style is **modern dark**, clean like a launcher app (CurseForge-like library
 3. **Compendium:** SRD 5.2 and Open5e sources, local search, server library with paste import, external repository import at server setup, editor, JSON/YAML import/export, bulk JSON import with mapping profiles, Credits screen.
 4. **Character sheets** (assisted).
 5. **Dice:** roll from sheet, log, secret rolls, physical entry.
-6. **Combat tracker.**
+6. **Combat tracker** and **battle map** (grid and basic shapes, DM controls everything, players move their own token).
 7. **Discord login** and account linking.
 8. **Later:**
    - Android app.

@@ -45,8 +45,10 @@ Nothing at the moment: Phase 4 is next.
 ### Phase 5: Dice
 - Rolls from the sheet, shared roll log, secret DM rolls, physical dice entry.
 
-### Phase 6: Combat tracker
+### Phase 6: Combat tracker and battle map
 - Initiative, turns, HP and conditions, with exact, vague or hidden monster health for players.
+- **Battle map:** a square grid with basic shapes to start (tokens, walls, zones). The DM controls everything: adds, moves, labels, removes, and hides or reveals any shape; hidden shapes never reach the players' apps. Each player moves only the token of their active character, and each player has their own colour, with the character's initials on the token so colour isn't the only cue. Tokens can be linked to tracker combatants.
+- Later for the map: background images, fog of war, measuring and area templates, token images.
 
 ### Phase 7: Discord login
 - Log in with Discord and link it to an existing account.
