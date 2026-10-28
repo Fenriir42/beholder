@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use beholder_core::ImageHash;
 use beholder_protocol::http::{
-    AuthError, AuthResponse, ImageError, ImageUploaded, LibraryChanges, LoginRequest,
+    AuthError, AuthResponse, ImageError, ImageUploaded, ImportInfo, LibraryChanges, LoginRequest,
     MAX_BUNDLE_BYTES, MAX_IMAGE_BYTES, RegisterRequest, SourceInfo,
 };
 use beholder_protocol::{PROTOCOL_HEADER, PROTOCOL_VERSION, SessionToken};
@@ -183,6 +183,14 @@ impl Http {
     ) -> Result<LibraryChanges, HttpError> {
         let path = format!("/api/library/changes/{after}");
         let (status, body) = self.get_authed(&path, token, 0, MAX_BUNDLE_BYTES as u64)?;
+        if status != 200 {
+            return Err(HttpError::Status(status));
+        }
+        postcard::from_bytes(&body).map_err(|_| HttpError::Decode)
+    }
+
+    pub fn library_imports(&self, token: &SessionToken) -> Result<Vec<ImportInfo>, HttpError> {
+        let (status, body) = self.get_authed("/api/library/imports", token, 0, SMALL_BODY)?;
         if status != 200 {
             return Err(HttpError::Status(status));
         }

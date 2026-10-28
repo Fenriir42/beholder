@@ -35,7 +35,7 @@ struct Row {
 }
 
 #[component]
-pub fn PasteImport(on_done: Callback<Option<String>>) -> impl IntoView {
+pub fn PasteImport(on_done: Callback<Option<ImportSummary>>) -> impl IntoView {
     let ctx = use_app();
     let i18n = use_i18n();
     let text = RwSignal::new(String::new());
@@ -96,16 +96,7 @@ pub fn PasteImport(on_done: Callback<Option<String>>) -> impl IntoView {
         };
         spawn_local(async move {
             match ipc::call::<ImportSummary>("library_accept", args).await {
-                Ok(s) => on_done.run(Some(i18n.tr(
-                    "lib-imported",
-                    &[
-                        ("added", s.added.into()),
-                        ("replaced", s.replaced.into()),
-                        ("skipped", s.skipped.into()),
-                        ("notyours", s.not_yours.into()),
-                        ("invalid", s.invalid.len().into()),
-                    ],
-                ))),
+                Ok(s) => on_done.run(Some(s)),
                 Err(e) => {
                     busy.try_set(false);
                     ctx.notify(error_key(e));

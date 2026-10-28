@@ -368,6 +368,16 @@ pub async fn library_changes(
     }
 }
 
+pub async fn library_imports(State(state): State<AppState>, headers: HeaderMap) -> Response {
+    if let Err(r) = signed_in(&state, &headers).await {
+        return r;
+    }
+    match state.db.call(|c| crate::library::imports(c)).await {
+        Ok(list) => reply(StatusCode::OK, &list),
+        Err(e) => internal(e),
+    }
+}
+
 pub async fn compendium_bundle(
     State(state): State<AppState>,
     headers: HeaderMap,

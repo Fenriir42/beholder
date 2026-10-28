@@ -66,7 +66,10 @@ pub fn compute(
                 LibraryOp::Save { draft, .. } => pending_library.push(draft.id),
                 LibraryOp::Delete { id } => pending_library.push(*id),
                 LibraryOp::SaveMany { drafts } => pending_import += drafts.len(),
-                LibraryOp::UpsertMany { items } => pending_import += items.len(),
+                LibraryOp::UpsertMany { items } | LibraryOp::ImportMany { items, .. } => {
+                    pending_import += items.len()
+                }
+                LibraryOp::UndoImport { .. } => {}
             },
             CommandKind::Campaign { campaign_id, op } => {
                 let Some(view) = campaigns.iter_mut().find(|c| c.campaign.id == *campaign_id)

@@ -1133,6 +1133,99 @@ mod tests {
     }
 
     #[test]
+    fn imports_undo_in_one_action_and_keep_later_edits() {
+        use beholder_core::ImportId;
+        use beholder_core::library::LibraryOp;
+        let (mut c, dm, player) = setup();
+        create(&mut c, &dm);
+        let lib = |op| CommandKind::Library { op };
+        let (old, fresh, edited) = (
+            LibraryId(Uuid::now_v7()),
+            LibraryId(Uuid::now_v7()),
+            LibraryId(Uuid::now_v7()),
+        );
+        run(
+            &mut c,
+            &player,
+            lib(LibraryOp::Save {
+                draft: draft(old, "Original"),
+                base_version: 0,
+            }),
+        );
+        let import = ImportId(Uuid::now_v7());
+        let batch = |items| lib(LibraryOp::ImportMany { import, items });
+        run(
+            &mut c,
+            &player,
+            batch(vec![
+                (draft(old, "Imported"), 1),
+                (draft(fresh, "Fresh"), 0),
+            ]),
+        );
+        run(
+            &mut c,
+            &player,
+            batch(vec![(draft(edited, "Will be edited"), 0)]),
+        );
+        run(
+            &mut c,
+            &dm,
+            lib(LibraryOp::Save {
+                draft: draft(edited, "Edited later"),
+                base_version: 1,
+            }),
+        );
+        let other = ImportId(Uuid::now_v7());
+        assert_eq!(
+            run(
+                &mut c,
+                &dm,
+                lib(LibraryOp::ImportMany {
+                    import,
+                    items: vec![(draft(LibraryId(Uuid::now_v7()), "Sneaky"), 0)],
+                })
+            )
+            .reply,
+            Reply::Reject(RejectReason::Forbidden),
+            "an import belongs to the user who started it"
+        );
+        assert_eq!(
+            run(&mut c, &dm, lib(LibraryOp::UndoImport { import: other })).reply,
+            Reply::Reject(RejectReason::NotFound)
+        );
+        let list = crate::library::imports(&c).unwrap();
+        assert_eq!((list.len(), list[0].entries, list[0].undone), (1, 3, false));
+        assert!(matches!(
+            run(&mut c, &player, lib(LibraryOp::UndoImport { import })).reply,
+            Reply::Ack(Some(_))
+        ));
+        let names: Vec<String> = crate::library::bundle(&c)
+            .unwrap()
+            .entries
+            .into_iter()
+            .map(|e| e.name)
+            .collect();
+        assert!(names.contains(&"Original".to_owned()), "{names:?}");
+        assert!(!names.contains(&"Fresh".to_owned()), "{names:?}");
+        assert!(
+            names.contains(&"Edited later".to_owned()),
+            "later edits are kept: {names:?}"
+        );
+        let list = crate::library::imports(&c).unwrap();
+        assert_eq!((list[0].undone, list[0].kept), (true, 1));
+        assert_eq!(
+            run(
+                &mut c,
+                &player,
+                batch(vec![(draft(LibraryId(Uuid::now_v7()), "Late"), 0)])
+            )
+            .reply,
+            Reply::Reject(RejectReason::Stale),
+            "an undone import takes no more batches"
+        );
+    }
+
+    #[test]
     fn catch_up_snapshots_across_visibility_changes() {
         let (mut c, dm, _) = setup();
         let id = create(&mut c, &dm);

@@ -323,6 +323,19 @@ async fn library_entries_sync_fold_hide_and_import() {
         )
         .unwrap();
     assert!(again.iter().all(|p| p.duplicate), "{again:?}");
+
+    let import = accepted.import.expect("the paste import has an id");
+    let listed = a.library_imports().unwrap();
+    assert!(listed.iter().any(|i| i.id == import && i.entries == 2 && !i.undone));
+    b.library_undo_import(import).unwrap();
+    wait_for("the undone paste disappears for alice", || {
+        !search(&a, "storm sorcery", vec![])
+            .iter()
+            .any(|h| h.source == "library")
+    })
+    .await;
+    let listed = b.library_imports().unwrap();
+    assert!(listed.iter().any(|i| i.id == import && i.undone && i.kept == 0));
     a.shutdown();
     b.shutdown();
 }

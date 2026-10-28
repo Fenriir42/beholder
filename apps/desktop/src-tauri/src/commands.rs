@@ -1,6 +1,5 @@
 use beholder_client_core::ClientError;
 use beholder_client_core::library_file::FileFormat;
-use beholder_core::LibraryId;
 use beholder_core::compendium::{FacetOptions, Hit, Kind, RulesVersion, SearchQuery};
 use beholder_core::library::{ImportSummary, LibraryDraft};
 use beholder_core::paste::Pasted;
@@ -8,10 +7,11 @@ use beholder_core::{
     Audience, CampaignId, CampaignOp, CampaignSettings, CampaignTitle, DisplayName, ImageHash,
     InviteCode, NoteBody, NoteId, NoteOp, NoteTitle, Password, Username,
 };
+use beholder_core::{ImportId, LibraryId};
 use beholder_ipc::{Boot, ConnState, Credits, EntryView, IpcError, PasteItem, ViewData};
 use beholder_protocol::CommandKind;
-use beholder_protocol::http::SourceInfo;
 use beholder_protocol::http::{AuthResponse, LoginRequest, RegisterRequest};
+use beholder_protocol::http::{ImportInfo, SourceInfo};
 use tauri::ipc::{InvokeBody, Request};
 use tauri::{AppHandle, Manager, State};
 
@@ -440,6 +440,7 @@ fn client_error(e: ClientError) -> IpcError {
     match e {
         ClientError::Cache(_) => IpcError::Storage,
         ClientError::File(_) => IpcError::BadFile,
+        ClientError::Http(_) => IpcError::Network,
     }
 }
 
@@ -539,4 +540,22 @@ pub async fn library_accept(
     .await
     .map_err(|_| IpcError::Server)?
     .map_err(client_error)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn library_imports(shell: State<'_, Shell>) -> Result<Vec<ImportInfo>, IpcError> {
+    let client = shell.session()?.client;
+    tauri::async_runtime::spawn_blocking(move || client.library_imports())
+        .await
+        .map_err(|_| IpcError::Server)?
+        .map_err(client_error)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn library_undo_import(shell: State<'_, Shell>, import: ImportId) -> Result<(), IpcError> {
+    shell
+        .session()?
+        .client
+        .library_undo_import(import)
+        .map_err(client_error)
 }

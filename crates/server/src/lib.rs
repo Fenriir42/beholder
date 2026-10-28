@@ -95,6 +95,7 @@ pub fn router(state: AppState) -> Router {
         .route("/api/compendium", get(http::compendium_index))
         .route("/api/compendium/{sha256}", get(http::compendium_bundle))
         .route("/api/library/changes/{after}", get(http::library_changes))
+        .route("/api/library/imports", get(http::library_imports))
         .with_state(state)
 }
 

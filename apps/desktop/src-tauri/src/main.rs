@@ -80,6 +80,8 @@ fn main() {
             commands::library_import,
             commands::library_paste,
             commands::library_accept,
+            commands::library_imports,
+            commands::library_undo_import,
             commands::compendium_facets,
         ])
         .run(tauri::generate_context!());

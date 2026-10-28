@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use crate::compendium::{Entry, Facets, LibraryMeta, RulesVersion};
-use crate::ids::{LibraryId, UserId};
+use crate::ids::{ImportId, LibraryId, UserId};
 use crate::note::{NoteBody, NoteTitle};
 use crate::user::ValidationError;
 
@@ -105,6 +105,13 @@ pub enum LibraryOp {
     UpsertMany {
         items: Vec<(LibraryDraft, u32)>,
     },
+    ImportMany {
+        import: ImportId,
+        items: Vec<(LibraryDraft, u32)>,
+    },
+    UndoImport {
+        import: ImportId,
+    },
 }
 
 // Stored as postcard: only append variants, never change one (ADR-0003).
@@ -121,6 +128,7 @@ pub struct ImportSummary {
     pub skipped: usize,
     pub not_yours: usize,
     pub invalid: Vec<String>,
+    pub import: Option<ImportId>,
 }
 
 #[cfg(test)]

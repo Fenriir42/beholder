@@ -5,9 +5,9 @@ use beholder_core::compendium::{
     SourceMeta,
 };
 use beholder_core::library::ImportSummary;
-use beholder_core::{CampaignId, LibraryId, Role};
+use beholder_core::{CampaignId, ImportId, LibraryId, Role, UnixMillis};
 use beholder_ipc::{CompendiumStatus, ConnState, Credits, EntryView};
-use beholder_protocol::http::SourceInfo;
+use beholder_protocol::http::{ImportInfo, SourceInfo};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use wasm_bindgen::JsCast;
@@ -24,6 +24,11 @@ const CR_STEPS: [u16; 34] = [
     0, 1, 2, 4, 8, 16, 24, 32, 40, 48, 56, 64, 72, 80, 88, 96, 104, 112, 120, 128, 136, 144, 152,
     160, 168, 176, 184, 192, 200, 208, 216, 224, 232, 240,
 ];
+
+#[derive(serde::Serialize)]
+struct ImportArgs {
+    import: ImportId,
+}
 
 #[derive(serde::Serialize)]
 struct SearchArgs {
@@ -58,6 +63,25 @@ struct ExportArgs {
 struct SourcesArgs {
     campaign_id: String,
     sources: Vec<String>,
+}
+
+fn summary_message(i18n: I18n, s: &ImportSummary) -> String {
+    i18n.tr(
+        "lib-imported",
+        &[
+            ("added", s.added.into()),
+            ("replaced", s.replaced.into()),
+            ("skipped", s.skipped.into()),
+            ("notyours", s.not_yours.into()),
+            ("invalid", s.invalid.len().into()),
+        ],
+    )
+}
+
+fn import_date(ts: UnixMillis) -> String {
+    js_sys::Date::new(&wasm_bindgen::JsValue::from_f64(ts.0 as f64))
+        .to_locale_string("default", &wasm_bindgen::JsValue::UNDEFINED)
+        .into()
 }
 
 pub fn rules_label(i18n: I18n, r: RulesVersion) -> String {
@@ -211,6 +235,8 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
     let invalid = RwSignal::new(Vec::<String>::new());
     let confirm_delete = RwSignal::new(false);
     let replace_existing = RwSignal::new(false);
+    let last_import = RwSignal::new(None::<ImportId>);
+    let imports = RwSignal::new(None::<Vec<ImportInfo>>);
     let query = RwSignal::new(SearchQuery::default());
     let hits = RwSignal::new(Vec::<Hit>::new());
     let credits_data = RwSignal::new(Credits::default());
@@ -456,16 +482,9 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
             match ipc::import_library::<ImportSummary>(file, replace_existing.get_untracked()).await
             {
                 Ok(s) => {
-                    message.set(Some(i18n.tr(
-                        "lib-imported",
-                        &[
-                            ("added", s.added.into()),
-                            ("replaced", s.replaced.into()),
-                            ("skipped", s.skipped.into()),
-                            ("notyours", s.not_yours.into()),
-                            ("invalid", s.invalid.len().into()),
-                        ],
-                    )));
+                    message.set(Some(summary_message(i18n, &s)));
+                    last_import.set(s.import);
+                    imports.set(None);
                     invalid.set(s.invalid);
                 }
                 Err(e) => ctx.notify(error_key(e)),
@@ -480,12 +499,35 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
             selected.set(Some((LIBRARY.to_owned(), key)));
         }
     });
-    let done_pasting = Callback::new(move |summary: Option<String>| {
+    let done_pasting = Callback::new(move |summary: Option<ImportSummary>| {
         pasting.set(false);
-        if summary.is_some() {
-            message.set(summary);
+        if let Some(s) = summary {
+            message.set(Some(summary_message(i18n, &s)));
+            last_import.set(s.import);
+            imports.set(None);
+            invalid.set(s.invalid);
         }
     });
+    let load_imports = move || {
+        spawn_local(async move {
+            match ipc::call0::<Vec<ImportInfo>>("library_imports").await {
+                Ok(list) => imports.set(Some(list)),
+                Err(e) => ctx.notify(error_key(e)),
+            }
+        });
+    };
+    let undo_import = move |import: ImportId| {
+        spawn_local(async move {
+            match ipc::call::<()>("library_undo_import", ImportArgs { import }).await {
+                Ok(()) => {
+                    message.set(Some(i18n.t("lib-undoing")));
+                    last_import.set(None);
+                    imports.set(None);
+                }
+                Err(e) => ctx.notify(error_key(e)),
+            }
+        });
+    };
     let pane = move || {
         if pasting.get() {
             return view! { <PasteImport on_done=done_pasting/> }.into_any();
@@ -694,6 +736,47 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
                         </p>
                     })
                 }}
+                {move || last_import.get().map(|import| view! {
+                    <button type="button" on:click=move |_| undo_import(import)>
+                        {move || i18n.t("lib-undo-import")}
+                    </button>
+                })}
+                <details class="license"
+                    on:toggle=move |_| if imports.with_untracked(Option::is_none) { load_imports() }>
+                    <summary>{move || i18n.t("lib-imports-title")}</summary>
+                    {move || match imports.get() {
+                        None => view! { <p class="muted small">{move || i18n.t("lib-imports-loading")}</p> }.into_any(),
+                        Some(list) if list.is_empty() => view! {
+                            <p class="muted small">{move || i18n.t("lib-imports-empty")}</p>
+                        }.into_any(),
+                        Some(list) => view! {
+                            <ul class="small">
+                                {list.into_iter().map(|info| {
+                                    let line = i18n.tr("lib-import-row", &[
+                                        ("date", import_date(info.ts).into()),
+                                        ("name", info.actor_name.clone().into()),
+                                        ("count", info.entries.into()),
+                                    ]);
+                                    let id = info.id;
+                                    let status = if info.undone {
+                                        view! {
+                                            <span class="muted">
+                                                {i18n.tr("lib-import-undone", &[("kept", info.kept.into())])}
+                                            </span>
+                                        }.into_any()
+                                    } else {
+                                        view! {
+                                            <button type="button" class="ghost" on:click=move |_| undo_import(id)>
+                                                {move || i18n.t("lib-undo")}
+                                            </button>
+                                        }.into_any()
+                                    };
+                                    view! { <li>{line}" "{status}</li> }
+                                }).collect_view()}
+                            </ul>
+                        }.into_any(),
+                    }}
+                </details>
                 {move || (!invalid.with(Vec::is_empty)).then(|| view! {
                     <details class="license">
                         <summary>{move || i18n.t("lib-invalid-title")}</summary>

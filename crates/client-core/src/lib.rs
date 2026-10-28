@@ -15,7 +15,8 @@ use beholder_core::compendium::{
 use beholder_core::compendium::{Kind, RulesVersion};
 use beholder_core::library::{ImportSummary, LibraryDraft, LibraryOp, MAX_BATCH};
 use beholder_core::paste::{self, Pasted};
-use beholder_core::{CampaignId, CommandId, LibraryId, NoteBody, NoteTitle, UserId};
+use beholder_core::{CampaignId, CommandId, ImportId, LibraryId, NoteBody, NoteTitle, UserId};
+use beholder_protocol::http::ImportInfo;
 use beholder_protocol::{Command, CommandKind, RejectReason, ServerMsg, SessionToken};
 use library_file::{FileError, FileFormat, Parsed};
 use tokio::sync::mpsc;
@@ -64,6 +65,8 @@ pub enum ClientError {
     Cache(#[from] CacheError),
     #[error("file: {0}")]
     File(#[from] FileError),
+    #[error("http: {0}")]
+    Http(#[from] http::HttpError),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -90,6 +93,7 @@ pub(crate) struct Shared {
     state: Mutex<ConnectionState>,
     events: mpsc::UnboundedSender<ClientEvent>,
     server_url: String,
+    token: SessionToken,
     compendium_busy: AtomicBool,
     compendium_synced: Mutex<Option<Vec<String>>>,
     library_dirty: AtomicBool,
@@ -202,6 +206,7 @@ impl Client {
             state: Mutex::new(ConnectionState::Connecting),
             events,
             server_url: server_url.to_owned(),
+            token: token.clone(),
             compendium_busy: AtomicBool::new(false),
             compendium_synced: Mutex::new(None),
             library_dirty: AtomicBool::new(false),
@@ -355,6 +360,17 @@ impl Client {
         self.upsert(items, replace)
     }
 
+    pub fn library_imports(&self) -> Result<Vec<ImportInfo>, ClientError> {
+        Ok(http::Http::new(&self.shared.server_url).library_imports(&self.shared.token)?)
+    }
+
+    pub fn library_undo_import(&self, import: ImportId) -> Result<(), ClientError> {
+        self.submit(CommandKind::Library {
+            op: LibraryOp::UndoImport { import },
+        })?;
+        Ok(())
+    }
+
     fn library_targets(&self) -> Result<HashMap<TargetKey, Option<Target>>, ClientError> {
         let (existing, me, campaigns) = self
             .shared
@@ -389,6 +405,7 @@ impl Client {
         replace: bool,
     ) -> Result<ImportSummary, ClientError> {
         let mut known = self.library_targets()?;
+        let import = ImportId(uuid::Uuid::now_v7());
         let mut summary = ImportSummary::default();
         let mut batch: Vec<(LibraryDraft, u32)> = Vec::new();
         let mut batch_bytes = 0;
@@ -433,7 +450,8 @@ impl Client {
             }
             let size = draft.text.as_str().len() + draft.name.as_str().len() + 256;
             if !batch.is_empty() && (batch.len() == MAX_BATCH || batch_bytes + size > BATCH_BYTES) {
-                self.submit_batch(std::mem::take(&mut batch))?;
+                self.submit_batch(import, std::mem::take(&mut batch))?;
+                summary.import = Some(import);
                 batch_bytes = 0;
             }
             batch.push((draft, base));
@@ -445,14 +463,19 @@ impl Client {
             }
         }
         if !batch.is_empty() {
-            self.submit_batch(batch)?;
+            self.submit_batch(import, batch)?;
+            summary.import = Some(import);
         }
         Ok(summary)
     }
 
-    fn submit_batch(&self, items: Vec<(LibraryDraft, u32)>) -> Result<(), CacheError> {
+    fn submit_batch(
+        &self,
+        import: ImportId,
+        items: Vec<(LibraryDraft, u32)>,
+    ) -> Result<(), CacheError> {
         self.submit(CommandKind::Library {
-            op: LibraryOp::UpsertMany { items },
+            op: LibraryOp::ImportMany { import, items },
         })
         .map(|_| ())
     }

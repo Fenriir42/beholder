@@ -284,6 +284,13 @@ mod tests {
             library::LibraryOp::Delete { id: lid(1) },
             library::LibraryOp::SaveMany { drafts: Vec::new() },
             library::LibraryOp::UpsertMany { items: Vec::new() },
+            library::LibraryOp::ImportMany {
+                import: beholder_core::ImportId(uuid::Uuid::from_u128(7)),
+                items: Vec::new(),
+            },
+            library::LibraryOp::UndoImport {
+                import: beholder_core::ImportId(uuid::Uuid::from_u128(7)),
+            },
         ];
         msgs.extend(library_ops.into_iter().map(|op| {
             ClientMsg::Command(Command {
@@ -478,6 +485,15 @@ mod tests {
             head: 9000,
             changes: None,
         });
+        round_trip(&vec![ImportInfo {
+            id: beholder_core::ImportId(uuid::Uuid::from_u128(7)),
+            actor: beholder_core::UserId(uuid::Uuid::from_u128(1)),
+            actor_name: "Alice".into(),
+            ts: beholder_core::UnixMillis(1_700_000_000_000),
+            entries: 3200,
+            undone: true,
+            kept: 2,
+        }]);
         round_trip(&ImageUploaded {
             hash: ImageHash([5; 32]),
         });

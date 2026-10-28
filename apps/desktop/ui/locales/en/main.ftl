@@ -294,6 +294,17 @@ tmpl-spell =
 lib-reading = Reading the file…
 lib-importing = Sending { $count } imported entries to the server…
 lib-replace = Replace entries already in the library
+lib-undo-import = Undo this import
+lib-undo = Undo
+lib-undoing = Undoing the import… Entries edited since then are kept.
+lib-imports-title = Recent imports
+lib-imports-empty = No imports yet.
+lib-imports-loading = Loading the list of imports…
+lib-import-row = { $date } · { $name } · { $count ->
+    [one] 1 entry
+   *[other] { $count } entries
+}
+lib-import-undone = Undone ({ $kept } kept because they were edited since)
 lib-paste = Paste
 paste-title = Paste import
 paste-hint = Paste one entry or a whole section copied from a book or page you own. Each entry starts with its name on its own line, followed by its header line (spell level, monster size and type, item type and rarity, feat category, or "Class: Subclass" as the name). Text that can't be read is kept as one entry of the kind chosen below.

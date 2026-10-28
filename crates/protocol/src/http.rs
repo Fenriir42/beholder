@@ -1,6 +1,8 @@
 use beholder_core::compendium::{GameSystem, RulesVersion};
 use beholder_core::library::LibraryEvent;
-use beholder_core::{DisplayName, ImageHash, Password, User, Username};
+use beholder_core::{
+    DisplayName, ImageHash, ImportId, Password, UnixMillis, User, UserId, Username,
+};
 use serde::{Deserialize, Serialize};
 
 use crate::SessionToken;
@@ -67,6 +69,17 @@ pub struct LibraryChange {
 pub struct LibraryChanges {
     pub head: u64,
     pub changes: Option<Vec<LibraryChange>>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct ImportInfo {
+    pub id: ImportId,
+    pub actor: UserId,
+    pub actor_name: String,
+    pub ts: UnixMillis,
+    pub entries: u32,
+    pub undone: bool,
+    pub kept: u32,
 }
 
 pub const MAX_BUNDLE_BYTES: usize = 64 * 1024 * 1024;

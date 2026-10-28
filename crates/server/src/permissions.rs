@@ -116,6 +116,10 @@ pub fn can_edit_library(actor: UserId, author: UserId, actor_is_dm_somewhere: bo
     actor == author || actor_is_dm_somewhere
 }
 
+pub fn can_undo_import(actor: UserId, importer: UserId, actor_is_dm_somewhere: bool) -> bool {
+    actor == importer || actor_is_dm_somewhere
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Outgoing(ServerMsg);
 
@@ -331,6 +335,15 @@ mod tests {
             "other players can't"
         );
         assert!(can_edit_library(other, author, true), "any DM can tidy up");
+        assert!(
+            can_undo_import(author, author, false),
+            "importers undo their imports"
+        );
+        assert!(
+            !can_undo_import(other, author, false),
+            "other players can't"
+        );
+        assert!(can_undo_import(other, author, true), "any DM can");
     }
 
     #[test]
