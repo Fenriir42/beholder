@@ -25,6 +25,15 @@ The sheet opens in a play view, laid out like D&D Beyond:
   - **Notes:** free text.
 - **Right:** clicking any spell, item, feature, species or class opens its compendium entry beside the sheet, with **Prepare**/**Unprepare** and **Remove** where they apply. Names typed without a link (for example from an imported file) are matched to the compendium by name. On narrow windows the panel slides over the sheet.
 
+### Computed effects
+
+When a spell or weapon is in the compendium, the sheet works out what it does for your character:
+
+- **Spells:** the attack bonus ("Attack +6"), or the saving throw the target makes and your DC ("DEX save DC 14", with "half on a success" when it applies), and the damage or healing dice at the spell's level, for example "2d10 fire" for Fire Bolt at level 5 or "Heals 2d8+3" for Cure Wounds. Cantrips scale with your level, Magic Missile and Eldritch Blast show how many darts or beams you get, and the side panel lists the damage at every slot level you can cast.
+- **Weapons:** the attack bonus and damage with your modifier (STR, DEX for ranged weapons, the better of the two for finesse weapons), plus the two-handed damage of versatile weapons. Weapon proficiency isn't tracked yet, so attacks assume you're proficient.
+
+The **Actions** tab gathers your equipped weapons, cantrips and prepared spells with these numbers, ready for the dice to come. Spells whose damage isn't written as dice show only their text.
+
 ## Editing the character
 
 **Edit character** at the top opens the build view: name and rules version, species and background, classes (level, hit die, kind of spellcaster, spellcasting ability), ability scores and saving throw proficiencies, skill proficiencies, armor and speed, maximum HP, resources, feats and features, plus **Export** and **Delete**. Click **Done** to go back to the play view. Every field saves as soon as you leave it, even offline (changes are sent when the connection comes back).

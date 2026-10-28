@@ -326,3 +326,6 @@ select option, select optgroup { color: var(--text); background: var(--surface-r
   .play-layout, .play-layout.with-panel { grid-template-columns: minmax(0, 1fr); }
   .abilities-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
+.spell-name { display: flex; align-items: baseline; gap: var(--space-1); min-width: 0; }
+.effect { margin-left: auto; font-size: var(--text-sm); color: var(--text-2); text-align: right; }
+.computed { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: var(--space-2) 0; }

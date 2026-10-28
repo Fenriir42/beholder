@@ -936,3 +936,32 @@ pub async fn character_import(
     }
     Ok(Some(id.to_string()))
 }
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn sheet_details(
+    shell: State<'_, Shell>,
+    refs: Vec<(String, String)>,
+) -> Result<Vec<Option<beholder_core::actions::Details>>, IpcError> {
+    use beholder_core::actions::{Details, parse_spell, parse_weapon};
+    use beholder_core::compendium::Facets;
+    let client = shell.session()?.client;
+    refs.into_iter()
+        .take(1000)
+        .map(|(source, key)| {
+            let found = client
+                .compendium_entry(&source, &key)
+                .map_err(|_| IpcError::Storage)?;
+            Ok(found.map(|(entry, _)| match entry.facets {
+                Facets::Spell { .. } => Details {
+                    spell: Some(parse_spell(&entry.text)),
+                    weapon: None,
+                },
+                Facets::Equipment { .. } | Facets::MagicItem { .. } => Details {
+                    spell: None,
+                    weapon: parse_weapon(&entry.text),
+                },
+                _ => Details::default(),
+            }))
+        })
+        .collect()
+}

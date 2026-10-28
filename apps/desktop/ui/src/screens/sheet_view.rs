@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use beholder_core::actions::{Details, Effect as Fx, Resolution, spell_effect, weapon_effect};
 use beholder_core::character::{
     Character, CharacterChange, CharacterOp, Counter, HitPoints, Item, KnownSpell, Link,
 };
@@ -21,6 +22,11 @@ struct ResolveArgs {
     items: Vec<ResolveItem>,
     sources: Vec<String>,
     hidden: Vec<String>,
+}
+
+#[derive(serde::Serialize)]
+struct DetailsArgs {
+    refs: Vec<(String, String)>,
 }
 
 #[derive(serde::Serialize)]
@@ -62,6 +68,25 @@ enum Panel {
 
 type Resolved = HashMap<String, Hit>;
 
+type DetailsMap = HashMap<(String, String), Details>;
+
+#[derive(Clone, Copy)]
+struct Lookups {
+    resolved: RwSignal<Resolved>,
+    details: RwSignal<DetailsMap>,
+}
+
+impl Lookups {
+    fn details(&self, link: &Link) -> Option<Details> {
+        let key = self.resolved.with(|r| hit_for(r, link))?;
+        self.details.with(|d| d.get(&key).cloned())
+    }
+
+    fn facets(&self, link: &Link) -> Option<Facets> {
+        self.resolved.with(|r| facets_for(r, link))
+    }
+}
+
 fn norm(name: &str) -> String {
     name.trim().to_lowercase()
 }
@@ -92,7 +117,6 @@ fn lookups(ch: &Character) -> Vec<ResolveItem> {
     out.extend(
         ch.spells
             .iter()
-            .filter(|s| unlinked(&s.spell))
             .map(|s| item(&s.spell.name, &[Kind::Spell])),
     );
     out.extend(
@@ -143,6 +167,71 @@ fn facets_for(resolved: &Resolved, link: &Link) -> Option<Facets> {
     resolved.get(&norm(&link.name)).map(|h| h.facets.clone())
 }
 
+fn spell_ability(ch: &Character, facets: Option<&Facets>) -> Ability {
+    let casters: Vec<(&str, Ability)> = ch
+        .classes
+        .iter()
+        .filter_map(|c| c.spell_ability.map(|a| (c.class.name.as_str(), a)))
+        .collect();
+    if let Some(Facets::Spell { classes, .. }) = facets
+        && let Some((_, a)) = casters
+            .iter()
+            .find(|(n, _)| classes.iter().any(|c| c.eq_ignore_ascii_case(n)))
+    {
+        return *a;
+    }
+    casters.first().map_or(Ability::Cha, |(_, a)| *a)
+}
+
+fn effect_line(i18n: I18n, e: &Fx) -> String {
+    let mut parts = Vec::new();
+    match e.resolution {
+        Resolution::Attack { bonus } => {
+            parts.push(i18n.tr("fx-attack", &[("bonus", signed(bonus).into())]));
+        }
+        Resolution::Save { ability, dc, .. } => parts.push(i18n.tr(
+            "fx-save",
+            &[
+                ("ability", i18n.t(ABILITY_KEYS[ability.index()]).into()),
+                ("dc", dc.into()),
+            ],
+        )),
+        Resolution::Automatic => {}
+    }
+    if let Some(d) = e.damage {
+        let times = if e.times > 1 {
+            format!("{}× ", e.times)
+        } else {
+            String::new()
+        };
+        let kind = e.damage_type.clone().unwrap_or_default();
+        parts.push(format!("{times}{d} {kind}").trim().to_owned());
+        if matches!(e.resolution, Resolution::Save { half: true, .. }) {
+            parts.push(i18n.t("fx-half"));
+        }
+    }
+    if let Some(h) = e.healing {
+        parts.push(i18n.tr("fx-heal", &[("roll", h.to_string().into())]));
+    }
+    parts.join(" · ")
+}
+
+fn spell_fx(ch: &Character, look: Lookups, s: &KnownSpell, cast_level: u8) -> Option<Fx> {
+    let info = look.details(&s.spell)?.spell?;
+    let ability = spell_ability(ch, look.facets(&s.spell).as_ref());
+    Some(spell_effect(
+        ch,
+        &info,
+        s.level,
+        cast_level.max(s.level),
+        ability,
+    ))
+}
+
+fn meaningful(e: &Fx) -> bool {
+    e.damage.is_some() || e.healing.is_some() || e.resolution != Resolution::Automatic
+}
+
 #[component]
 pub fn Sheet(id: CampaignId, selected: RwSignal<Option<CharacterId>>) -> impl IntoView {
     let ctx = use_app();
@@ -152,6 +241,9 @@ pub fn Sheet(id: CampaignId, selected: RwSignal<Option<CharacterId>>) -> impl In
     let panel = RwSignal::new(Panel::Closed);
     let resolved = RwSignal::new(Resolved::new());
     let tried = StoredValue::new(std::collections::HashSet::<String>::new());
+    let details = RwSignal::new(DetailsMap::new());
+    let fetched = StoredValue::new(std::collections::HashSet::<(String, String)>::new());
+    let look = Lookups { resolved, details };
     let character = Memo::new(move |_| {
         let me = ctx.view.with(|v| v.user.as_ref().map(|u| u.id));
         ctx.view.with(|v| {
@@ -202,6 +294,45 @@ pub fn Sheet(id: CampaignId, selected: RwSignal<Option<CharacterId>>) -> impl In
             }
         });
     });
+    let wanted_details = Memo::new(move |_| {
+        let links: Vec<Link> = character.with(|c| {
+            c.as_ref()
+                .map(|c| {
+                    c.spells
+                        .iter()
+                        .map(|s| s.spell.clone())
+                        .chain(c.inventory.iter().map(|i| i.item.clone()))
+                        .collect()
+                })
+                .unwrap_or_default()
+        });
+        resolved.with(|r| {
+            links
+                .iter()
+                .filter_map(|l| hit_for(r, l))
+                .filter(|k| !fetched.with_value(|f| f.contains(k)))
+                .collect::<Vec<_>>()
+        })
+    });
+    Effect::new(move |_| {
+        let refs = wanted_details.get();
+        if refs.is_empty() {
+            return;
+        }
+        fetched.update_value(|f| f.extend(refs.iter().cloned()));
+        spawn_local(async move {
+            let args = DetailsArgs { refs: refs.clone() };
+            if let Ok(found) = ipc::call::<Vec<Option<Details>>>("sheet_details", args).await {
+                details.try_update(|d| {
+                    for (k, v) in refs.into_iter().zip(found) {
+                        if let Some(v) = v {
+                            d.insert(k, v);
+                        }
+                    }
+                });
+            }
+        });
+    });
     move || match character.get() {
         Some(ch) if editing.get() => view! {
             <section class="home sheet">
@@ -216,7 +347,7 @@ pub fn Sheet(id: CampaignId, selected: RwSignal<Option<CharacterId>>) -> impl In
         }
         .into_any(),
         Some(ch) => view! {
-            <Play campaign=id ch=ch tab=tab editing=editing panel=panel resolved=resolved/>
+            <Play campaign=id ch=ch tab=tab editing=editing panel=panel look=look/>
         }
         .into_any(),
         None => view! {
@@ -235,7 +366,7 @@ fn Play(
     tab: RwSignal<Tab>,
     editing: RwSignal<bool>,
     panel: RwSignal<Panel>,
-    resolved: RwSignal<Resolved>,
+    look: Lookups,
 ) -> impl IntoView {
     let i18n = use_i18n();
     let classes: Vec<(String, u8)> = ch
@@ -272,10 +403,11 @@ fn Play(
         let ch = ch.clone();
         move || match tab.get() {
             Tab::Actions => {
-                view! { <ActionsTab campaign=campaign ch=ch.clone() panel=panel/> }.into_any()
+                view! { <ActionsTab campaign=campaign ch=ch.clone() panel=panel look=look/> }
+                    .into_any()
             }
             Tab::Spells => {
-                view! { <SpellsTab campaign=campaign ch=ch.clone() panel=panel resolved=resolved/> }
+                view! { <SpellsTab campaign=campaign ch=ch.clone() panel=panel look=look/> }
                     .into_any()
             }
             Tab::Inventory => {
@@ -312,7 +444,7 @@ fn Play(
                     {body}
                 </div>
                 {move || (panel.get() != Panel::Closed).then(|| view! {
-                    <DetailPanel campaign=campaign ch=ch.clone() panel=panel resolved=resolved/>
+                    <DetailPanel campaign=campaign ch=ch.clone() panel=panel look=look/>
                 })}
             </div>
         </section>
@@ -512,7 +644,12 @@ fn counter_row(
 }
 
 #[component]
-fn ActionsTab(campaign: CampaignId, ch: Character, panel: RwSignal<Panel>) -> impl IntoView {
+fn ActionsTab(
+    campaign: CampaignId,
+    ch: Character,
+    panel: RwSignal<Panel>,
+    look: Lookups,
+) -> impl IntoView {
     let i18n = use_i18n();
     let id = ch.id;
     let equipped = ch
@@ -522,12 +659,42 @@ fn ActionsTab(campaign: CampaignId, ch: Character, panel: RwSignal<Panel>) -> im
         .map(|i| {
             let link = i.item.clone();
             let name = link.name.clone();
+            let weapon = look.details(&link).and_then(|d| d.weapon);
+            let line = weapon.as_ref().map(|w| {
+                let mut l = effect_line(i18n, &weapon_effect(&ch, w, false));
+                if w.versatile.is_some() {
+                    let two = weapon_effect(&ch, w, true);
+                    if let Some(d) = two.damage {
+                        l.push_str(&i18n.tr("fx-two-handed", &[("roll", d.to_string().into())]));
+                    }
+                }
+                l
+            });
             view! {
                 <button type="button" class="row link-row"
                     on:click=move |_| panel.set(Panel::Entry { link: link.clone(), owner: Owner::Item })>
-                    <span class="grow">{name}</span>
+                    <span class="spell-name"><strong>{name}</strong></span>
+                    {line.map(|l| view! { <span class="effect">{l}</span> })}
                 </button>
             }
+        })
+        .collect_view();
+    let spell_attacks = ch
+        .spells
+        .iter()
+        .filter(|s| s.level == 0 || s.prepared)
+        .filter_map(|s| {
+            let fx = spell_fx(&ch, look, s, s.level).filter(meaningful)?;
+            let link = s.spell.clone();
+            let name = link.name.clone();
+            let line = effect_line(i18n, &fx);
+            Some(view! {
+                <button type="button" class="row link-row"
+                    on:click=move |_| panel.set(Panel::Entry { link: link.clone(), owner: Owner::Spell })>
+                    <span class="spell-name"><strong>{name}</strong></span>
+                    <span class="effect">{line}</span>
+                </button>
+            })
         })
         .collect_view();
     let counters = (0..ch.counters.len())
@@ -539,6 +706,8 @@ fn ActionsTab(campaign: CampaignId, ch: Character, panel: RwSignal<Panel>) -> im
         <div class="tab-body">
             <h3>{move || i18n.t("sheet-equipped-items")}</h3>
             <div class="list">{equipped}</div>
+            <h3>{move || i18n.t("sheet-spell-actions")}</h3>
+            <div class="list">{spell_attacks}</div>
             <h3>{move || i18n.t("sheet-limited-uses")}</h3>
             <div class="list">{counters}</div>
             <p class="muted small">
@@ -586,7 +755,7 @@ fn SpellsTab(
     campaign: CampaignId,
     ch: Character,
     panel: RwSignal<Panel>,
-    resolved: RwSignal<Resolved>,
+    look: Lookups,
 ) -> impl IntoView {
     let i18n = use_i18n();
     let id = ch.id;
@@ -710,7 +879,10 @@ fn SpellsTab(
                     .map(|s| {
                         let link = s.spell.clone();
                         let name = link.name.clone();
-                        let badges = spell_badges(i18n, resolved.with(|r| facets_for(r, &link)));
+                        let badges = spell_badges(i18n, look.facets(&link));
+                        let fx = spell_fx(&ch, look, s, s.level)
+                            .filter(meaningful)
+                            .map(|e| effect_line(i18n, &e));
                         let prepared = s.prepared;
                         let toggle_name = name.clone();
                         view! {
@@ -723,8 +895,11 @@ fn SpellsTab(
                                 </button>
                                 <button type="button" class="link-row grow"
                                     on:click=move |_| panel.set(Panel::Entry { link: link.clone(), owner: Owner::Spell })>
-                                    <strong>{name}</strong>
-                                    <span class="muted small">" "{badges}</span>
+                                    <span class="spell-name">
+                                        <strong>{name}</strong>
+                                        <span class="muted small">" "{badges}</span>
+                                    </span>
+                                    {fx.map(|f| view! { <span class="effect">{f}</span> })}
                                 </button>
                             </div>
                         }
@@ -942,7 +1117,7 @@ fn DetailPanel(
     campaign: CampaignId,
     ch: Character,
     panel: RwSignal<Panel>,
-    resolved: RwSignal<Resolved>,
+    look: Lookups,
 ) -> impl IntoView {
     let i18n = use_i18n();
     let close = move |_| panel.set(Panel::Closed);
@@ -950,7 +1125,7 @@ fn DetailPanel(
         match panel.get() {
         Panel::Closed => ().into_any(),
         Panel::Entry { link, owner } => {
-            view! { <EntryDetail campaign=campaign ch=ch.clone() link=link owner=owner resolved=resolved panel=panel/> }
+            view! { <EntryDetail campaign=campaign ch=ch.clone() link=link owner=owner look=look panel=panel/> }
                 .into_any()
         }
         Panel::Browse(owner) => view! { <Browse campaign=campaign ch=ch.clone() owner=owner/> }.into_any(),
@@ -973,14 +1148,14 @@ fn EntryDetail(
     ch: Character,
     link: Link,
     owner: Owner,
-    resolved: RwSignal<Resolved>,
+    look: Lookups,
     panel: RwSignal<Panel>,
 ) -> impl IntoView {
     let ctx = use_app();
     let i18n = use_i18n();
     let id = ch.id;
     let entry = RwSignal::new(None::<Option<EntryView>>);
-    let target = resolved.with_untracked(|r| hit_for(r, &link));
+    let target = look.resolved.with_untracked(|r| hit_for(r, &link));
     match target {
         Some((source, key)) => {
             let (sources, _) = sources_of(campaign);
@@ -1053,9 +1228,66 @@ fn EntryDetail(
             </div>
         }
     };
+    let computed = match owner {
+        Owner::Spell => ch.spells.iter().find(|s| s.spell.name == name).and_then(|known| {
+            let info = look.details(&link)?.spell?;
+            let facts = [
+                info.casting_time.clone(),
+                info.range.clone(),
+                info.duration.clone(),
+                info.components.clone(),
+            ]
+            .into_iter()
+            .flatten()
+            .collect::<Vec<_>>()
+            .join(" · ");
+            let top = max_spell_level(&ch).max(known.level);
+            let scales = info.upcast.is_some() || info.extra_projectile_per_level;
+            let levels: Vec<u8> = if known.level == 0 || !scales {
+                vec![known.level]
+            } else {
+                (known.level..=top).collect()
+            };
+            let rows = levels
+                .into_iter()
+                .filter_map(|l| {
+                    let fx = spell_fx(&ch, look, known, l).filter(meaningful)?;
+                    let label = if known.level == 0 {
+                        level_label(i18n, 0)
+                    } else {
+                        level_label(i18n, l)
+                    };
+                    Some(view! { <li><span class="muted small">{label}</span>" "{effect_line(i18n, &fx)}</li> })
+                })
+                .collect::<Vec<_>>();
+            Some(view! {
+                <div class="computed">
+                    <p class="small">{facts}</p>
+                    <ul class="plain-list">{rows}</ul>
+                </div>
+            }
+            .into_any())
+        }),
+        Owner::Item => look.details(&link).and_then(|d| d.weapon).map(|w| {
+            let one = effect_line(i18n, &weapon_effect(&ch, &w, false));
+            let two = w
+                .versatile
+                .is_some()
+                .then(|| effect_line(i18n, &weapon_effect(&ch, &w, true)));
+            view! {
+                <div class="computed">
+                    <p>{one}</p>
+                    {two.map(|t| view! { <p>{move || i18n.t("fx-two-handed-label")}" "{t}</p> })}
+                </div>
+            }
+            .into_any()
+        }),
+        _ => None,
+    };
     view! {
         <h2>{name.clone()}</h2>
         {actions}
+        {computed}
         {move || match entry.get() {
             None => view! { <p class="muted">{move || i18n.t("sheet-loading")}</p> }.into_any(),
             Some(None) => view! { <p class="muted">{move || i18n.t("sheet-not-in-compendium")}</p> }.into_any(),

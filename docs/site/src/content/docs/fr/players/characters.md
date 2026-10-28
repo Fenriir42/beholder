@@ -25,6 +25,15 @@ La fiche s'ouvre en vue de jeu, organisée comme D&D Beyond :
   - **Notes :** texte libre.
 - **À droite :** cliquer sur un sort, un objet, une aptitude, une espèce ou une classe ouvre sa fiche du compendium à côté de la feuille, avec **Préparer**/**Ne plus préparer** et **Retirer** quand c'est utile. Les noms saisis sans lien (par exemple depuis un fichier importé) sont retrouvés dans le compendium par leur nom. Sur les fenêtres étroites, le panneau glisse par-dessus la fiche.
 
+### Effets calculés
+
+Quand un sort ou une arme est dans le compendium, la fiche calcule ce qu'il fait pour votre personnage :
+
+- **Sorts :** le bonus d'attaque (« Attaque +6 »), ou le jet de sauvegarde de la cible et votre DD (« Sauvegarde de DEX DD 14 », avec « moitié en cas de réussite » quand c'est le cas), et les dés de dégâts ou de soins au niveau du sort, par exemple « 2d10 fire » pour Fire Bolt au niveau 5 ou « Soigne 2d8+3 » pour Cure Wounds. Les sorts mineurs progressent avec votre niveau, Magic Missile et Eldritch Blast indiquent combien de projectiles vous obtenez, et le panneau latéral liste les dégâts à chaque niveau d'emplacement que vous pouvez utiliser.
+- **Armes :** le bonus d'attaque et les dégâts avec votre modificateur (FOR, DEX pour les armes à distance, le meilleur des deux pour les armes de finesse), plus les dégâts à deux mains des armes polyvalentes. La maîtrise des armes n'est pas encore suivie : les attaques supposent que vous êtes maîtrisé.
+
+L'onglet **Actions** regroupe vos armes équipées, sorts mineurs et sorts préparés avec ces valeurs, prêts pour les dés à venir. Les sorts dont les dégâts ne sont pas écrits en dés n'affichent que leur texte.
+
 ## Modifier le personnage
 
 **Modifier le personnage**, en haut, ouvre la vue de construction : nom et version des règles, espèce et historique, classes (niveau, dé de vie, type de lanceur, caractéristique d'incantation), caractéristiques et maîtrise des sauvegardes, maîtrise des compétences, armure et vitesse, PV maximum, ressources, dons et aptitudes, plus **Exporter** et **Supprimer**. Cliquez sur **Terminé** pour revenir à la vue de jeu. Chaque champ s'enregistre dès que vous le quittez, même hors ligne (les modifications partent quand la connexion revient).
