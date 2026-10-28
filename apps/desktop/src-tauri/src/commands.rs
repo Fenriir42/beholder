@@ -1,5 +1,6 @@
 use beholder_client_core::ClientError;
 use beholder_client_core::library_file::FileFormat;
+use beholder_core::character::CharacterOp;
 use beholder_core::compendium::{FacetOptions, Hit, Kind, RulesVersion, SearchQuery};
 use beholder_core::library::{ImportSummary, LibraryDraft};
 use beholder_core::mapping::Profile;
@@ -770,4 +771,31 @@ pub async fn mapping_profile_import(
     let bytes = std::fs::read(&path).map_err(|_| IpcError::BadFile)?;
     let profile: Profile = serde_json::from_slice(&bytes).map_err(|_| IpcError::BadFile)?;
     mapping_profile_save(shell, profile)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn character_command(
+    shell: State<'_, Shell>,
+    campaign_id: String,
+    op: CharacterOp,
+) -> Result<(), IpcError> {
+    let campaign_id = self::campaign_id(&campaign_id)?;
+    shell
+        .session()?
+        .client
+        .submit(CommandKind::Character { campaign_id, op })
+        .map(|_| ())
+        .map_err(|_| IpcError::Storage)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn character_create(
+    shell: State<'_, Shell>,
+    campaign_id: String,
+    name: String,
+    rules: RulesVersion,
+) -> Result<String, IpcError> {
+    let id = beholder_core::CharacterId(uuid::Uuid::now_v7());
+    character_command(shell, campaign_id, CharacterOp::Create { id, name, rules })?;
+    Ok(id.to_string())
 }

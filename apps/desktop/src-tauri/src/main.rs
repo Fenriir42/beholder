@@ -84,6 +84,8 @@ fn main() {
             commands::library_accept,
             commands::library_imports,
             commands::library_undo_import,
+            commands::character_command,
+            commands::character_create,
             commands::bulk_open,
             commands::bulk_values,
             commands::bulk_preview,

@@ -1,4 +1,4 @@
-use beholder_core::{CampaignId, CampaignSettings, CombatVisibility, NoteId, Role};
+use beholder_core::{CampaignId, CampaignSettings, CharacterId, CombatVisibility, NoteId, Role};
 use beholder_ipc::CampaignView;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
@@ -8,11 +8,13 @@ use crate::app::{ConnBanner, ConnPill, Screen, error_key, image_url, use_app};
 use crate::i18n::use_i18n;
 use crate::screens::compendium::{Compendium, SourcesSetting};
 use crate::screens::notes::{Notes, NotesPreview};
+use crate::screens::sheet::{CharacterList, Sheet, summary_line};
 use crate::{icons, ipc};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Section {
     Home,
+    Sheet,
     Notes,
     Compendium,
 }
@@ -49,6 +51,11 @@ pub fn CampaignScreen(id: CampaignId) -> impl IntoView {
     let tab = RwSignal::new(Tab::Characters);
     let section = RwSignal::new(Section::Home);
     let selected_note = RwSignal::new(None::<NoteId>);
+    let selected_character = RwSignal::new(None::<CharacterId>);
+    let open_character = Callback::new(move |id: CharacterId| {
+        selected_character.set(Some(id));
+        section.set(Section::Sheet);
+    });
     let open_note = Callback::new(move |id: NoteId| {
         selected_note.set(Some(id));
         section.set(Section::Notes);
@@ -103,7 +110,7 @@ pub fn CampaignScreen(id: CampaignId) -> impl IntoView {
                 })}
                 <nav>
                     {nav_item("nav-home", icons::home().into_any(), Some(Section::Home))}
-                    {nav_item("nav-sheet", icons::sheet().into_any(), None)}
+                    {nav_item("nav-sheet", icons::sheet().into_any(), Some(Section::Sheet))}
                     {nav_item("nav-notes", icons::notes().into_any(), Some(Section::Notes))}
                     {nav_item("nav-compendium", icons::book().into_any(), Some(Section::Compendium))}
                     {nav_item("nav-combat", icons::swords().into_any(), None)}
@@ -115,8 +122,9 @@ pub fn CampaignScreen(id: CampaignId) -> impl IntoView {
                 <ConnBanner/>
                 {move || match section.get() {
                     Section::Home => (move || campaign.get().map(|c| view! {
-                        <Home c=c tab=tab is_dm=is_dm open_note=open_note/>
+                        <Home c=c tab=tab is_dm=is_dm open_note=open_note open_character=open_character/>
                     })).into_any(),
+                    Section::Sheet => view! { <Sheet id=id selected=selected_character/> }.into_any(),
                     Section::Notes => view! { <Notes id=id selected=selected_note/> }.into_any(),
                     Section::Compendium => view! { <Compendium id=id/> }.into_any(),
                 }}
@@ -131,6 +139,7 @@ fn Home(
     tab: RwSignal<Tab>,
     is_dm: Memo<bool>,
     open_note: Callback<NoteId>,
+    open_character: Callback<CharacterId>,
 ) -> impl IntoView {
     let ctx = use_app();
     let i18n = use_i18n();
@@ -190,7 +199,7 @@ fn Home(
             </div>
             {move || match tab.get() {
                 Tab::Characters => view! {
-                    <div class="empty">{icons::sheet()}<p>{move || i18n.t("characters-empty")}</p></div>
+                    <CharacterList c=c2.clone() me=ctx.view.with_untracked(|v| v.user.as_ref().map(|u| u.id)) open=open_character/>
                 }.into_any(),
                 Tab::Notes => view! { <NotesPreview c=c2.clone() on_open=open_note/> }.into_any(),
                 Tab::Party => view! { <Party c=c2.clone()/> }.into_any(),
@@ -210,10 +219,30 @@ fn Party(c: CampaignView) -> impl IntoView {
         .map(|m| {
             let online = c.online.contains(&m.user_id);
             let dm = m.role == Role::Dm;
+            let active = c
+                .campaign
+                .characters
+                .iter()
+                .find(|ch| ch.owner == m.user_id && ch.active)
+                .map(|ch| {
+                    let classes: Vec<(String, u8)> =
+                        ch.classes.iter().map(|k| (k.class.name.clone(), k.level)).collect();
+                    summary_line(i18n, &ch.name, &classes, ch.armor_class(), ch.hp)
+                })
+                .or_else(|| {
+                    c.campaign
+                        .party
+                        .iter()
+                        .find(|s| s.owner == m.user_id && s.active)
+                        .map(|s| summary_line(i18n, &s.name, &s.classes, s.armor_class, s.hp))
+                });
             view! {
                 <div class="row">
                     <span class=if online { "dot online" } else { "dot" }></span>
-                    <span class="grow">{m.display_name.as_str().to_owned()}</span>
+                    <span class="grow">
+                        {m.display_name.as_str().to_owned()}
+                        {active.map(|line| view! { <span class="muted small">" · "{line}</span> })}
+                    </span>
                     {dm.then(|| view! { <span class="badge">{move || i18n.t("dm-badge")}</span> })}
                     <span class="muted">
                         {move || if online { i18n.t("presence-online") } else { i18n.t("presence-offline") }}

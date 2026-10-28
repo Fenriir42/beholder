@@ -118,6 +118,7 @@ pub fn view_data(client: &Client) -> Result<ViewData, IpcError> {
                 campaign: c.campaign,
                 pending: c.pending,
                 pending_notes: c.pending_notes,
+                pending_characters: c.pending_characters,
                 online: c.online,
             })
             .collect(),

@@ -7,6 +7,7 @@ mod library;
 mod notes;
 mod paste;
 mod server;
+mod sheet;
 
 pub use auth::AuthScreen;
 pub use campaign::CampaignScreen;

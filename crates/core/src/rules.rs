@@ -122,6 +122,26 @@ pub enum ArmorFormula {
     Fixed { ac: u8 },
 }
 
+pub fn class_defaults(name: &str) -> Option<(u8, Caster, Option<Ability>)> {
+    let d = match name.trim().to_lowercase().as_str() {
+        "barbarian" => (12, Caster::None, None),
+        "bard" => (8, Caster::Full, Some(Ability::Cha)),
+        "cleric" => (8, Caster::Full, Some(Ability::Wis)),
+        "druid" => (8, Caster::Full, Some(Ability::Wis)),
+        "fighter" => (10, Caster::None, None),
+        "monk" => (8, Caster::None, None),
+        "paladin" => (10, Caster::Half, Some(Ability::Cha)),
+        "ranger" => (10, Caster::Half, Some(Ability::Wis)),
+        "rogue" => (8, Caster::None, None),
+        "sorcerer" => (6, Caster::Full, Some(Ability::Cha)),
+        "warlock" => (8, Caster::Pact, Some(Ability::Cha)),
+        "wizard" => (6, Caster::Full, Some(Ability::Int)),
+        "artificer" => (8, Caster::HalfRoundedUp, Some(Ability::Int)),
+        _ => return None,
+    };
+    Some(d)
+}
+
 pub fn modifier(score: u8) -> i8 {
     ((i16::from(score) - 10).div_euclid(2)) as i8
 }
@@ -379,6 +399,20 @@ mod tests {
             spell_slots(&warlock_bard, RulesVersion::R2014),
             full_caster_slots(2)
         );
+    }
+
+    #[test]
+    fn standard_class_defaults() {
+        assert_eq!(
+            class_defaults(" Wizard "),
+            Some((6, Caster::Full, Some(Ability::Int)))
+        );
+        assert_eq!(
+            class_defaults("warlock"),
+            Some((8, Caster::Pact, Some(Ability::Cha)))
+        );
+        assert_eq!(class_defaults("Barbarian"), Some((12, Caster::None, None)));
+        assert_eq!(class_defaults("Blood Hunter"), None);
     }
 
     #[test]

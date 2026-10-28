@@ -1,7 +1,7 @@
 use beholder_core::compendium::{Alternative, Entry, Kind, LicenseText, SourceMeta};
 use beholder_core::mapping::Profile;
 use beholder_core::paste::Pasted;
-use beholder_core::{Campaign, LibraryId, NoteId, User, UserId, ValidationError};
+use beholder_core::{Campaign, CharacterId, LibraryId, NoteId, User, UserId, ValidationError};
 use beholder_protocol::RejectReason;
 use beholder_protocol::http::{AuthError, ImageError};
 use serde::{Deserialize, Serialize};
@@ -36,6 +36,7 @@ pub struct CampaignView {
     pub campaign: Campaign,
     pub pending: bool,
     pub pending_notes: Vec<NoteId>,
+    pub pending_characters: Vec<CharacterId>,
     pub online: Vec<UserId>,
 }
 

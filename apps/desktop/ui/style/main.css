@@ -260,3 +260,22 @@ select option, select optgroup { color: var(--text); background: var(--surface-r
   .notes { grid-template-columns: 1fr; grid-template-rows: auto 1fr; }
   .notes-list { max-height: var(--stack-list-h); border-right: none; border-bottom: 1px solid var(--border); }
 }
+
+/* Character sheet */
+.sheet { max-width: none; }
+.sheet-head { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; }
+.sheet-name { font-family: var(--font-display); font-size: var(--text-xl); flex: 1; min-width: 200px; }
+.sheet-section { border: 1px solid var(--border); border-radius: var(--radius-card); padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-3); margin: 0; }
+.sheet-section legend { color: var(--text-2); padding: 0 var(--space-1); }
+.sheet-class { align-items: end; border-bottom: 1px solid var(--border); padding-bottom: var(--space-3); }
+.abilities { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--space-3); }
+.ability { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); padding: var(--space-3); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-character); }
+.ability-name { color: var(--text-muted); font-size: var(--text-sm); }
+.ability input { width: 100%; text-align: center; }
+.ability-mod { font-size: var(--text-xl); }
+.skills { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: var(--space-2); }
+.skill-row { display: flex; align-items: center; gap: var(--space-2); min-height: var(--touch); }
+.skill-row select { width: auto; min-width: 7em; }
+.stats { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+.stat { display: flex; flex-direction: column; align-items: center; min-width: 88px; padding: var(--space-2) var(--space-3); background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-card); }
+.stat strong { font-size: var(--text-xl); }
