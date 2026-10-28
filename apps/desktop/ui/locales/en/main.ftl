@@ -294,3 +294,19 @@ tmpl-spell =
 lib-reading = Reading the file…
 lib-importing = Sending { $count } imported entries to the server…
 lib-replace = Replace entries already in the library
+lib-paste = Paste
+paste-title = Paste import
+paste-hint = Paste one entry or a whole section copied from a book or page you own. Each entry starts with its name on its own line, followed by its header line (spell level, monster size and type, item type and rarity, feat category, or "Class: Subclass" as the name). Text that can't be read is kept as one entry of the kind chosen below.
+paste-default-kind = Kind when it can't be detected
+paste-text = Pasted text
+paste-read = Read entries
+paste-found = { $count ->
+    [one] 1 entry found. Check it, then accept.
+   *[other] { $count } entries found. Check them, then accept.
+}
+paste-check = Check the fields
+paste-duplicate = Already in the library
+paste-preview = Preview
+paste-back = Back to the text
+paste-accept-all = Accept all
+paste-accept-selected = Accept selected ({ $count })

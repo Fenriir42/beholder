@@ -1,4 +1,5 @@
 use beholder_core::compendium::{Alternative, Entry, LicenseText, SourceMeta};
+use beholder_core::paste::Pasted;
 use beholder_core::{Campaign, LibraryId, NoteId, User, UserId, ValidationError};
 use beholder_protocol::RejectReason;
 use beholder_protocol::http::{AuthError, ImageError};
@@ -69,6 +70,12 @@ pub struct EntryView {
 pub struct Credits {
     pub sources: Vec<SourceMeta>,
     pub licenses: Vec<LicenseText>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PasteItem {
+    pub entry: Pasted,
+    pub duplicate: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

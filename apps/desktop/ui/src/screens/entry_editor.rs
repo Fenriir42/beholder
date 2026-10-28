@@ -12,7 +12,7 @@ use crate::screens::compendium::{kind_label, rules_label};
 
 const SIZES: [&str; 6] = ["Tiny", "Small", "Medium", "Large", "Huge", "Gargantuan"];
 
-const RULES: [RulesVersion; 3] = [
+pub const RULES: [RulesVersion; 3] = [
     RulesVersion::R2024,
     RulesVersion::R2014,
     RulesVersion::LevelUp,

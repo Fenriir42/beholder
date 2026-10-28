@@ -15,6 +15,7 @@ use wasm_bindgen::JsCast;
 use crate::app::{error_key, use_app};
 use crate::i18n::{I18n, use_i18n};
 use crate::screens::entry_editor::EntryEditor;
+use crate::screens::paste::PasteImport;
 use crate::{icons, ipc, markdown};
 
 const TYPE_DELAY: Duration = Duration::from_millis(120);
@@ -71,7 +72,7 @@ pub fn kind_label(i18n: I18n, k: Kind) -> String {
     i18n.t(&format!("kind-{}", k.as_str()))
 }
 
-fn meta(i18n: I18n, f: &Facets) -> String {
+pub fn meta(i18n: I18n, f: &Facets) -> String {
     match f {
         Facets::Spell {
             level,
@@ -205,6 +206,7 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
         })
     });
     let editing = RwSignal::new(None::<Option<Entry>>);
+    let pasting = RwSignal::new(false);
     let message = RwSignal::new(None::<String>);
     let invalid = RwSignal::new(Vec::<String>::new());
     let confirm_delete = RwSignal::new(false);
@@ -478,7 +480,16 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
             selected.set(Some((LIBRARY.to_owned(), key)));
         }
     });
+    let done_pasting = Callback::new(move |summary: Option<String>| {
+        pasting.set(false);
+        if summary.is_some() {
+            message.set(summary);
+        }
+    });
     let pane = move || {
+        if pasting.get() {
+            return view! { <PasteImport on_done=done_pasting/> }.into_any();
+        }
         if let Some(existing) = editing.get() {
             return view! { <EntryEditor existing=existing on_done=done_editing/> }.into_any();
         }
@@ -658,8 +669,11 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
                     </button>
                 </div>
                 <div class="toolbar">
-                    <button type="button" class="primary" on:click=move |_| { credits.set(false); editing.set(Some(None)); }>
+                    <button type="button" class="primary" on:click=move |_| { credits.set(false); pasting.set(false); editing.set(Some(None)); }>
                         {icons::plus()}{move || i18n.t("lib-new")}
+                    </button>
+                    <button type="button" on:click=move |_| { credits.set(false); editing.set(None); pasting.set(true); }>
+                        {move || i18n.t("lib-paste")}
                     </button>
                     <label class="btn file">
                         <span>{move || i18n.t("lib-import")}</span>

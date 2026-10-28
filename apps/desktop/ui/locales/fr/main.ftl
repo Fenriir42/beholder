@@ -294,3 +294,19 @@ tmpl-spell =
 lib-reading = Lecture du fichier…
 lib-importing = Envoi de { $count } entrées importées au serveur…
 lib-replace = Remplacer les entrées déjà dans la bibliothèque
+lib-paste = Coller
+paste-title = Import par collage
+paste-hint = Collez une entrée ou une section entière copiée d'un livre ou d'une page que vous possédez. Chaque entrée commence par son nom sur une ligne, suivi de sa ligne d'en-tête (niveau du sort, taille et type du monstre, type et rareté de l'objet, catégorie du don, ou « Classe: Sous-classe » comme nom). Le texte illisible est gardé comme une seule entrée du type choisi ci-dessous.
+paste-default-kind = Type si non détecté
+paste-text = Texte collé
+paste-read = Lire les entrées
+paste-found = { $count ->
+    [one] 1 entrée trouvée. Vérifiez-la, puis acceptez.
+   *[other] { $count } entrées trouvées. Vérifiez-les, puis acceptez.
+}
+paste-check = Vérifier les champs
+paste-duplicate = Déjà dans la bibliothèque
+paste-preview = Aperçu
+paste-back = Retour au texte
+paste-accept-all = Tout accepter
+paste-accept-selected = Accepter la sélection ({ $count })

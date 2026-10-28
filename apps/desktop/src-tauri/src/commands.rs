@@ -1,13 +1,14 @@
 use beholder_client_core::ClientError;
 use beholder_client_core::library_file::FileFormat;
 use beholder_core::LibraryId;
-use beholder_core::compendium::{FacetOptions, Hit, SearchQuery};
+use beholder_core::compendium::{FacetOptions, Hit, Kind, RulesVersion, SearchQuery};
 use beholder_core::library::{ImportSummary, LibraryDraft};
+use beholder_core::paste::Pasted;
 use beholder_core::{
     Audience, CampaignId, CampaignOp, CampaignSettings, CampaignTitle, DisplayName, ImageHash,
     InviteCode, NoteBody, NoteId, NoteOp, NoteTitle, Password, Username,
 };
-use beholder_ipc::{Boot, ConnState, Credits, EntryView, IpcError, ViewData};
+use beholder_ipc::{Boot, ConnState, Credits, EntryView, IpcError, PasteItem, ViewData};
 use beholder_protocol::CommandKind;
 use beholder_protocol::http::SourceInfo;
 use beholder_protocol::http::{AuthResponse, LoginRequest, RegisterRequest};
@@ -497,4 +498,45 @@ pub async fn library_import(
         .await
         .map_err(|_| IpcError::Server)?
         .map_err(client_error)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn library_paste(
+    shell: State<'_, Shell>,
+    text: String,
+    book: Option<String>,
+    rules: RulesVersion,
+    kind: Kind,
+) -> Result<Vec<PasteItem>, IpcError> {
+    let client = shell.session()?.client;
+    let previews = tauri::async_runtime::spawn_blocking(move || {
+        client.library_paste(&text, book.as_deref(), rules, kind)
+    })
+    .await
+    .map_err(|_| IpcError::Server)?
+    .map_err(client_error)?;
+    Ok(previews
+        .into_iter()
+        .map(|p| PasteItem {
+            entry: p.entry,
+            duplicate: p.duplicate,
+        })
+        .collect())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn library_accept(
+    shell: State<'_, Shell>,
+    entries: Vec<Pasted>,
+    book: Option<String>,
+    rules: RulesVersion,
+    replace: bool,
+) -> Result<ImportSummary, IpcError> {
+    let client = shell.session()?.client;
+    tauri::async_runtime::spawn_blocking(move || {
+        client.library_accept(entries, book.as_deref(), rules, replace)
+    })
+    .await
+    .map_err(|_| IpcError::Server)?
+    .map_err(client_error)
 }

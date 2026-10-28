@@ -78,6 +78,8 @@ fn main() {
             commands::library_hide,
             commands::library_export,
             commands::library_import,
+            commands::library_paste,
+            commands::library_accept,
             commands::compendium_facets,
         ])
         .run(tauri::generate_context!());

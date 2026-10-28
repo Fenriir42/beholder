@@ -4,6 +4,7 @@ mod compendium;
 mod entry_editor;
 mod library;
 mod notes;
+mod paste;
 mod server;
 
 pub use auth::AuthScreen;
