@@ -75,9 +75,10 @@
   --topbar-h: 56px;
   --sidebar-w: 248px;
   --banner-h: 150px;
-  --card-min: 240px;
-  --notes-list-w: 320px;
-  --prose-w: 72ch;
+  --card-min: 240px;  --notes-list-w: clamp(240px, 22vw, 340px);
+  --prose-w: 100ch;
+  --sidebar-w-compact: 200px;
+  --stack-list-h: 40vh;
   --text-sm: 13px;
   --text-md: 15px;
   --text-lg: 18px;
