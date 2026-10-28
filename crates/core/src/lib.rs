@@ -14,7 +14,8 @@ pub use campaign::{
     InviteCode, Member, Role,
 };
 pub use ids::{
-    CampaignId, CommandId, ImageHash, ImportId, LibraryId, NoteId, Seq, UnixMillis, UserId,
+    CampaignId, CharacterId, CommandId, ImageHash, ImportId, LibraryId, NoteId, Seq, UnixMillis,
+    UserId,
 };
 pub use note::{Audience, Note, NoteBody, NoteOp, NoteTitle};
 pub use user::{DisplayName, Password, User, Username, ValidationError};

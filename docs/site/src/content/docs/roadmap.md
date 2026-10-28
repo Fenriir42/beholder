@@ -35,7 +35,7 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 
 ## In progress
 
-Nothing at the moment: Phase 4 is next.
+- **Character sheets (Phase 4):** the rules calculations and the sync are done: characters, edits by the owner and the DM, summaries for the rest of the party. The sheet screen comes next.
 
 ## Planned
 

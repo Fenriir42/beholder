@@ -237,6 +237,29 @@ fn execute(
                 joined: None,
             }))
         }
+        CommandKind::Character { campaign_id, op } => {
+            let Some(role) = role_of(tx, *campaign_id, actor.id)? else {
+                return Ok(Err(RejectReason::NotFound));
+            };
+            let viewer = Viewer {
+                user: actor.id,
+                role,
+            };
+            let decided = match crate::characters::decide(tx, viewer, *campaign_id, op)? {
+                Ok(events) => events,
+                Err(reason) => return Ok(Err(reason)),
+            };
+            let events = decided
+                .into_iter()
+                .map(|e| log.emit(*campaign_id, e))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(Ok(Executed {
+                campaign_id: Some(*campaign_id),
+                events,
+                library_seq: None,
+                joined: None,
+            }))
+        }
     }
 }
 
@@ -355,6 +378,10 @@ fn project(
         | CampaignEvent::NoteEdited { .. }
         | CampaignEvent::NoteAudienceChanged { .. }
         | CampaignEvent::NoteDeleted { .. } => notes::project(tx, campaign_id, event)?,
+        CampaignEvent::CharacterSaved { .. } | CampaignEvent::CharacterDeleted { .. } => {
+            crate::characters::project(tx, campaign_id, event)?
+        }
+        CampaignEvent::PartyMemberSaved { .. } => {}
         CampaignEvent::SourcesChanged { sources } => {
             tx.execute(
                 "UPDATE campaigns SET sources = ?2 WHERE id = ?1",
@@ -454,6 +481,8 @@ pub fn load_campaign(
             .map(|b| postcard::from_bytes(&b))
             .transpose()?
             .unwrap_or_default(),
+        characters: crate::characters::campaign_characters(conn, id)?,
+        party: Vec::new(),
     };
     Ok(Some((Seq(head), campaign)))
 }
@@ -1130,6 +1159,82 @@ mod tests {
             .map(|e| e.name)
             .collect();
         assert!(names.contains(&"Replaced".to_owned()) && names.contains(&"Added".to_owned()));
+    }
+
+    #[test]
+    fn characters_belong_to_their_owner_and_the_dm() {
+        use beholder_core::CharacterId;
+        use beholder_core::character::{CharacterChange, CharacterOp};
+        let (mut c, dm, player) = setup();
+        let campaign = create(&mut c, &dm);
+        let code: String = c
+            .query_row(
+                "SELECT invite_code FROM campaigns WHERE id = ?1",
+                [campaign.as_bytes()],
+                |r| r.get(0),
+            )
+            .unwrap();
+        run(
+            &mut c,
+            &player,
+            CommandKind::JoinCampaign {
+                code: beholder_core::InviteCode::parse(&code).unwrap(),
+            },
+        );
+        let ch = |op| CommandKind::Character {
+            campaign_id: campaign,
+            op,
+        };
+        let id = CharacterId(Uuid::now_v7());
+        let created = run(
+            &mut c,
+            &player,
+            ch(CharacterOp::Create {
+                id,
+                name: "Ilsa".into(),
+                rules: beholder_core::compendium::RulesVersion::R2024,
+            }),
+        );
+        assert!(matches!(created.reply, Reply::Ack(Some(_))));
+        let hit = ch(CharacterOp::Change {
+            id,
+            change: CharacterChange::Exhaustion(1),
+        });
+        assert!(
+            matches!(run(&mut c, &dm, hit).reply, Reply::Ack(Some(_))),
+            "the DM edits any character"
+        );
+        let other = crate::auth::create_user(
+            &mut c,
+            &Username::new("outsider".into()).unwrap(),
+            &DisplayName::new("outsider").unwrap(),
+            "phc",
+            UnixMillis(0),
+        )
+        .unwrap()
+        .unwrap();
+        assert_eq!(
+            run(&mut c, &other, ch(CharacterOp::Delete { id })).reply,
+            Reply::Reject(RejectReason::NotFound),
+            "non-members can't touch it"
+        );
+        assert_eq!(
+            run(
+                &mut c,
+                &player,
+                ch(CharacterOp::Create {
+                    id,
+                    name: "Again".into(),
+                    rules: beholder_core::compendium::RulesVersion::R2024,
+                })
+            )
+            .reply,
+            Reply::Reject(RejectReason::IdConflict)
+        );
+        let (_, loaded) = load_campaign(&c, campaign).unwrap().unwrap();
+        assert_eq!(loaded.characters.len(), 1);
+        assert_eq!(loaded.characters[0].exhaustion, 1);
+        assert!(loaded.characters[0].active);
     }
 
     #[test]

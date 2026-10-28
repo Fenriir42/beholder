@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use beholder_core::character::Character;
 use beholder_core::{
     Audience, Campaign, CampaignEvent, CampaignId, CampaignOp, CampaignSettings, Note, NoteId,
     Role, Seq, UserId,
@@ -43,6 +44,10 @@ pub fn can_manage_note(viewer: Viewer, note: &Note) -> bool {
     note.author == viewer.user
 }
 
+pub fn can_edit_character(viewer: Viewer, character: &Character) -> bool {
+    character.owner == viewer.user || viewer.role == Role::Dm
+}
+
 pub struct Scope<'a> {
     pub settings: CampaignSettings,
     pub notes: &'a HashMap<NoteId, Note>,
@@ -62,7 +67,18 @@ pub fn event_for(
         | CampaignEvent::MemberJoined { .. }
         | CampaignEvent::SettingsChanged { .. }
         | CampaignEvent::SourcesChanged { .. }
-        | CampaignEvent::EntryHidden { .. } => Some(event.clone()),
+        | CampaignEvent::EntryHidden { .. }
+        | CampaignEvent::CharacterDeleted { .. }
+        | CampaignEvent::PartyMemberSaved { .. } => Some(event.clone()),
+        CampaignEvent::CharacterSaved { character } => {
+            if can_edit_character(viewer, character) {
+                Some(event.clone())
+            } else {
+                Some(CampaignEvent::PartyMemberSaved {
+                    summary: character.summary(),
+                })
+            }
+        }
         CampaignEvent::NoteCreated { note } => {
             can_read_note(viewer, settings, note).then(|| event.clone())
         }
@@ -109,6 +125,18 @@ pub fn campaign_for(viewer: Viewer, campaign: &Campaign) -> Campaign {
             .collect(),
         sources: campaign.sources.clone(),
         hidden: campaign.hidden.clone(),
+        characters: campaign
+            .characters
+            .iter()
+            .filter(|c| can_edit_character(viewer, c))
+            .cloned()
+            .collect(),
+        party: campaign
+            .characters
+            .iter()
+            .filter(|c| !can_edit_character(viewer, c))
+            .map(Character::summary)
+            .collect(),
     }
 }
 
@@ -323,6 +351,46 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn character_matrix() {
+        let mut ch = Character::new(
+            beholder_core::CharacterId(Uuid::from_bytes([9; 16])),
+            uid(P1),
+            "Ilsa".into(),
+            beholder_core::compendium::RulesVersion::R2024,
+        );
+        ch.notes = "owes the thieves' guild".into();
+        ch.hp.current = 7;
+        let mut campaign = Campaign::new(
+            beholder_core::CampaignId(Uuid::from_bytes([5; 16])),
+            CampaignTitle::new("Test").unwrap(),
+            member(DM, Role::Dm),
+        );
+        campaign.characters.push(ch.clone());
+        let saved = CampaignEvent::CharacterSaved {
+            character: Box::new(ch.clone()),
+        };
+        // (viewer, sees and edits the full sheet)
+        for (who, full) in [(DM, true), (P1, true), (P2, false)] {
+            assert_eq!(can_edit_character(v(who), &ch), full);
+            let filtered = campaign_for(v(who), &campaign);
+            match event_for(v(who), &scope(&no_notes(), false), &saved) {
+                Some(CampaignEvent::CharacterSaved { character }) => {
+                    assert!(full && character.notes == ch.notes);
+                    assert_eq!(filtered.characters, vec![ch.clone()]);
+                    assert!(filtered.party.is_empty());
+                }
+                Some(CampaignEvent::PartyMemberSaved { summary }) => {
+                    assert!(!full);
+                    assert_eq!((summary.name.as_str(), summary.hp.current), ("Ilsa", 7));
+                    assert!(filtered.characters.is_empty(), "no full sheet leaks");
+                    assert_eq!(filtered.party, vec![ch.summary()]);
+                }
+                other => panic!("unexpected {other:?}"),
+            }
+        }
+    }
+
     #[test]
     fn library_edit_matrix() {
         let (author, other) = (uid(P1), uid(P2));

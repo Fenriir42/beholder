@@ -108,7 +108,51 @@ mod tests {
         c.cover = Some(ImageHash([3; 32]));
         c.invite_code = Some(InviteCode::from_random([1, 2, 3, 4, 5]));
         c.apply(&CampaignEvent::NoteCreated { note: note() });
+        c.apply(&CampaignEvent::CharacterSaved {
+            character: Box::new(character()),
+        });
+        c.apply(&CampaignEvent::PartyMemberSaved {
+            summary: beholder_core::character::Character {
+                id: beholder_core::CharacterId(Uuid::from_bytes([8; 16])),
+                ..character()
+            }
+            .summary(),
+        });
         c
+    }
+
+    fn character() -> beholder_core::character::Character {
+        use beholder_core::character::{Character, ClassLevel, Item, Link};
+        use beholder_core::rules::{Ability, Caster};
+        let mut ch = Character::new(
+            beholder_core::CharacterId(Uuid::from_bytes([7; 16])),
+            uid(1),
+            "Ilsa".into(),
+            compendium::RulesVersion::R2024,
+        );
+        ch.classes.push(ClassLevel {
+            class: Link {
+                name: "Paladin".into(),
+                source: Some("srd-5.2".into()),
+                key: Some("class/paladin".into()),
+            },
+            subclass: None,
+            level: 3,
+            hit_die: 10,
+            caster: Caster::Half,
+            spell_ability: Some(Ability::Cha),
+        });
+        ch.inventory.push(Item {
+            item: Link {
+                name: "Longsword".into(),
+                ..Link::default()
+            },
+            quantity: 1,
+            equipped: true,
+            note: String::new(),
+        });
+        ch.active = true;
+        ch
     }
     fn lid(n: u8) -> LibraryId {
         LibraryId(Uuid::from_bytes([n; 16]))
@@ -188,6 +232,13 @@ mod tests {
             CampaignEvent::EntryHidden {
                 id: lid(1),
                 hidden: false,
+            },
+            CampaignEvent::CharacterSaved {
+                character: Box::new(character()),
+            },
+            CampaignEvent::CharacterDeleted { id: character().id },
+            CampaignEvent::PartyMemberSaved {
+                summary: character().summary(),
             },
         ]
     }
@@ -292,6 +343,31 @@ mod tests {
                 import: beholder_core::ImportId(uuid::Uuid::from_u128(7)),
             },
         ];
+        let character_ops = vec![
+            beholder_core::character::CharacterOp::Create {
+                id: character().id,
+                name: "Ilsa".into(),
+                rules: compendium::RulesVersion::R2014,
+            },
+            beholder_core::character::CharacterOp::Change {
+                id: character().id,
+                change: beholder_core::character::CharacterChange::Skill(
+                    beholder_core::rules::Skill::Stealth,
+                    beholder_core::rules::Proficiency::Expertise,
+                ),
+            },
+            beholder_core::character::CharacterOp::SetActive { id: character().id },
+            beholder_core::character::CharacterOp::Delete { id: character().id },
+        ];
+        msgs.extend(character_ops.into_iter().map(|op| {
+            ClientMsg::Command(Command {
+                id: cmd_id(10),
+                kind: CommandKind::Character {
+                    campaign_id: cid(2),
+                    op,
+                },
+            })
+        }));
         msgs.extend(library_ops.into_iter().map(|op| {
             ClientMsg::Command(Command {
                 id: cmd_id(9),
@@ -378,7 +454,8 @@ mod tests {
             | CommandKind::JoinCampaign { .. }
             | CommandKind::Campaign { .. }
             | CommandKind::Note { .. }
-            | CommandKind::Library { .. } => {}
+            | CommandKind::Library { .. }
+            | CommandKind::Character { .. } => {}
         }
         match e {
             CampaignEvent::Created { .. }
@@ -392,7 +469,10 @@ mod tests {
             | CampaignEvent::NoteAudienceChanged { .. }
             | CampaignEvent::NoteDeleted { .. }
             | CampaignEvent::SourcesChanged { .. }
-            | CampaignEvent::EntryHidden { .. } => {}
+            | CampaignEvent::EntryHidden { .. }
+            | CampaignEvent::CharacterSaved { .. }
+            | CampaignEvent::CharacterDeleted { .. }
+            | CampaignEvent::PartyMemberSaved { .. } => {}
         }
         match n {
             NoteOp::Create { .. }

@@ -1,7 +1,9 @@
 use std::collections::{HashMap, HashSet};
 
 use beholder_core::library::LibraryOp;
-use beholder_core::{Campaign, CampaignId, LibraryId, Member, NoteId, Role, Seq, User, UserId};
+use beholder_core::{
+    Campaign, CampaignId, CharacterId, LibraryId, Member, NoteId, Role, Seq, User, UserId,
+};
 use beholder_protocol::{Command, CommandKind};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -10,6 +12,7 @@ pub struct CampaignView {
     pub seq: Seq,
     pub pending: bool,
     pub pending_notes: Vec<NoteId>,
+    pub pending_characters: Vec<CharacterId>,
     pub online: Vec<UserId>,
 }
 
@@ -35,6 +38,7 @@ pub fn compute(
             seq,
             pending: false,
             pending_notes: Vec::new(),
+            pending_characters: Vec::new(),
             online: Vec::new(),
         })
         .collect();
@@ -58,6 +62,7 @@ pub fn compute(
                     seq: Seq(0),
                     pending: true,
                     pending_notes: Vec::new(),
+                    pending_characters: Vec::new(),
                     online: Vec::new(),
                 });
             }
@@ -94,6 +99,23 @@ pub fn compute(
                 }
                 if !view.pending_notes.contains(&id) {
                     view.pending_notes.push(id);
+                }
+            }
+            CommandKind::Character { campaign_id, op } => {
+                let (Some(me), Some(view)) = (
+                    &user,
+                    campaigns.iter_mut().find(|c| c.campaign.id == *campaign_id),
+                ) else {
+                    continue;
+                };
+                if let Ok(events) = op.events(me.id, &view.campaign.characters) {
+                    for e in &events {
+                        view.campaign.apply(e);
+                    }
+                }
+                let id = op.id();
+                if !view.pending_characters.contains(&id) {
+                    view.pending_characters.push(id);
                 }
             }
         }

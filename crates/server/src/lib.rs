@@ -1,5 +1,6 @@
 pub mod auth;
 pub mod campaigns;
+pub mod characters;
 pub mod compendium;
 pub mod db;
 pub mod http;

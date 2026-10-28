@@ -1,11 +1,14 @@
 use serde::{Deserialize, Serialize};
 
+use crate::campaign::CampaignEvent;
 use crate::compendium::RulesVersion;
 use crate::ids::{CharacterId, UserId};
+use crate::note::MAX_BODY_BYTES;
 use crate::rules::{
     self, Ability, ArmorFormula, Caster, Proficiency, Skill, armor_class, modifier,
     proficiency_bonus, proficiency_part,
 };
+use crate::user::ValidationError;
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Link {
@@ -85,6 +88,145 @@ pub struct Character {
     pub inventory: Vec<Item>,
     pub currency: [u32; 5],
     pub notes: String,
+    pub active: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct CharacterSummary {
+    pub id: CharacterId,
+    pub owner: UserId,
+    pub name: String,
+    pub species: Option<String>,
+    pub classes: Vec<(String, u8)>,
+    pub armor_class: i16,
+    pub hp: HitPoints,
+    pub active: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CharacterChange {
+    Name(String),
+    Rules(RulesVersion),
+    Species(Option<Link>),
+    Background(Option<Link>),
+    Classes(Vec<ClassLevel>),
+    Feats(Vec<Link>),
+    Features(Vec<Link>),
+    Abilities([u8; 6]),
+    Saves([bool; 6]),
+    Skill(Skill, Proficiency),
+    JackOfAllTrades(bool),
+    Armor {
+        formula: ArmorFormula,
+        shield: bool,
+        bonus: i8,
+    },
+    InitiativeBonus(i8),
+    Speed(u16),
+    Hp(HitPoints),
+    HitDiceSpent(u8),
+    DeathSaves(u8, u8),
+    Conditions(Vec<String>),
+    Exhaustion(u8),
+    Counters(Vec<Counter>),
+    SlotsSpent([u8; 9]),
+    PactSpent(u8),
+    Spells(Vec<KnownSpell>),
+    Inventory(Vec<Item>),
+    Currency([u32; 5]),
+    Notes(String),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum CharacterOp {
+    Create {
+        id: CharacterId,
+        name: String,
+        rules: RulesVersion,
+    },
+    Change {
+        id: CharacterId,
+        change: CharacterChange,
+    },
+    SetActive {
+        id: CharacterId,
+    },
+    Delete {
+        id: CharacterId,
+    },
+}
+
+const MAX_NAME: usize = 80;
+const MAX_TEXT: usize = 120;
+const MAX_LIST: usize = 200;
+const MAX_INVENTORY: usize = 500;
+
+fn text_ok(s: &str) -> bool {
+    s.chars().count() <= MAX_TEXT
+}
+
+fn link_ok(l: &Link) -> bool {
+    !l.name.trim().is_empty()
+        && text_ok(&l.name)
+        && l.source.as_deref().is_none_or(text_ok)
+        && l.key.as_deref().is_none_or(text_ok)
+}
+
+impl CharacterOp {
+    pub fn id(&self) -> CharacterId {
+        match self {
+            Self::Create { id, .. }
+            | Self::Change { id, .. }
+            | Self::SetActive { id }
+            | Self::Delete { id } => *id,
+        }
+    }
+
+    pub fn events(
+        &self,
+        actor: UserId,
+        characters: &[Character],
+    ) -> Result<Vec<CampaignEvent>, ValidationError> {
+        let saved = |c: Character| CampaignEvent::CharacterSaved {
+            character: Box::new(c),
+        };
+        let current = characters.iter().find(|c| c.id == self.id());
+        match (self, current) {
+            (Self::Create { id, name, rules }, None) => {
+                let mut c = Character::new(*id, actor, name.trim().to_owned(), *rules);
+                c.active = !characters.iter().any(|o| o.owner == actor && o.active);
+                c.validate()?;
+                Ok(vec![saved(c)])
+            }
+            (Self::Change { change, .. }, Some(c)) => {
+                let mut next = c.clone();
+                next.apply(change.clone());
+                next.validate()?;
+                Ok(vec![saved(next)])
+            }
+            (Self::SetActive { .. }, Some(c)) => {
+                let mut out: Vec<CampaignEvent> = characters
+                    .iter()
+                    .filter(|o| o.owner == c.owner && o.active && o.id != c.id)
+                    .map(|o| {
+                        saved(Character {
+                            active: false,
+                            ..o.clone()
+                        })
+                    })
+                    .collect();
+                if !c.active {
+                    out.push(saved(Character {
+                        active: true,
+                        ..c.clone()
+                    }));
+                }
+                Ok(out)
+            }
+            (Self::Delete { id }, Some(_)) => Ok(vec![CampaignEvent::CharacterDeleted { id: *id }]),
+            _ => Err(ValidationError::Length),
+        }
+    }
 }
 
 impl Character {
@@ -120,6 +262,117 @@ impl Character {
             inventory: Vec::new(),
             currency: [0; 5],
             notes: String::new(),
+            active: false,
+        }
+    }
+
+    pub fn apply(&mut self, change: CharacterChange) {
+        match change {
+            CharacterChange::Name(n) => self.name = n.trim().to_owned(),
+            CharacterChange::Rules(r) => self.rules = r,
+            CharacterChange::Species(l) => self.species = l,
+            CharacterChange::Background(l) => self.background = l,
+            CharacterChange::Classes(c) => self.classes = c,
+            CharacterChange::Feats(f) => self.feats = f,
+            CharacterChange::Features(f) => self.features = f,
+            CharacterChange::Abilities(a) => self.abilities = a,
+            CharacterChange::Saves(s) => self.saves = s,
+            CharacterChange::Skill(s, p) => self.skills[s.index()] = p,
+            CharacterChange::JackOfAllTrades(j) => self.jack_of_all_trades = j,
+            CharacterChange::Armor {
+                formula,
+                shield,
+                bonus,
+            } => {
+                self.armor = formula;
+                self.shield = shield;
+                self.ac_bonus = bonus;
+            }
+            CharacterChange::InitiativeBonus(b) => self.initiative_bonus = b,
+            CharacterChange::Speed(s) => self.speed = s,
+            CharacterChange::Hp(hp) => self.hp = hp,
+            CharacterChange::HitDiceSpent(n) => self.hit_dice_spent = n,
+            CharacterChange::DeathSaves(ok, ko) => self.death_saves = (ok, ko),
+            CharacterChange::Conditions(c) => self.conditions = c,
+            CharacterChange::Exhaustion(e) => self.exhaustion = e,
+            CharacterChange::Counters(c) => self.counters = c,
+            CharacterChange::SlotsSpent(s) => self.slots_spent = s,
+            CharacterChange::PactSpent(n) => self.pact_spent = n,
+            CharacterChange::Spells(s) => self.spells = s,
+            CharacterChange::Inventory(i) => self.inventory = i,
+            CharacterChange::Currency(c) => self.currency = c,
+            CharacterChange::Notes(n) => self.notes = n,
+        }
+    }
+
+    pub fn validate(&self) -> Result<(), ValidationError> {
+        let len = self.name.chars().count();
+        let hp_ok = |v: i16| (-10_000..=10_000).contains(&v);
+        let ok = (1..=MAX_NAME).contains(&len)
+            && self.species.as_ref().is_none_or(link_ok)
+            && self.background.as_ref().is_none_or(link_ok)
+            && self.classes.len() <= 20
+            && self.classes.iter().all(|c| {
+                link_ok(&c.class)
+                    && c.subclass.as_ref().is_none_or(link_ok)
+                    && (1..=20).contains(&c.level)
+                    && matches!(c.hit_die, 4 | 6 | 8 | 10 | 12)
+            })
+            && self.classes.iter().map(|c| u16::from(c.level)).sum::<u16>() <= 20
+            && self.feats.len() <= MAX_LIST
+            && self.feats.iter().all(link_ok)
+            && self.features.len() <= MAX_LIST
+            && self.features.iter().all(link_ok)
+            && self.abilities.iter().all(|a| (1..=30).contains(a))
+            && self.speed <= 1000
+            && hp_ok(self.hp.current)
+            && hp_ok(self.hp.max)
+            && hp_ok(self.hp.temp)
+            && self.hit_dice_spent <= 20
+            && self.death_saves.0 <= 3
+            && self.death_saves.1 <= 3
+            && self.conditions.len() <= 30
+            && self.conditions.iter().all(|c| text_ok(c))
+            && self.exhaustion <= 10
+            && self.counters.len() <= 50
+            && self
+                .counters
+                .iter()
+                .all(|c| text_ok(&c.name) && c.current <= c.max.max(c.current))
+            && self.slots_spent.iter().all(|s| *s <= 20)
+            && self.pact_spent <= 10
+            && self.spells.len() <= MAX_INVENTORY
+            && self
+                .spells
+                .iter()
+                .all(|s| link_ok(&s.spell) && s.level <= 9)
+            && self.inventory.len() <= MAX_INVENTORY
+            && self
+                .inventory
+                .iter()
+                .all(|i| link_ok(&i.item) && text_ok(&i.note))
+            && self.notes.len() <= MAX_BODY_BYTES;
+        if ok {
+            Ok(())
+        } else {
+            Err(ValidationError::Length)
+        }
+    }
+
+    pub fn summary(&self) -> CharacterSummary {
+        CharacterSummary {
+            id: self.id,
+            owner: self.owner,
+            name: self.name.clone(),
+            species: self.species.as_ref().map(|s| s.name.clone()),
+            classes: self
+                .classes
+                .iter()
+                .map(|c| (c.class.name.clone(), c.level))
+                .collect(),
+            armor_class: self.armor_class(),
+            hp: self.hp,
+            active: self.active,
         }
     }
 
@@ -250,6 +503,62 @@ mod tests {
         c.skills[Skill::Persuasion.index()] = Proficiency::Expertise;
         c.skills[Skill::Stealth.index()] = Proficiency::Proficient;
         c
+    }
+
+    fn one_saved(events: Vec<CampaignEvent>) -> Character {
+        match events.as_slice() {
+            [CampaignEvent::CharacterSaved { character }] => (**character).clone(),
+            other => panic!("expected one saved character, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn ops_create_change_activate_and_delete() {
+        let me = UserId::from_bytes([2; 16]);
+        let first = CharacterOp::Create {
+            id: CharacterId::from_bytes([1; 16]),
+            name: " Ilsa ".into(),
+            rules: RulesVersion::R2024,
+        };
+        let a = one_saved(first.events(me, &[]).unwrap());
+        assert!(a.active && a.name == "Ilsa" && a.owner == me);
+        let second = CharacterOp::Create {
+            id: CharacterId::from_bytes([3; 16]),
+            name: "Bran".into(),
+            rules: RulesVersion::R2014,
+        };
+        let party = vec![a.clone()];
+        let b = one_saved(second.events(me, &party).unwrap());
+        assert!(!b.active, "only the first character starts active");
+        let party = vec![a.clone(), b.clone()];
+        let switched = CharacterOp::SetActive { id: b.id }
+            .events(me, &party)
+            .unwrap();
+        assert_eq!(switched.len(), 2, "the old one turns off, the new one on");
+        let hurt = CharacterOp::Change {
+            id: a.id,
+            change: CharacterChange::Hp(HitPoints {
+                current: 3,
+                max: 12,
+                temp: 0,
+            }),
+        };
+        let c = one_saved(hurt.events(me, &party).unwrap());
+        assert_eq!(c.hp.current, 3);
+        assert_eq!(c.summary().hp.max, 12);
+        let bad = CharacterOp::Change {
+            id: a.id,
+            change: CharacterChange::Abilities([0; 6]),
+        };
+        assert!(bad.events(me, &party).is_err());
+        assert!(first.events(me, &party).is_err(), "the id is taken");
+        assert!(
+            CharacterOp::Delete {
+                id: CharacterId::from_bytes([9; 16])
+            }
+            .events(me, &party)
+            .is_err()
+        );
     }
 
     #[test]

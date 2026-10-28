@@ -35,7 +35,7 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 
 ## En cours
 
-Rien pour l'instant : la phase 4 est la suivante.
+- **Fiches de personnage (phase 4) :** les calculs de règles et la synchronisation sont faits : personnages, modifications par le propriétaire et le MJ, résumés pour le reste du groupe. L'écran de la fiche arrive ensuite.
 
 ## Prévu
 

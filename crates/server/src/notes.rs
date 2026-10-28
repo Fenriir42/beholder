@@ -158,7 +158,10 @@ pub(crate) fn project(
         | CampaignEvent::InviteRegenerated { .. }
         | CampaignEvent::SettingsChanged { .. }
         | CampaignEvent::SourcesChanged { .. }
-        | CampaignEvent::EntryHidden { .. } => {}
+        | CampaignEvent::EntryHidden { .. }
+        | CampaignEvent::CharacterSaved { .. }
+        | CampaignEvent::CharacterDeleted { .. }
+        | CampaignEvent::PartyMemberSaved { .. } => {}
     }
     Ok(())
 }

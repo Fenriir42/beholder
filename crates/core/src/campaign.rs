@@ -2,8 +2,9 @@ use core::fmt;
 
 use serde::{Deserialize, Serialize};
 
+use crate::character::{Character, CharacterSummary};
 use crate::compendium::{LIBRARY, SRD};
-use crate::ids::{CampaignId, ImageHash, LibraryId, NoteId, UserId};
+use crate::ids::{CampaignId, CharacterId, ImageHash, LibraryId, NoteId, UserId};
 use crate::note::{Audience, Note, NoteBody, NoteTitle};
 use crate::user::{DisplayName, ValidationError, clean_text};
 
@@ -231,6 +232,15 @@ pub enum CampaignEvent {
         id: LibraryId,
         hidden: bool,
     },
+    CharacterSaved {
+        character: Box<Character>,
+    },
+    CharacterDeleted {
+        id: CharacterId,
+    },
+    PartyMemberSaved {
+        summary: CharacterSummary,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -244,6 +254,8 @@ pub struct Campaign {
     pub notes: Vec<Note>,
     pub sources: Vec<String>,
     pub hidden: Vec<LibraryId>,
+    pub characters: Vec<Character>,
+    pub party: Vec<CharacterSummary>,
 }
 
 impl Campaign {
@@ -258,6 +270,8 @@ impl Campaign {
             notes: Vec::new(),
             sources: vec![SRD.to_owned(), LIBRARY.to_owned()],
             hidden: Vec::new(),
+            characters: Vec::new(),
+            party: Vec::new(),
         }
     }
 
@@ -310,7 +324,35 @@ impl Campaign {
             }
             CampaignEvent::SourcesChanged { sources } => self.sources = sources.clone(),
             CampaignEvent::EntryHidden { id, hidden } => set_hidden(&mut self.hidden, *id, *hidden),
+            CampaignEvent::CharacterSaved { character } => {
+                self.party.retain(|p| p.id != character.id);
+                match self
+                    .characters
+                    .binary_search_by_key(&character.id, |c| c.id)
+                {
+                    Ok(i) => self.characters[i] = (**character).clone(),
+                    Err(i) => self.characters.insert(i, (**character).clone()),
+                }
+            }
+            CampaignEvent::CharacterDeleted { id } => {
+                self.characters.retain(|c| c.id != *id);
+                self.party.retain(|p| p.id != *id);
+            }
+            CampaignEvent::PartyMemberSaved { summary } => {
+                self.characters.retain(|c| c.id != summary.id);
+                match self.party.binary_search_by_key(&summary.id, |p| p.id) {
+                    Ok(i) => self.party[i] = summary.clone(),
+                    Err(i) => self.party.insert(i, summary.clone()),
+                }
+            }
         }
+    }
+
+    pub fn character(&self, id: CharacterId) -> Option<&Character> {
+        self.characters
+            .binary_search_by_key(&id, |c| c.id)
+            .ok()
+            .map(|i| &self.characters[i])
     }
 
     pub fn note(&self, id: NoteId) -> Option<&Note> {

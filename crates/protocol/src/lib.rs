@@ -6,6 +6,7 @@ pub mod http;
 
 use core::fmt;
 
+use beholder_core::character::CharacterOp;
 use beholder_core::library::LibraryOp;
 use beholder_core::{
     Campaign, CampaignEvent, CampaignId, CampaignOp, CampaignTitle, CommandId, InviteCode, NoteOp,
@@ -13,7 +14,7 @@ use beholder_core::{
 };
 use serde::{Deserialize, Serialize};
 
-pub const PROTOCOL_VERSION: u16 = 4;
+pub const PROTOCOL_VERSION: u16 = 5;
 
 pub const PROTOCOL_HEADER: &str = "x-beholder-protocol";
 
@@ -76,6 +77,10 @@ pub enum CommandKind {
     },
     Library {
         op: LibraryOp,
+    },
+    Character {
+        campaign_id: CampaignId,
+        op: CharacterOp,
     },
 }
 
