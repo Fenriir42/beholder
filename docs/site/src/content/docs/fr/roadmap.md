@@ -29,13 +29,11 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 - Même nom dans plusieurs sources : affiché une fois selon la priorité, les autres versions sous « Aussi dans ».
 - Écran de crédits avec toutes les mentions de licence.
 - **Bibliothèque du serveur :** les entrées propres à votre groupe (création maison et contenu des livres que vous possédez), partagées sur votre serveur, avec un éditeur par type d'entrée, l'import/export JSON et YAML et la priorité sur les autres sources. Le MJ peut masquer une entrée aux joueurs d'une campagne.
+- **Import par collage :** coller une entrée ou un chapitre entier de sorts, monstres, objets magiques, dons ou sous-classes, relire les entrées détectées avec les doublons signalés, modifier n'importe laquelle et en accepter tout ou partie.
 
 ## En cours
 
 - **Gros imports :** des dizaines de milliers d'entrées par fichier, envoyées par lots, avec l'option de remplacer les entrées déjà présentes. Un convertisseur transforme les fichiers JSON de `dnd-data` en fichiers de bibliothèque, et le format des fichiers de bibliothèque est une norme documentée, avec un schéma JSON.
-
-### Phase 3, suite
-- **Import par collage :** coller un profil ou un chapitre entier, relire les entrées détectées, en accepter tout ou partie.
 
 ## Prévu
 

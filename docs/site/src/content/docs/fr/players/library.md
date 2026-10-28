@@ -18,6 +18,24 @@ Dans le **Compendium**, cliquez sur **Nouvelle entrée**. Choisissez le **type**
 
 Tout utilisateur du serveur peut ajouter des entrées. Une entrée peut être modifiée ou supprimée par son auteur et par toute personne MJ d'une campagne. Si quelqu'un d'autre a enregistré l'entrée pendant que vous la modifiiez, votre enregistrement est refusé et Beholder vous demande de la recharger d'abord : personne n'écrase les modifications d'un autre sans le savoir.
 
+## Coller depuis un livre ou une page
+
+Pour ajouter des entrées d'un livre ou d'une page que vous possédez, cliquez sur **Coller** dans le **Compendium**. Indiquez une seule fois le **livre** et la **version des règles** pour tout le collage, puis collez une entrée ou une section entière, par exemple tous les sorts d'un chapitre, et cliquez sur **Lire les entrées**.
+
+Beholder découpe le texte en entrées. Chaque entrée commence par son nom sur une ligne, suivi d'une ligne qu'il reconnaît :
+
+| Type | Ligne d'en-tête après le nom |
+|---|---|
+| Sort | « Level 3 Evocation (Sorcerer, Wizard) », « 3rd-level evocation » ou « Evocation Cantrip » |
+| Monstre | « Small Fey (Goblinoid), Chaotic Neutral » ; le facteur de puissance vient de la ligne « CR » ou « Challenge » |
+| Objet magique | « Wondrous Item, Uncommon (Requires Attunement) », ou une ligne « Rarity » juste en dessous |
+| Don | « Origin Feat », « General Feat (Prerequisite: …) » ou « Prerequisite: … » |
+| Sous-classe | un nom écrit « Sorcerer: Storm Sorcery », ou une ligne comme « Fighter subclass: … » |
+
+Le reste de chaque entrée devient du texte mis en forme : les lignes courtes suivies d'un paragraphe deviennent des titres, les paragraphes « Nom. Texte » ont leur nom en gras, les statistiques, caractéristiques et sections des monstres (Actions, Reactions…) sont présentées comme dans le SRD, les puces deviennent des listes et les lignes séparées par des tabulations deviennent des tables. Le texte qui ne correspond à aucune entrée est gardé comme une seule entrée du **type si non détecté** choisi.
+
+Vous relisez ensuite la liste. Chaque entrée affiche ses champs, avec la mention **Vérifier les champs** quand quelque chose a été deviné (un monstre sans facteur de puissance, une entrée du type par défaut) ou **Déjà dans la bibliothèque** quand une entrée de même type, nom, livre et version des règles existe. Les doublons sont décochés au départ. **Aperçu** affiche le texte mis en forme, et **Modifier** ouvre l'entrée dans l'éditeur ; l'enregistrer l'ajoute tout de suite. Cliquez ensuite sur **Accepter la sélection** ou **Tout accepter**. Cochez **Remplacer les entrées déjà dans la bibliothèque** pour écraser les doublons que vous avez le droit de modifier.
+
 ## Priorité sur les autres sources
 
 En cas de nom en double, les entrées de la bibliothèque passent en premier : si votre bibliothèque contient « Fireball », le compendium affiche la vôtre, la version du SRD étant listée sous **Aussi dans**.

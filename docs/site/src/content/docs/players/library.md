@@ -18,6 +18,24 @@ In the **Compendium**, click **New entry**. Choose the **type** (spell, monster,
 
 Anyone on the server can add entries. An entry can be edited or deleted by its author, and by anyone who is DM of a campaign. If someone else saved the entry while you were editing it, your save is refused and Beholder asks you to reload it first, so nobody's changes are silently overwritten.
 
+## Pasting from a book or page
+
+To add entries from a book or page you own, click **Paste** in the **Compendium**. Set the **book** and **rules version** once for the whole paste, then paste one entry or a whole section, such as every spell in a chapter, and click **Read entries**.
+
+Beholder splits the text into entries. Each entry starts with its name on its own line, followed by a line it recognises:
+
+| Type | Header line after the name |
+|---|---|
+| Spell | "Level 3 Evocation (Sorcerer, Wizard)", "3rd-level evocation" or "Evocation Cantrip" |
+| Monster | "Small Fey (Goblinoid), Chaotic Neutral"; the challenge rating comes from the "CR" or "Challenge" line |
+| Magic item | "Wondrous Item, Uncommon (Requires Attunement)", or a "Rarity" line just below |
+| Feat | "Origin Feat", "General Feat (Prerequisite: …)" or "Prerequisite: …" |
+| Subclass | a name written "Sorcerer: Storm Sorcery", or a line like "Fighter subclass: …" |
+
+The rest of each entry becomes formatted text: short lines followed by a paragraph become headings, "Name. Text" paragraphs get a bold name, monster statistics, ability scores and sections (Actions, Reactions…) are laid out like the SRD, bullets become lists, and tab-separated lines become tables. Text that matches no entry is kept as one entry of the **kind when it can't be detected** you chose.
+
+You then review the list. Each entry shows its fields, and is marked **Check the fields** when something was guessed (a monster without a challenge rating, an entry of the fallback kind) or **Already in the library** when an entry with the same type, name, book and rules version exists. Duplicates start unticked. **Preview** shows the formatted text, and **Edit** opens the entry in the editor; saving it there adds it right away. Then click **Accept selected** or **Accept all**. Tick **Replace entries already in the library** to overwrite the duplicates you're allowed to edit.
+
 ## Priority over other sources
 
 Library entries come first when names clash: if your library has a "Fireball", the compendium shows yours, with the SRD version listed under **Also in**.

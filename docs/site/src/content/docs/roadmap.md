@@ -29,13 +29,11 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 - Same name in several sources: shown once by priority, with the other versions under "Also in".
 - Credits screen with every licence notice.
 - **Server library:** your group's own entries (homebrew and content from books you own), shared on your server, with an editor per entry type, JSON and YAML import and export, and priority over other sources. The DM can hide single entries from a campaign's players.
+- **Paste import:** paste one entry or a whole chapter of spells, monsters, magic items, feats or subclasses, review the parsed entries with duplicates flagged, edit any of them, and accept some or all.
 
 ## In progress
 
 - **Large imports:** tens of thousands of entries per file, sent in batches, with the option to replace entries already in the library. A converter turns the `dnd-data` JSON files into library files, and the library file format is a documented standard with a JSON Schema.
-
-### Phase 3, continued
-- **Paste import:** paste a stat block or a whole chapter, review the parsed entries, accept some or all.
 
 ## Planned
 
