@@ -34,6 +34,7 @@ uuid_id!(CommandId);
 uuid_id!(NoteId);
 uuid_id!(LibraryId);
 uuid_id!(ImportId);
+uuid_id!(CharacterId);
 
 impl CommandId {
     pub fn unix_millis(&self) -> Option<u64> {
