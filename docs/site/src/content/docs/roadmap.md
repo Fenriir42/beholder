@@ -33,12 +33,12 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 
 ## In progress
 
-- **Large imports:** tens of thousands of entries per file, sent in batches, with the option to replace entries already in the library, and undoing a whole import in one action, keeping entries edited since. A converter turns the `dnd-data` JSON files into library files, and the library file format is a documented standard with a JSON Schema.
+- **Large imports:** tens of thousands of entries per file, sent in batches, with the option to replace entries already in the library, undoing a whole import in one action (keeping entries edited since), and JSON files of any shape read through saved, exportable mapping profiles with a summary review before importing. A converter turns the `dnd-data` JSON files into library files, and the library file format is a documented standard with a JSON Schema.
 
 ## Planned
 
 ### Phase 3, remaining
-- **Bulk import, rest:** JSON files of any shape read through mapping profiles, and the setup-time import from an external repository.
+- **Bulk import, rest:** the setup-time import from an external repository.
 
 ### Phase 4: Character sheets
 - Assisted sheets: the app computes modifiers, proficiency, saves, skills, spell slots and AC; you choose species, class, background and feats from the compendium.
@@ -80,7 +80,7 @@ Measured on Linux, release builds.
 | Artifact | Size |
 |---|---:|
 | Interface (WASM, after `wasm-opt -Oz`) | 1.05 MB (426 KB gzipped) |
-| Desktop app binary (Linux) | 5.7 MB |
+| Desktop app binary (Linux) | 6.1 MB |
 | SRD 5.2 download | 200 KB |
 | All 20 Open5e books | 1.6 MB |
 | Server RAM, idle / peak (40 MP image upload) | 6 MB / 157 MB |

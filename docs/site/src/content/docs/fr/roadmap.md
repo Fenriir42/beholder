@@ -33,12 +33,12 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 
 ## En cours
 
-- **Gros imports :** des dizaines de milliers d'entrées par fichier, envoyées par lots, avec l'option de remplacer les entrées déjà présentes, et l'annulation d'un import entier en une action, en conservant les entrées modifiées depuis. Un convertisseur transforme les fichiers JSON de `dnd-data` en fichiers de bibliothèque, et le format des fichiers de bibliothèque est une norme documentée, avec un schéma JSON.
+- **Gros imports :** des dizaines de milliers d'entrées par fichier, envoyées par lots, avec l'option de remplacer les entrées déjà présentes, l'annulation d'un import entier en une action (en conservant les entrées modifiées depuis), et les fichiers JSON de toute structure lus via des profils de correspondance enregistrés et exportables, avec un résumé avant l'import. Un convertisseur transforme les fichiers JSON de `dnd-data` en fichiers de bibliothèque, et le format des fichiers de bibliothèque est une norme documentée, avec un schéma JSON.
 
 ## Prévu
 
 ### Phase 3, reste
-- **Import en masse, la suite :** fichiers JSON de toute structure lus via des profils de correspondance, et import depuis un dépôt externe à l'installation du serveur.
+- **Import en masse, la suite :** import depuis un dépôt externe à l'installation du serveur.
 
 ### Phase 4 : fiches de personnage
 - Fiches assistées : l'application calcule modificateurs, maîtrise, sauvegardes, compétences, emplacements de sorts et CA ; vous choisissez espèce, classe, historique et dons dans le compendium.
@@ -80,7 +80,7 @@ Mesurées sous Linux, compilations de production.
 | Élément | Taille |
 |---|---:|
 | Interface (WASM, après `wasm-opt -Oz`) | 1,05 Mo (426 Ko compressé) |
-| Application de bureau (binaire Linux) | 5,7 Mo |
+| Application de bureau (binaire Linux) | 6,1 Mo |
 | Téléchargement du SRD 5.2 | 200 Ko |
 | Les 20 livres Open5e | 1,6 Mo |
 | RAM du serveur, au repos / en pointe (envoi d'une image de 40 MP) | 6 Mo / 157 Mo |

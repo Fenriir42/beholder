@@ -53,6 +53,14 @@ The DM can also hide single entries from the players of one campaign: open the e
 
 The format is described in [Library file format](/dev/library-format/). Imports of tens of thousands of entries are fine: they're sent in batches, and a banner shows how many are still on their way to the server.
 
+### Importing JSON of any shape
+
+For JSON files from other tools or websites, click **Import any JSON** and pick the file. Beholder finds the list of entries in it and suggests a **mapping**: which keys hold the name, the text, the entry type, the book, and fields like a spell's level or a monster's challenge rating (keys inside objects are written with a dot, like `properties.Level`). Each type value found in the file (for example "Spells" or "Monsters") is matched to a Beholder type, which you can change, along with a type to use when it's unknown. A preview of the first 20 entries updates as you change the mapping.
+
+Click **Check the whole file** to read it once without importing: you get the number of entries per type and per book, how many are already in the library, how many are only partly mapped, and which ones can't be read. Then click **Import**, optionally replacing the duplicates you're allowed to edit. Entries are never refused because a field is missing: the field gets "Unknown" and you can fix it later. Keys you didn't map are added to the end of the text. Only entries without a name are skipped. Large files (100 MB and more) are read from disk as they're imported, and the import can be undone like any other.
+
+Give the mapping a name and click **Save profile** to reuse it with similar files. **Export profile** saves it to your Downloads folder so others can **Import a profile**.
+
 ### Undoing an import
 
 Every file import and every paste is recorded as one import. Right after it, an **Undo this import** button appears; older imports are listed under **Recent imports** with who made them, when, and how many entries they wrote. Undoing removes the entries the import added and puts back the previous text of the entries it replaced, in one action and for everyone. Entries someone edited or deleted after the import are left as they are, and the list shows how many were kept. You can undo your own imports; a DM of any campaign can undo anyone's.
