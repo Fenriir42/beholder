@@ -30,3 +30,7 @@ The files also use their own layout, which the importer refuses. SPEC §5.2 puts
 - A server restart rebuilds the library bundle on the first index request, which takes a few seconds for 34,000 entries, done once.
 - Converted descriptions stay partly flattened where no structure could be detected.
 - The rest of slice 3e remains: mapping profiles for arbitrary JSON, undoable import batches, and the setup-time import from a git repository.
+
+## Addendum: replacing on import
+
+SPEC §5.2 asks that duplicates can be skipped or replaced, and re-importing an improved conversion was otherwise impossible. `LibraryOp::UpsertMany` (appended) carries creates (base version 0) and updates (the entry's current version) in one batch, with the same per-item rules as single saves (author or any DM; stale versions refused) and all-or-nothing validation. The client replaces only duplicates the user may edit and counts the rest as "not yours".

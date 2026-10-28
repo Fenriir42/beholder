@@ -95,8 +95,40 @@ La commande lit ces fichiers dans `data/` et écrit un fichier de bibliothèque 
 | `spells.json` | `spell` | `Level` (ou « cantrip »), `School`, `Classes` ou le « (Ranger, Wizard) » en début de description, rituel et concentration d'après le temps d'incantation et la durée |
 | `monsters.json` | `monster` | `Challenge Rating` (de 0 à 30, sinon le « Challenge X » de la description, sinon 0), `Size` (la première), `Type` |
 | `items.json` | `magic-item`, ou `equipment` sans vraie rareté | `Item Type`, `Item Rarity`, `Requires Attunement` |
-| `classes.json`, `species.json`, `backgrounds.json` | `class`, `species`, `background` | aucun |
+| `classes.json` | `class`, et `subclass` (voir plus bas) | aucun pour les classes ; `class` pour les sous-classes |
+| `species.json`, `backgrounds.json` | `species`, `background` | aucun |
 
 Chaque entrée garde son `book`. La version des règles est `2024` quand le nom du livre contient 2024, `level-up` pour les livres Level Up, `2014` sinon.
 
-Les descriptions de ces fichiers ont perdu leurs retours à la ligne. Le convertisseur rétablit ce qu'il détecte de façon fiable : titres de sections des monstres (Traits, Actions, Legendary Actions…), étiquettes d'actions et de traits en gras écrites « Nom . texte », lignes d'en-tête des sorts (Casting Time, Range, Components, Duration, Classes) et paragraphes de niveau supérieur. Le reste reste en un seul paragraphe.
+### Classes et sous-classes
+
+`classes.json` ne contient pas d'entrées de sous-classes séparées, et le dépôt d'origine n'a pas de fichier de sous-classes. Ce que contient le fichier :
+
+| Classes tirées de | Contenu des sous-classes |
+|---|---|
+| Player's Handbook (2024), Free Basic Rules (2024) | Aucun : le texte s'arrête au niveau 20. |
+| Player's Handbook (2014) | Seulement les noms, listés à la fin de chaque classe. |
+| Free Basic Rules (2014) | Une sous-classe par classe avec ses règles complètes, ajoutée à la suite de la classe. |
+| Fateforge | Descriptions vides. |
+| Autres livres | Leurs propres classes ; un éventuel texte de sous-classe reste dans la classe. |
+
+Le convertisseur, donc :
+
+- fait de chaque entrée de `classes.json` une `class` ;
+- sépare les 12 sous-classes des Free Basic Rules (2014) en entrées `subclass` avec leur `class` parente et leur livre (Path of the Berserker, College of Lore, Life Domain, Circle of the Land, Champion, Way of the Open Hand, Oath of Devotion, Hunter, Thief, Draconic Bloodline, The Fiend, School of Evocation). Une sous-classe commence à son nom, trouvé après les premiers 40 % du texte de la classe, non précédé de « the », « a » ou « of », et suivi d'un mot en majuscule. La classe garde son titre de groupe (« Primal Paths ») et un renvoi vers la sous-classe ;
+- transforme les listes de noms du Player's Handbook (2014) en section « Subclasses », regroupée par livre, qui précise que seuls les noms sont inclus.
+
+Les règles de sous-classes absentes des fichiers peuvent être ajoutées avec l'éditeur de l'application.
+
+### Mise en forme du texte
+
+Les descriptions de ces fichiers ont perdu leurs retours à la ligne et gardent des restes de l'extraction. Le convertisseur :
+
+- retire le paragraphe Roll20 « Free Basic Rules only contain a fraction… », les caractères invisibles de jonction et les espaces avant les virgules ;
+- transforme les étiquettes écrites « Nom . texte » ou « Nom : texte » en paragraphes en gras, mais garde les étiquettes des lignes d'attaque (Hit, Miss, Melee Weapon Attack…) en ligne, en italique ;
+- ajoute les titres de sections des monstres (Traits, Actions, Bonus Actions, Reactions, Legendary Actions…) ;
+- transforme les aptitudes de classe en titres, pour les deux présentations : « Level 3: Barbarian Subclass » (2024) et « Danger Sense At 2nd level… » (2014) ;
+- sépare les lignes d'en-tête des sorts (Casting Time, Range, Components, Duration, Classes) et les paragraphes de niveau supérieur ;
+- retire la ligne de nom et de type que les objets répètent au début de leur texte.
+
+Le texte sans structure détectable reste en un seul paragraphe.

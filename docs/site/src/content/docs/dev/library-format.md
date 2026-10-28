@@ -95,8 +95,40 @@ It reads those files from `data/` and writes one library file per category to `d
 | `spells.json` | `spell` | `Level` (or "cantrip"), `School`, `Classes` or the "(Ranger, Wizard)" at the start of the description, ritual and concentration from the casting time and duration |
 | `monsters.json` | `monster` | `Challenge Rating` (0 to 30, else the description's "Challenge X", else 0), `Size` (the first one), `Type` |
 | `items.json` | `magic-item`, or `equipment` without a real rarity | `Item Type`, `Item Rarity`, `Requires Attunement` |
-| `classes.json`, `species.json`, `backgrounds.json` | `class`, `species`, `background` | none |
+| `classes.json` | `class`, and `subclass` (see below) | none for classes; `class` for subclasses |
+| `species.json`, `backgrounds.json` | `species`, `background` | none |
 
 Every entry keeps its `book`. The rules version is `2024` when the book name contains 2024, `level-up` for Level Up books, `2014` otherwise.
 
-The descriptions in these files have lost their line breaks. The converter restores what it can detect reliably: monster section headings (Traits, Actions, Legendary Actions…), bold action and trait labels written as "Name . text", spell header lines (Casting Time, Range, Components, Duration, Classes) and higher-level paragraphs. The rest stays as one paragraph.
+### Classes and subclasses
+
+`classes.json` has no separate subclass entries, and the upstream repository has no subclass file. What the file contains:
+
+| Classes from | Subclass content |
+|---|---|
+| Player's Handbook (2024), Free Basic Rules (2024) | None: the text ends at level 20. |
+| Player's Handbook (2014) | Only the names, listed at the end of each class. |
+| Free Basic Rules (2014) | One subclass per class with its full rules, appended to the class. |
+| Fateforge | Empty descriptions. |
+| Other books | Their own classes; any subclass text stays inside the class. |
+
+So the converter:
+
+- turns every `classes.json` entry into a `class`;
+- splits the 12 subclasses of the Free Basic Rules (2014) out into `subclass` entries with their parent `class` and book (Path of the Berserker, College of Lore, Life Domain, Circle of the Land, Champion, Way of the Open Hand, Oath of Devotion, Hunter, Thief, Draconic Bloodline, The Fiend, School of Evocation). A subclass starts at its name, found after the first 40% of the class text, not preceded by "the", "a" or "of", and followed by a capitalised word. The class keeps its group heading ("Primal Paths") and a pointer to the subclass;
+- turns the 2014 Player's Handbook name lists into a "Subclasses" section, grouped by book, that says only the names are included.
+
+Subclass rules that aren't in the files can be added in the app's editor.
+
+### Text formatting
+
+The descriptions in these files have lost their line breaks and carry scraping leftovers. The converter:
+
+- removes the Roll20 "Free Basic Rules only contain a fraction…" paragraph, invisible word-joiner characters and spaces before commas;
+- turns labels written "Name . text" or "Name : text" into bold paragraphs, but keeps attack-line labels (Hit, Miss, Melee Weapon Attack…) inline in italics;
+- adds monster section headings (Traits, Actions, Bonus Actions, Reactions, Legendary Actions…);
+- turns class features into headings, for both layouts: "Level 3: Barbarian Subclass" (2024) and "Danger Sense At 2nd level…" (2014);
+- splits spell header lines (Casting Time, Range, Components, Duration, Classes) and higher-level paragraphs;
+- drops the name and type line items repeat at the start of their text.
+
+Text where no structure can be detected stays as one paragraph.

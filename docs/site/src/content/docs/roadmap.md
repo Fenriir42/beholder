@@ -13,7 +13,7 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 - Campaigns: create, join with an invite code, regenerate the code, cover image, title.
 - Campaign rules: whether the DM can read players' private notes, and what players see in combat.
 - Sync built for bad connections: changes saved on your computer first and sent when possible, never applied twice; works offline from the local cache; connection pill and banner.
-- English and French interface, switchable at any time.
+- English and French interface, switchable at any time; the whole interface scales with Ctrl + and Ctrl −.
 - Server image, Docker Compose with Caddy, installers built by CI.
 
 ### Phase 2: Notes and handouts
@@ -32,7 +32,7 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 
 ## In progress
 
-- **Large imports:** tens of thousands of entries per file, sent in batches. A converter turns the `dnd-data` JSON files into library files, and the library file format is a documented standard with a JSON Schema.
+- **Large imports:** tens of thousands of entries per file, sent in batches, with the option to replace entries already in the library. A converter turns the `dnd-data` JSON files into library files, and the library file format is a documented standard with a JSON Schema.
 
 ### Phase 3, continued
 - **Paste import:** paste a stat block or a whole chapter, review the parsed entries, accept some or all.
@@ -72,6 +72,7 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 - Updating the app can reset its local cache, dropping changes still queued offline at that moment.
 - Library export saves to the Downloads folder; there's no save dialog yet.
 - Converted `dnd-data` descriptions keep their flattened text where no structure could be detected.
+- The `dnd-data` files hold almost no subclass rules: only the 12 Free Basic Rules subclasses become subclass entries.
 - Hiding single entries works for the server library only, not for the SRD or Open5e books.
 
 ## Sizes

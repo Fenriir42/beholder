@@ -13,7 +13,7 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 - Campagnes : création, invitation par code, nouveau code, image de couverture, titre.
 - Règles de campagne : le MJ peut-il lire les notes privées des joueurs, et ce que les joueurs voient en combat.
 - Synchronisation pensée pour les mauvaises connexions : modifications enregistrées sur votre ordinateur puis envoyées dès que possible, jamais appliquées deux fois ; fonctionnement hors ligne depuis le cache local ; pastille et bandeau de connexion.
-- Interface en anglais et en français, modifiable à tout moment.
+- Interface en anglais et en français, modifiable à tout moment ; toute l'interface s'agrandit avec Ctrl + et Ctrl −.
 - Image serveur, Docker Compose avec Caddy, installateurs construits par la CI.
 
 ### Phase 2 : notes et documents
@@ -32,7 +32,7 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 
 ## En cours
 
-- **Gros imports :** des dizaines de milliers d'entrées par fichier, envoyées par lots. Un convertisseur transforme les fichiers JSON de `dnd-data` en fichiers de bibliothèque, et le format des fichiers de bibliothèque est une norme documentée, avec un schéma JSON.
+- **Gros imports :** des dizaines de milliers d'entrées par fichier, envoyées par lots, avec l'option de remplacer les entrées déjà présentes. Un convertisseur transforme les fichiers JSON de `dnd-data` en fichiers de bibliothèque, et le format des fichiers de bibliothèque est une norme documentée, avec un schéma JSON.
 
 ### Phase 3, suite
 - **Import par collage :** coller un profil ou un chapitre entier, relire les entrées détectées, en accepter tout ou partie.
@@ -72,6 +72,7 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 - Une mise à jour de l'application peut réinitialiser son cache local et perdre les modifications encore en attente hors ligne à ce moment.
 - L'export de la bibliothèque enregistre dans le dossier Téléchargements ; il n'y a pas encore de fenêtre d'enregistrement.
 - Les descriptions converties depuis `dnd-data` gardent leur texte aplati quand aucune structure n'a pu être détectée.
+- Les fichiers `dnd-data` ne contiennent presque pas de règles de sous-classes : seules les 12 sous-classes des Free Basic Rules deviennent des entrées de sous-classe.
 - Masquer une entrée ne fonctionne que pour la bibliothèque du serveur, pas pour le SRD ni les livres Open5e.
 
 ## Tailles
