@@ -16,6 +16,7 @@ use crate::session::Shell;
 
 fn main() {
     let result = tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
         .register_asynchronous_uri_scheme_protocol("img", |ctx, request, responder| {
             images::handle(
                 ctx.app_handle().clone(),
@@ -32,6 +33,7 @@ fn main() {
                 config: Mutex::new(Config::default()),
                 secrets: Secrets::init(),
                 session: Mutex::new(None),
+                bulk: Mutex::new(None),
             };
             let config = Config::load(&shell.config_dir);
             *session::lock(&shell.config) = config.clone();
@@ -82,6 +84,16 @@ fn main() {
             commands::library_accept,
             commands::library_imports,
             commands::library_undo_import,
+            commands::bulk_open,
+            commands::bulk_values,
+            commands::bulk_preview,
+            commands::bulk_scan,
+            commands::bulk_import,
+            commands::mapping_profiles,
+            commands::mapping_profile_save,
+            commands::mapping_profile_delete,
+            commands::mapping_profile_export,
+            commands::mapping_profile_import,
             commands::compendium_facets,
         ])
         .run(tauri::generate_context!());

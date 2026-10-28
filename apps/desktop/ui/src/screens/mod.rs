@@ -1,4 +1,5 @@
 mod auth;
+mod bulk;
 mod campaign;
 mod compendium;
 mod entry_editor;

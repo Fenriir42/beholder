@@ -22,6 +22,12 @@ pub struct Shell {
     pub config: Mutex<Config>,
     pub secrets: Secrets,
     pub session: Mutex<Option<Session>>,
+    pub bulk: Mutex<Option<BulkFile>>,
+}
+
+pub struct BulkFile {
+    pub path: PathBuf,
+    pub sample: Vec<serde_json::Value>,
 }
 
 #[derive(Clone)]

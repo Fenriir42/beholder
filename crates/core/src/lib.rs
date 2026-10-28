@@ -2,6 +2,7 @@ pub mod campaign;
 pub mod compendium;
 pub mod ids;
 pub mod library;
+pub mod mapping;
 pub mod note;
 pub mod paste;
 pub mod user;

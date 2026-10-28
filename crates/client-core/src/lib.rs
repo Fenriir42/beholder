@@ -3,9 +3,11 @@ pub mod compendium;
 pub mod connection;
 pub mod http;
 pub mod library_file;
+pub mod mapping;
 pub mod view;
 
 use std::collections::{HashMap, HashSet};
+use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, MutexGuard};
 
@@ -67,6 +69,31 @@ pub enum ClientError {
     File(#[from] FileError),
     #[error("http: {0}")]
     Http(#[from] http::HttpError),
+    #[error("mapping: {0}")]
+    Mapping(#[from] mapping::MappingError),
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct BulkScan {
+    pub total: usize,
+    pub kinds: Vec<(Kind, usize)>,
+    pub books: Vec<(String, usize)>,
+    pub duplicates: usize,
+    pub partial: usize,
+    pub invalid: Vec<String>,
+    pub invalid_count: usize,
+}
+
+fn open_json(path: &Path) -> Result<std::io::BufReader<std::fs::File>, ClientError> {
+    Ok(std::io::BufReader::new(
+        std::fs::File::open(path).map_err(mapping::MappingError::from)?,
+    ))
+}
+
+pub fn bulk_probe(path: &Path) -> Result<(mapping::Probe, mapping::Profile), ClientError> {
+    let probe = mapping::probe(open_json(path)?)?;
+    let profile = mapping::suggest(&probe);
+    Ok((probe, profile))
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -369,6 +396,118 @@ impl Client {
             op: LibraryOp::UndoImport { import },
         })?;
         Ok(())
+    }
+
+    pub fn bulk_preview(
+        &self,
+        sample: &[serde_json::Value],
+        profile: &mapping::Profile,
+    ) -> Result<Vec<PastePreview>, ClientError> {
+        let targets = self.library_targets()?;
+        Ok(sample
+            .iter()
+            .filter_map(|v| mapping::map(profile, v).ok())
+            .map(|m| {
+                let p = m.parsed;
+                let duplicate = targets.contains_key(&target_key(
+                    p.facets.kind(),
+                    p.name.as_str(),
+                    p.book.as_ref().map(|b| b.as_str()),
+                    Some(p.rules),
+                ));
+                PastePreview {
+                    entry: Pasted {
+                        name: p.name.as_str().to_owned(),
+                        facets: p.facets,
+                        text: p.text.as_str().to_owned(),
+                        complete: !m.partial,
+                    },
+                    duplicate,
+                }
+            })
+            .collect())
+    }
+
+    pub fn bulk_scan(
+        &self,
+        path: &Path,
+        profile: &mapping::Profile,
+    ) -> Result<BulkScan, ClientError> {
+        let targets = self.library_targets()?;
+        let mut scan = BulkScan::default();
+        let mut kinds: std::collections::BTreeMap<Kind, usize> = Default::default();
+        let mut books: HashMap<String, usize> = HashMap::new();
+        let found = mapping::each(open_json(path)?, &profile.entries, |v| {
+            scan.total += 1;
+            match mapping::map(profile, &v) {
+                Ok(m) => {
+                    let p = &m.parsed;
+                    *kinds.entry(p.facets.kind()).or_default() += 1;
+                    let book = p
+                        .book
+                        .as_ref()
+                        .map(|b| b.as_str().to_owned())
+                        .unwrap_or_default();
+                    *books.entry(book).or_default() += 1;
+                    if targets.contains_key(&target_key(
+                        p.facets.kind(),
+                        p.name.as_str(),
+                        p.book.as_ref().map(|b| b.as_str()),
+                        Some(p.rules),
+                    )) {
+                        scan.duplicates += 1;
+                    }
+                    if m.partial {
+                        scan.partial += 1;
+                    }
+                }
+                Err(why) => {
+                    scan.invalid_count += 1;
+                    if scan.invalid.len() < 50 {
+                        scan.invalid.push(format!("#{}: {why}", scan.total));
+                    }
+                }
+            }
+            true
+        })?;
+        if !found {
+            return Err(mapping::MappingError::NoEntries.into());
+        }
+        scan.kinds = kinds.into_iter().collect();
+        let mut books: Vec<(String, usize)> = books.into_iter().collect();
+        books.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
+        books.truncate(20);
+        scan.books = books;
+        Ok(scan)
+    }
+
+    pub fn bulk_import(
+        &self,
+        path: &Path,
+        profile: &mapping::Profile,
+        replace: bool,
+    ) -> Result<ImportSummary, ClientError> {
+        let file = open_json(path)?;
+        let (tx, rx) = std::sync::mpsc::sync_channel(512);
+        let profile = profile.clone();
+        let reader = std::thread::spawn(move || {
+            let mut n = 0usize;
+            mapping::each(file, &profile.entries, |v| {
+                n += 1;
+                let item = mapping::map(&profile, &v).map(|m| m.parsed);
+                tx.send((format!("#{n}"), item)).is_ok()
+            })
+        });
+        let mut summary = self.upsert(rx.into_iter(), replace)?;
+        match reader.join() {
+            Ok(Ok(true)) => {}
+            Ok(Ok(false)) => summary
+                .invalid
+                .push(mapping::MappingError::NoEntries.to_string()),
+            Ok(Err(e)) => summary.invalid.push(e.to_string()),
+            Err(_) => summary.invalid.push("the file reader stopped".into()),
+        }
+        Ok(summary)
     }
 
     fn library_targets(&self) -> Result<HashMap<TargetKey, Option<Target>>, ClientError> {

@@ -14,6 +14,7 @@ use wasm_bindgen::JsCast;
 
 use crate::app::{error_key, use_app};
 use crate::i18n::{I18n, use_i18n};
+use crate::screens::bulk::BulkImport;
 use crate::screens::entry_editor::EntryEditor;
 use crate::screens::paste::PasteImport;
 use crate::{icons, ipc, markdown};
@@ -231,6 +232,7 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
     });
     let editing = RwSignal::new(None::<Option<Entry>>);
     let pasting = RwSignal::new(false);
+    let bulk = RwSignal::new(false);
     let message = RwSignal::new(None::<String>);
     let invalid = RwSignal::new(Vec::<String>::new());
     let confirm_delete = RwSignal::new(false);
@@ -501,6 +503,7 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
     });
     let done_pasting = Callback::new(move |summary: Option<ImportSummary>| {
         pasting.set(false);
+        bulk.set(false);
         if let Some(s) = summary {
             message.set(Some(summary_message(i18n, &s)));
             last_import.set(s.import);
@@ -531,6 +534,9 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
     let pane = move || {
         if pasting.get() {
             return view! { <PasteImport on_done=done_pasting/> }.into_any();
+        }
+        if bulk.get() {
+            return view! { <BulkImport on_done=done_pasting/> }.into_any();
         }
         if let Some(existing) = editing.get() {
             return view! { <EntryEditor existing=existing on_done=done_editing/> }.into_any();
@@ -711,11 +717,14 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
                     </button>
                 </div>
                 <div class="toolbar">
-                    <button type="button" class="primary" on:click=move |_| { credits.set(false); pasting.set(false); editing.set(Some(None)); }>
+                    <button type="button" class="primary" on:click=move |_| { credits.set(false); pasting.set(false); bulk.set(false); editing.set(Some(None)); }>
                         {icons::plus()}{move || i18n.t("lib-new")}
                     </button>
-                    <button type="button" on:click=move |_| { credits.set(false); editing.set(None); pasting.set(true); }>
+                    <button type="button" on:click=move |_| { credits.set(false); editing.set(None); bulk.set(false); pasting.set(true); }>
                         {move || i18n.t("lib-paste")}
+                    </button>
+                    <button type="button" on:click=move |_| { credits.set(false); editing.set(None); pasting.set(false); bulk.set(true); }>
+                        {move || i18n.t("lib-bulk")}
                     </button>
                     <label class="btn file">
                         <span>{move || i18n.t("lib-import")}</span>

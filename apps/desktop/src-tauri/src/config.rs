@@ -1,6 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use beholder_core::UserId;
+use beholder_core::mapping::Profile;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
@@ -31,6 +32,25 @@ impl Config {
         )?;
         std::fs::rename(tmp, Self::path(dir))
     }
+}
+
+const PROFILES: &str = "mapping-profiles.json";
+
+pub fn load_profiles(dir: &Path) -> Vec<Profile> {
+    std::fs::read(dir.join(PROFILES))
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default()
+}
+
+pub fn save_profiles(dir: &Path, profiles: &[Profile]) -> std::io::Result<()> {
+    std::fs::create_dir_all(dir)?;
+    let tmp = dir.join("mapping-profiles.json.tmp");
+    std::fs::write(
+        &tmp,
+        serde_json::to_vec_pretty(profiles).map_err(std::io::Error::other)?,
+    )?;
+    std::fs::rename(tmp, dir.join(PROFILES))
 }
 
 pub fn normalize_server_url(input: &str) -> Option<String> {

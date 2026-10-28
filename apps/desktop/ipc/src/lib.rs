@@ -1,4 +1,5 @@
-use beholder_core::compendium::{Alternative, Entry, LicenseText, SourceMeta};
+use beholder_core::compendium::{Alternative, Entry, Kind, LicenseText, SourceMeta};
+use beholder_core::mapping::Profile;
 use beholder_core::paste::Pasted;
 use beholder_core::{Campaign, LibraryId, NoteId, User, UserId, ValidationError};
 use beholder_protocol::RejectReason;
@@ -76,6 +77,26 @@ pub struct Credits {
 pub struct PasteItem {
     pub entry: Pasted,
     pub duplicate: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BulkOpened {
+    pub file_name: String,
+    pub bytes: u64,
+    pub keys: Vec<String>,
+    pub sample: Vec<String>,
+    pub profile: Profile,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct BulkScanView {
+    pub total: usize,
+    pub kinds: Vec<(Kind, usize)>,
+    pub books: Vec<(String, usize)>,
+    pub duplicates: usize,
+    pub partial: usize,
+    pub invalid: Vec<String>,
+    pub invalid_count: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
