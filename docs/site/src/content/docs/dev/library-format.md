@@ -128,7 +128,12 @@ The descriptions in these files have lost their line breaks and carry scraping l
 - turns labels written "Name . text" or "Name : text" into bold paragraphs, but keeps attack-line labels (Hit, Miss, Melee Weapon Attack…) inline in italics;
 - adds monster section headings (Traits, Actions, Bonus Actions, Reactions, Legendary Actions…);
 - turns class features into headings, for both layouts: "Level 3: Barbarian Subclass" (2024) and "Danger Sense At 2nd level…" (2014);
-- splits spell header lines (Casting Time, Range, Components, Duration, Classes) and higher-level paragraphs;
-- drops the name and type line items repeat at the start of their text.
+- splits spell header lines (Casting Time, Range, Components, Duration, Classes) and higher-level paragraphs, fixes the scraped "Rang e :" and "Duration :" labels, italicises the "3rd-Level Evocation" line, and adds the header lines a spell only has in its properties;
+- drops the name and type line items repeat at the start of their text;
+- rebuilds class level tables as Markdown tables. A row starts with the level ("1st" or "1") followed by the proficiency bonus that level must have, and the features column is the only one holding words. Tables that stop early (the Essentials Kit goes to level 6) are kept. The 2024 card copy of each table (one "Level 1 Proficiency Bonus +2…" block per level) is removed, since the grid that follows holds the same data, and the 2024 spell slot grid becomes a table too;
+- turns the 2014 Hit Points, Proficiencies and Equipment block and the 2024 Core Traits block into headings with bullet lists, with one bullet per (a)/(b) equipment choice;
+- makes a heading of each feature named in the level table where its description starts, and bolds inline sub-sections: 2024 "Cantrips. You know…" labels and the fixed 2014 spellcasting parts (Spell Slots, Spellcasting Ability, Spellcasting Focus…);
+- turns d4 to d20 roll tables (personality traits, ideals, bonds, flaws…) into tables;
+- lists the opening traits of backgrounds (Skill Proficiencies, Languages, Equipment in 2014; Ability Scores, Feat, Equipment in 2024) and of 2024 species (Creature Type, Size, Speed), and makes a heading of the 2014 background "Feature:".
 
-Text where no structure can be detected stays as one paragraph.
+Text where no structure can be detected stays as one paragraph. Monster stat blocks lack AC, hit points, speed and ability scores in the source, so the converter can't restore them. A few third-party classes use table layouts it doesn't recognise; their tables stay as running text.

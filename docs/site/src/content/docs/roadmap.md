@@ -71,7 +71,7 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 - The OGL notices of Open5e books are generated from their metadata, not copied from the books.
 - Updating the app can reset its local cache, dropping changes still queued offline at that moment.
 - Library export saves to the Downloads folder; there's no save dialog yet.
-- Converted `dnd-data` descriptions keep their flattened text where no structure could be detected.
+- Converted `dnd-data` descriptions get their tables, headings and lists back where the layout is recognised; the rest stays flattened text. Monster stat blocks in those files have no AC, hit points or ability scores.
 - The `dnd-data` files hold almost no subclass rules: only the 12 Free Basic Rules subclasses become subclass entries.
 - Hiding single entries works for the server library only, not for the SRD or Open5e books.
 

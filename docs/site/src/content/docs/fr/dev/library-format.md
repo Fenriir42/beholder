@@ -128,7 +128,12 @@ Les descriptions de ces fichiers ont perdu leurs retours à la ligne et gardent 
 - transforme les étiquettes écrites « Nom . texte » ou « Nom : texte » en paragraphes en gras, mais garde les étiquettes des lignes d'attaque (Hit, Miss, Melee Weapon Attack…) en ligne, en italique ;
 - ajoute les titres de sections des monstres (Traits, Actions, Bonus Actions, Reactions, Legendary Actions…) ;
 - transforme les aptitudes de classe en titres, pour les deux présentations : « Level 3: Barbarian Subclass » (2024) et « Danger Sense At 2nd level… » (2014) ;
-- sépare les lignes d'en-tête des sorts (Casting Time, Range, Components, Duration, Classes) et les paragraphes de niveau supérieur ;
-- retire la ligne de nom et de type que les objets répètent au début de leur texte.
+- sépare les lignes d'en-tête des sorts (Casting Time, Range, Components, Duration, Classes) et les paragraphes de niveau supérieur, corrige les étiquettes abîmées « Rang e : » et « Duration : », met en italique la ligne « 3rd-Level Evocation » et ajoute les lignes d'en-tête qu'un sort n'a que dans ses propriétés ;
+- retire la ligne de nom et de type que les objets répètent au début de leur texte ;
+- reconstruit les tables de niveaux des classes en tables Markdown. Une ligne commence par le niveau (« 1st » ou « 1 ») suivi du bonus de maîtrise de ce niveau, et la colonne des aptitudes est la seule qui contient des mots. Les tables qui s'arrêtent avant (l'Essentials Kit va jusqu'au niveau 6) sont conservées. La copie en fiches de chaque table 2024 (un bloc « Level 1 Proficiency Bonus +2… » par niveau) est retirée, car la grille qui suit contient les mêmes données, et la grille des emplacements de sorts 2024 devient elle aussi une table ;
+- transforme le bloc 2014 Hit Points, Proficiencies et Equipment et le bloc 2024 Core Traits en titres et listes à puces, avec une puce par choix d'équipement (a)/(b) ;
+- crée un titre pour chaque aptitude nommée dans la table de niveaux, là où sa description commence, et met en gras les sous-parties en ligne : les étiquettes 2024 « Cantrips. You know… » et les parties fixes du lanceur de sorts 2014 (Spell Slots, Spellcasting Ability, Spellcasting Focus…) ;
+- transforme les tables de tirage d4 à d20 (traits de personnalité, idéaux, liens, défauts…) en tables ;
+- met en liste les traits du début des historiques (Skill Proficiencies, Languages, Equipment en 2014 ; Ability Scores, Feat, Equipment en 2024) et des espèces 2024 (Creature Type, Size, Speed), et crée un titre pour le « Feature: » des historiques 2014.
 
-Le texte sans structure détectable reste en un seul paragraphe.
+Le texte sans structure détectable reste en un seul paragraphe. Dans la source, les blocs de statistiques des monstres n'ont ni CA, ni points de vie, ni vitesse, ni caractéristiques : le convertisseur ne peut pas les recréer. Quelques classes tierces utilisent des présentations de tables qu'il ne reconnaît pas ; leurs tables restent en texte continu.

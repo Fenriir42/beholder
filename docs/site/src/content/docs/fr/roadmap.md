@@ -71,7 +71,7 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 - Les mentions OGL des livres Open5e sont générées à partir de leurs métadonnées, pas copiées des livres.
 - Une mise à jour de l'application peut réinitialiser son cache local et perdre les modifications encore en attente hors ligne à ce moment.
 - L'export de la bibliothèque enregistre dans le dossier Téléchargements ; il n'y a pas encore de fenêtre d'enregistrement.
-- Les descriptions converties depuis `dnd-data` gardent leur texte aplati quand aucune structure n'a pu être détectée.
+- Les descriptions converties depuis `dnd-data` retrouvent leurs tables, titres et listes quand la présentation est reconnue ; le reste reste en texte aplati. Dans ces fichiers, les blocs de statistiques des monstres n'ont ni CA, ni points de vie, ni caractéristiques.
 - Les fichiers `dnd-data` ne contiennent presque pas de règles de sous-classes : seules les 12 sous-classes des Free Basic Rules deviennent des entrées de sous-classe.
 - Masquer une entrée ne fonctionne que pour la bibliothèque du serveur, pas pour le SRD ni les livres Open5e.
 
