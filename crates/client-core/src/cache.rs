@@ -466,19 +466,26 @@ impl Cache {
             })
             .collect();
         let mut stmt = self.conn.prepare_cached(
-            "SELECT o.source, o.key FROM compendium_entries e
+            "SELECT o.source, o.key, o.facets, o.extra FROM compendium_entries e
              JOIN compendium_entries o ON o.kind = e.kind AND o.name = e.name COLLATE NOCASE
              WHERE e.source = ?1 AND e.key = ?2 AND NOT (o.source = ?1 AND o.key = ?2)",
         )?;
         let rows = stmt.query_map([source, key], |r| {
-            Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?))
+            Ok((
+                r.get::<_, String>(0)?,
+                r.get::<_, String>(1)?,
+                r.get::<_, Vec<u8>>(2)?,
+                r.get::<_, Vec<u8>>(3)?,
+            ))
         })?;
         let mut out: Vec<(u8, Alternative)> = Vec::new();
         for row in rows {
-            let (src, k) = row?;
+            let (src, k, facets, extra) = row?;
             if !allowed.contains(&src) {
                 continue;
             }
+            let (book, _, _): Extra = postcard::from_bytes(&extra)?;
+            let facets = postcard::from_bytes(&facets)?;
             let (name, p) = names.get(&src).cloned().unwrap_or_default();
             out.push((
                 p,
@@ -486,6 +493,8 @@ impl Cache {
                     source: src,
                     source_name: name,
                     key: k,
+                    book,
+                    facets,
                 },
             ));
         }

@@ -291,6 +291,8 @@ pub struct Alternative {
     pub source: String,
     pub source_name: String,
     pub key: String,
+    pub book: Option<String>,
+    pub facets: Facets,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

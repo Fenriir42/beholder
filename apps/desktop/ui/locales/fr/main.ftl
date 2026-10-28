@@ -515,3 +515,8 @@ fx-heal = Soigne { $roll }
 fx-two-handed =  ({ $roll } à deux mains)
 fx-two-handed-label = À deux mains :
 sheet-spell-actions = Sorts
+sheet-use-version = Utiliser cette version
+sheet-other-versions = { $count ->
+    [one] 1 autre version de ce nom
+   *[other] { $count } autres versions de ce nom
+}

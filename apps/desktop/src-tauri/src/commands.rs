@@ -351,6 +351,18 @@ pub fn compendium_resolve(
         .into_iter()
         .take(1000)
         .map(|item| {
+            if let Some((source, key)) = &item.entry {
+                let found = client
+                    .compendium_entry(source, key)
+                    .map_err(|_| IpcError::Storage)?;
+                return Ok(found.map(|(e, _)| Hit {
+                    source: source.clone(),
+                    key: key.clone(),
+                    name: e.name,
+                    facets: e.facets,
+                    others: 0,
+                }));
+            }
             let kinds: Vec<Option<Kind>> = if item.kinds.is_empty() {
                 vec![None]
             } else {
@@ -364,12 +376,20 @@ pub fn compendium_resolve(
                     hidden: hidden.clone(),
                     ..SearchQuery::default()
                 };
-                let hits = client.search(&query, 10).map_err(|_| IpcError::Storage)?;
-                if let Some(h) = hits
+                let hits: Vec<Hit> = client
+                    .search(&query, 25)
+                    .map_err(|_| IpcError::Storage)?
                     .into_iter()
-                    .find(|h| h.name.trim().eq_ignore_ascii_case(item.name.trim()))
-                {
-                    return Ok(Some(h));
+                    .filter(|h| h.name.trim().eq_ignore_ascii_case(item.name.trim()))
+                    .collect();
+                let same_level = |h: &&Hit| match (&h.facets, item.level) {
+                    (beholder_core::compendium::Facets::Spell { level, .. }, Some(want)) => {
+                        *level == want
+                    }
+                    _ => false,
+                };
+                if let Some(h) = hits.iter().find(same_level).or(hits.first()) {
+                    return Ok(Some(h.clone()));
                 }
             }
             Ok(None)

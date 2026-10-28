@@ -107,48 +107,52 @@ fn sources_of(campaign: CampaignId) -> (Vec<String>, Vec<String>) {
     })
 }
 
-fn lookups(ch: &Character) -> Vec<ResolveItem> {
-    let item = |name: &str, kinds: &[Kind]| ResolveItem {
-        name: name.to_owned(),
-        kinds: kinds.to_vec(),
+fn link_id(link: &Link) -> String {
+    match (&link.source, &link.key) {
+        (Some(s), Some(k)) => format!("{s}|{k}"),
+        _ => norm(&link.name),
+    }
+}
+
+fn lookups(ch: &Character) -> Vec<(String, ResolveItem)> {
+    let item = |link: &Link, kinds: &[Kind], level: Option<u8>| {
+        (
+            link_id(link),
+            ResolveItem {
+                name: link.name.clone(),
+                kinds: kinds.to_vec(),
+                level,
+                entry: link.source.clone().zip(link.key.clone()),
+            },
+        )
     };
     let mut out = Vec::new();
-    let unlinked = |l: &Link| l.key.is_none();
     out.extend(
         ch.spells
             .iter()
-            .map(|s| item(&s.spell.name, &[Kind::Spell])),
+            .map(|s| item(&s.spell, &[Kind::Spell], Some(s.level))),
     );
     out.extend(
         ch.inventory
             .iter()
-            .filter(|i| unlinked(&i.item))
-            .map(|i| item(&i.item.name, &[Kind::MagicItem, Kind::Equipment])),
+            .map(|i| item(&i.item, &[Kind::MagicItem, Kind::Equipment], None)),
     );
-    out.extend(
-        ch.feats
-            .iter()
-            .filter(|l| unlinked(l))
-            .map(|l| item(&l.name, &[Kind::Feat])),
-    );
+    out.extend(ch.feats.iter().map(|l| item(l, &[Kind::Feat], None)));
     out.extend(
         ch.features
             .iter()
-            .filter(|l| unlinked(l))
-            .map(|l| item(&l.name, &[Kind::Feature, Kind::Trait, Kind::Feat])),
+            .map(|l| item(l, &[Kind::Feature, Kind::Trait, Kind::Feat], None)),
     );
-    if let Some(l) = ch.species.as_ref().filter(|l| unlinked(l)) {
-        out.push(item(&l.name, &[Kind::Species]));
+    if let Some(l) = &ch.species {
+        out.push(item(l, &[Kind::Species], None));
     }
-    if let Some(l) = ch.background.as_ref().filter(|l| unlinked(l)) {
-        out.push(item(&l.name, &[Kind::Background]));
+    if let Some(l) = &ch.background {
+        out.push(item(l, &[Kind::Background], None));
     }
     for c in &ch.classes {
-        if unlinked(&c.class) {
-            out.push(item(&c.class.name, &[Kind::Class]));
-        }
-        if let Some(s) = c.subclass.as_ref().filter(|l| unlinked(l)) {
-            out.push(item(&s.name, &[Kind::Subclass]));
+        out.push(item(&c.class, &[Kind::Class], None));
+        if let Some(s) = &c.subclass {
+            out.push(item(s, &[Kind::Subclass], None));
         }
     }
     out
@@ -158,13 +162,13 @@ fn hit_for(resolved: &Resolved, link: &Link) -> Option<(String, String)> {
     match (&link.source, &link.key) {
         (Some(s), Some(k)) => Some((s.clone(), k.clone())),
         _ => resolved
-            .get(&norm(&link.name))
+            .get(&link_id(link))
             .map(|h| (h.source.clone(), h.key.clone())),
     }
 }
 
 fn facets_for(resolved: &Resolved, link: &Link) -> Option<Facets> {
-    resolved.get(&norm(&link.name)).map(|h| h.facets.clone())
+    resolved.get(&link_id(link)).map(|h| h.facets.clone())
 }
 
 fn spell_ability(ch: &Character, facets: Option<&Facets>) -> Ability {
@@ -265,7 +269,7 @@ pub fn Sheet(id: CampaignId, selected: RwSignal<Option<CharacterId>>) -> impl In
                 .map(lookups)
                 .unwrap_or_default()
                 .into_iter()
-                .filter(|i| !tried.with_value(|t| t.contains(&norm(&i.name))))
+                .filter(|(id, _)| !tried.with_value(|t| t.contains(id)))
                 .collect::<Vec<_>>()
         })
     });
@@ -275,7 +279,7 @@ pub fn Sheet(id: CampaignId, selected: RwSignal<Option<CharacterId>>) -> impl In
             return;
         }
         let (sources, hidden) = sources_of(id);
-        let names: Vec<String> = items.iter().map(|i| norm(&i.name)).collect();
+        let (names, items): (Vec<String>, Vec<ResolveItem>) = items.into_iter().unzip();
         tried.update_value(|t| t.extend(names.iter().cloned()));
         spawn_local(async move {
             let args = ResolveArgs {
@@ -1178,6 +1182,8 @@ fn EntryDetail(
     }
     let image_base = ctx.boot.with_untracked(|b| b.image_base.clone());
     let name = link.name.clone();
+    let sheet = StoredValue::new(ch.clone());
+    let name_for_pick = StoredValue::new(name.clone());
     let actions = {
         let ch = ch.clone();
         let name = name.clone();
@@ -1293,8 +1299,56 @@ fn EntryDetail(
             Some(None) => view! { <p class="muted">{move || i18n.t("sheet-not-in-compendium")}</p> }.into_any(),
             Some(Some(view)) => {
                 let html = markdown::render(&view.entry.text, &image_base);
+                let from = view.entry.book.clone().unwrap_or_else(|| view.source.name.clone());
+                let others = (owner != Owner::Other && !view.also.is_empty()).then(|| {
+                    let rows = view
+                        .also
+                        .iter()
+                        .map(|alt| {
+                            let label = format!(
+                                "{} · {}",
+                                alt.book.clone().unwrap_or_else(|| alt.source_name.clone()),
+                                meta(i18n, &alt.facets)
+                            );
+                            let (source, key) = (alt.source.clone(), alt.key.clone());
+                            let pick = move |_| {
+                                let target = name_for_pick.get_value();
+                                let (source, key) = (Some(source.clone()), Some(key.clone()));
+                                change_list(campaign, id, &sheet.get_value(), owner, move |c| {
+                                    let relink = |l: &mut Link| {
+                                        if l.name == target {
+                                            l.source = source.clone();
+                                            l.key = key.clone();
+                                        }
+                                    };
+                                    match owner {
+                                        Owner::Spell => c.spells.iter_mut().for_each(|s| relink(&mut s.spell)),
+                                        Owner::Item => c.inventory.iter_mut().for_each(|i| relink(&mut i.item)),
+                                        Owner::Feat => c.feats.iter_mut().for_each(relink),
+                                        Owner::Feature => c.features.iter_mut().for_each(relink),
+                                        Owner::Other => {}
+                                    }
+                                });
+                                panel.set(Panel::Closed);
+                            };
+                            view! {
+                                <li>
+                                    <span class="grow small">{label}</span>
+                                    <button type="button" class="ghost" on:click=pick>{move || i18n.t("sheet-use-version")}</button>
+                                </li>
+                            }
+                        })
+                        .collect_view();
+                    view! {
+                        <details class="license">
+                            <summary>{move || i18n.tr("sheet-other-versions", &[("count", view.also.len().into())])}</summary>
+                            <ul class="plain-list">{rows}</ul>
+                        </details>
+                    }
+                });
                 view! {
-                    <p class="muted small">{meta(i18n, &view.entry.facets)}" · "{view.source.name.clone()}</p>
+                    <p class="muted small">{meta(i18n, &view.entry.facets)}" · "{from}</p>
+                    {others}
                     <div class="prose" inner_html=html></div>
                 }
                 .into_any()

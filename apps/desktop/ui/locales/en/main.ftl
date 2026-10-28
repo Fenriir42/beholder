@@ -515,3 +515,8 @@ fx-heal = Heals { $roll }
 fx-two-handed =  ({ $roll } two-handed)
 fx-two-handed-label = Two-handed:
 sheet-spell-actions = Spells
+sheet-use-version = Use this version
+sheet-other-versions = { $count ->
+    [one] 1 other version with this name
+   *[other] { $count } other versions with this name
+}

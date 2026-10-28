@@ -78,6 +78,10 @@ pub struct Credits {
 pub struct ResolveItem {
     pub name: String,
     pub kinds: Vec<Kind>,
+    #[serde(default)]
+    pub level: Option<u8>,
+    #[serde(default)]
+    pub entry: Option<(String, String)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
