@@ -218,10 +218,10 @@ async fn library_entries_sync_fold_hide_and_import() {
         rules: RulesVersion::R2024,
     };
     a.library_save(draft("Our house fireball."), 0).unwrap();
-    wait_for("bob sees alice's entry", || {
+    wait_for("bob sees alice's entry next to the SRD's", || {
         search(&b, "fireball", vec![])
             .iter()
-            .any(|h| h.source == "library")
+            .any(|h| h.source == "library" && h.others == 1)
     })
     .await;
     let hit = search(&b, "fireball", vec![])
@@ -250,7 +250,9 @@ async fn library_entries_sync_fold_hide_and_import() {
     );
 
     let file = "format: beholder-library\nversion: 1\nentries:\n  - kind: condition\n    name: Dazed\n    text: Can't take reactions.\n  - kind: spell\n    name: Fireball\n    book: Table rules\n    level: 3\n    school: Evocation\n    text: dup\n  - kind: monster\n    name: Broken\n    text: no cr\n";
-    let summary = a.library_import(file.as_bytes(), FileFormat::Yaml).unwrap();
+    let summary = a
+        .library_import(file.as_bytes(), FileFormat::Yaml, false)
+        .unwrap();
     assert_eq!(summary.added, 1);
     assert_eq!(
         summary.skipped, 1,
@@ -261,6 +263,30 @@ async fn library_entries_sync_fold_hide_and_import() {
         search(&b, "dazed", vec![])
             .iter()
             .any(|h| h.source == "library")
+    })
+    .await;
+    let again = "format: beholder-library\nversion: 1\nentries:\n  - kind: condition\n    name: Dazed\n    text: Can't take reactions or bonus actions.\n";
+    let skipped = b
+        .library_import(again.as_bytes(), FileFormat::Yaml, false)
+        .unwrap();
+    assert_eq!(
+        (skipped.added, skipped.replaced, skipped.skipped),
+        (0, 0, 1)
+    );
+    let replaced = b
+        .library_import(again.as_bytes(), FileFormat::Yaml, true)
+        .unwrap();
+    assert_eq!(
+        replaced.replaced, 1,
+        "a DM may replace someone else's duplicate: {replaced:?}"
+    );
+    wait_for("alice sees the replaced text", || {
+        search(&a, "dazed", vec![])
+            .iter()
+            .any(|h| h.source == "library")
+            && a.library_export(FileFormat::Json)
+                .unwrap()
+                .contains("bonus actions")
     })
     .await;
     let exported = b.library_export(FileFormat::Json).unwrap();
@@ -342,7 +368,9 @@ async fn large_imports_are_batched_and_reach_late_clients() {
         ));
     }
     file.push_str("]}");
-    let summary = a.library_import(file.as_bytes(), FileFormat::Json).unwrap();
+    let summary = a
+        .library_import(file.as_bytes(), FileFormat::Json, false)
+        .unwrap();
     assert_eq!(summary.added, 1200);
     wait_for("alice receives the whole import", || {
         count_library(&a) == 1200
@@ -365,6 +393,7 @@ async fn large_imports_are_batched_and_reach_late_clients() {
         .library_import(
             b"{\"format\":\"beholder-library\",\"version\":1,\"entries\":[{\"kind\":\"condition\",\"name\":\"One more\",\"text\":\"x\"}]}",
             FileFormat::Json,
+            false,
         )
         .unwrap();
     assert_eq!(summary.added, 1);

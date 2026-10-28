@@ -102,6 +102,9 @@ pub enum LibraryOp {
     SaveMany {
         drafts: Vec<LibraryDraft>,
     },
+    UpsertMany {
+        items: Vec<(LibraryDraft, u32)>,
+    },
 }
 
 // Stored as postcard: only append variants, never change one (ADR-0003).
@@ -114,7 +117,9 @@ pub enum LibraryEvent {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ImportSummary {
     pub added: usize,
+    pub replaced: usize,
     pub skipped: usize,
+    pub not_yours: usize,
     pub invalid: Vec<String>,
 }
 

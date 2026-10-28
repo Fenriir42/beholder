@@ -486,9 +486,14 @@ pub async fn library_import(
         Some("yaml") => FileFormat::Yaml,
         _ => FileFormat::Json,
     };
+    let replace = request
+        .headers()
+        .get("replace")
+        .and_then(|v| v.to_str().ok())
+        == Some("1");
     let client = shell.session()?.client;
     let bytes = bytes.clone();
-    tauri::async_runtime::spawn_blocking(move || client.library_import(&bytes, format))
+    tauri::async_runtime::spawn_blocking(move || client.library_import(&bytes, format, replace))
         .await
         .map_err(|_| IpcError::Server)?
         .map_err(client_error)

@@ -234,7 +234,7 @@ lib-import = Import
 lib-export-json = Export JSON
 lib-export-yaml = Export YAML
 lib-exported = Saved to { $path }
-lib-imported = Import done: { $added } added, { $skipped } skipped as duplicates, { $invalid } invalid.
+lib-imported = Import done: { $added } added, { $replaced } replaced, { $skipped } skipped as duplicates, { $notyours } not yours to replace, { $invalid } invalid.
 lib-invalid-title = Entries that weren't imported
 lib-edit = Edit
 lib-delete = Delete entry
@@ -293,3 +293,4 @@ tmpl-spell =
     {"*"}*Using a Higher-Level Spell Slot.** Describe what changes.
 lib-reading = Reading the file…
 lib-importing = Sending { $count } imported entries to the server…
+lib-replace = Replace entries already in the library

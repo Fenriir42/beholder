@@ -101,6 +101,52 @@ pub(crate) fn decide(
                 })
                 .collect()
         }
+        LibraryOp::UpsertMany { items } => {
+            if items.is_empty() || items.len() > MAX_BATCH {
+                return Ok(Err(RejectReason::Invalid(ValidationError::Length)));
+            }
+            let dm = is_dm_anywhere(tx, actor)?;
+            let mut ids = HashSet::with_capacity(items.len());
+            let mut events = Vec::with_capacity(items.len());
+            for (d, base) in items {
+                if let Err(e) = d.check_facets() {
+                    return Ok(Err(RejectReason::Invalid(e)));
+                }
+                if !ids.insert(d.id) {
+                    return Ok(Err(RejectReason::IdConflict));
+                }
+                let (author, version) = match (load(tx, d.id)?, *base) {
+                    (None, 0) => (actor, 1),
+                    (None, _) | (Some((_, true)), _) => return Ok(Err(RejectReason::NotFound)),
+                    (Some(_), 0) => return Ok(Err(RejectReason::IdConflict)),
+                    (Some((current, false)), base) => {
+                        if !permissions::can_edit_library(actor, current.author, dm) {
+                            return Ok(Err(RejectReason::Forbidden));
+                        }
+                        if current.version != base {
+                            return Ok(Err(RejectReason::Stale));
+                        }
+                        let Some(next) = base.checked_add(1) else {
+                            return Ok(Err(RejectReason::Invalid(ValidationError::Length)));
+                        };
+                        (current.author, next)
+                    }
+                };
+                events.push(LibraryEvent::Saved {
+                    entry: LibraryEntry {
+                        id: d.id,
+                        author,
+                        name: d.name.clone(),
+                        facets: d.facets.clone(),
+                        text: d.text.clone(),
+                        book: d.book.clone(),
+                        rules: d.rules,
+                        version,
+                    },
+                });
+            }
+            events
+        }
         LibraryOp::Delete { id } => {
             let Some((current, false)) = load(tx, *id)? else {
                 return Ok(Err(RejectReason::NotFound));

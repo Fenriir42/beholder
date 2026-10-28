@@ -234,7 +234,7 @@ lib-import = Importer
 lib-export-json = Exporter en JSON
 lib-export-yaml = Exporter en YAML
 lib-exported = Enregistré dans { $path }
-lib-imported = Import terminé : { $added } ajoutées, { $skipped } ignorées car en double, { $invalid } invalides.
+lib-imported = Import terminé : { $added } ajoutées, { $replaced } remplacées, { $skipped } ignorées car en double, { $notyours } impossibles à remplacer (pas les vôtres), { $invalid } invalides.
 lib-invalid-title = Entrées non importées
 lib-edit = Modifier
 lib-delete = Supprimer l'entrée
@@ -293,3 +293,4 @@ tmpl-spell =
     {"*"}*Avec un emplacement de niveau supérieur.** Décrivez ce qui change.
 lib-reading = Lecture du fichier…
 lib-importing = Envoi de { $count } entrées importées au serveur…
+lib-replace = Remplacer les entrées déjà dans la bibliothèque

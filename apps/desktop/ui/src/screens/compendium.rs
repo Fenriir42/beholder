@@ -208,6 +208,7 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
     let message = RwSignal::new(None::<String>);
     let invalid = RwSignal::new(Vec::<String>::new());
     let confirm_delete = RwSignal::new(false);
+    let replace_existing = RwSignal::new(false);
     let query = RwSignal::new(SearchQuery::default());
     let hits = RwSignal::new(Vec::<Hit>::new());
     let credits_data = RwSignal::new(Credits::default());
@@ -450,13 +451,16 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
         input.set_value("");
         message.set(Some(i18n.t("lib-reading")));
         spawn_local(async move {
-            match ipc::import_library::<ImportSummary>(file).await {
+            match ipc::import_library::<ImportSummary>(file, replace_existing.get_untracked()).await
+            {
                 Ok(s) => {
                     message.set(Some(i18n.tr(
                         "lib-imported",
                         &[
                             ("added", s.added.into()),
+                            ("replaced", s.replaced.into()),
                             ("skipped", s.skipped.into()),
+                            ("notyours", s.not_yours.into()),
                             ("invalid", s.invalid.len().into()),
                         ],
                     )));
@@ -660,6 +664,10 @@ pub fn Compendium(id: CampaignId) -> impl IntoView {
                     <label class="btn file">
                         <span>{move || i18n.t("lib-import")}</span>
                         <input type="file" accept=".json,.yaml,.yml,application/json" on:change=import/>
+                    </label>                    <label class="choice small">
+                        <input type="checkbox" prop:checked=move || replace_existing.get()
+                            on:change=move |ev| replace_existing.set(event_target_checked(&ev))/>
+                        {move || i18n.t("lib-replace")}
                     </label>
                     <button type="button" on:click=move |_| export(false)>{move || i18n.t("lib-export-json")}</button>
                     <button type="button" on:click=move |_| export(true)>{move || i18n.t("lib-export-yaml")}</button>

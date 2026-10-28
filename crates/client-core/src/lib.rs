@@ -268,12 +268,19 @@ impl Client {
         &self,
         bytes: &[u8],
         format: FileFormat,
+        replace: bool,
     ) -> Result<ImportSummary, ClientError> {
         let text = std::str::from_utf8(bytes).map_err(|_| FileError::NotLibrary)?;
         let file = library_file::read(text, format)?;
-        let mut batch: Vec<LibraryDraft> = Vec::new();
-        let mut batch_bytes = 0;
-        let existing = self.shared.with_cache(|c| c.library_entries())?;
+        let (existing, me, campaigns) = self
+            .shared
+            .with_cache(|c| Ok((c.library_entries()?, c.user()?, c.campaigns()?)))?;
+        let me = me.map(|u| u.id);
+        let dm_anywhere = me.is_some_and(|m| {
+            campaigns
+                .iter()
+                .any(|(_, c)| c.role_of(m) == Some(beholder_core::Role::Dm))
+        });
         let key = |kind: Kind, name: &str, book: Option<&str>, rules: Option<RulesVersion>| {
             (
                 kind,
@@ -282,11 +289,25 @@ impl Client {
                 rules,
             )
         };
-        let mut seen: HashSet<_> = existing
+        let mut known: HashMap<_, Option<(LibraryId, u32, bool)>> = existing
             .iter()
-            .map(|e| key(e.facets.kind(), &e.name, e.book.as_deref(), e.rules))
+            .map(|e| {
+                let target = e
+                    .key
+                    .parse()
+                    .ok()
+                    .map(LibraryId)
+                    .zip(e.library)
+                    .map(|(id, m)| (id, m.version, dm_anywhere || Some(m.author) == me));
+                (
+                    key(e.facets.kind(), &e.name, e.book.as_deref(), e.rules),
+                    target,
+                )
+            })
             .collect();
         let mut summary = ImportSummary::default();
+        let mut batch: Vec<(LibraryDraft, u32)> = Vec::new();
+        let mut batch_bytes = 0;
         for (i, f) in file.iter().enumerate() {
             let p = match library_file::parse_entry(f) {
                 Ok(p) => p,
@@ -303,12 +324,21 @@ impl Client {
                 p.book.as_ref().map(|b| b.as_str()),
                 Some(p.rules),
             );
-            if !seen.insert(k) {
-                summary.skipped += 1;
-                continue;
-            }
+            let (id, base) = match known.get(&k) {
+                None => (LibraryId(uuid::Uuid::now_v7()), 0),
+                Some(Some((id, version, true))) if replace => (*id, *version),
+                Some(Some((_, _, false))) if replace => {
+                    summary.not_yours += 1;
+                    continue;
+                }
+                Some(_) => {
+                    summary.skipped += 1;
+                    continue;
+                }
+            };
+            known.insert(k, None);
             let draft = LibraryDraft {
-                id: LibraryId(uuid::Uuid::now_v7()),
+                id,
                 name: p.name,
                 facets: p.facets,
                 text: p.text,
@@ -324,9 +354,13 @@ impl Client {
                 self.submit_batch(std::mem::take(&mut batch))?;
                 batch_bytes = 0;
             }
-            batch.push(draft);
+            batch.push((draft, base));
             batch_bytes += size;
-            summary.added += 1;
+            if base == 0 {
+                summary.added += 1;
+            } else {
+                summary.replaced += 1;
+            }
         }
         if !batch.is_empty() {
             self.submit_batch(batch)?;
@@ -334,9 +368,9 @@ impl Client {
         Ok(summary)
     }
 
-    fn submit_batch(&self, drafts: Vec<LibraryDraft>) -> Result<(), CacheError> {
+    fn submit_batch(&self, items: Vec<(LibraryDraft, u32)>) -> Result<(), CacheError> {
         self.submit(CommandKind::Library {
-            op: LibraryOp::SaveMany { drafts },
+            op: LibraryOp::UpsertMany { items },
         })
         .map(|_| ())
     }

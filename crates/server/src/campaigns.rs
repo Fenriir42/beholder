@@ -1081,6 +1081,58 @@ mod tests {
     }
 
     #[test]
+    fn library_upserts_respect_rights_and_versions() {
+        let (mut c, dm, player) = setup();
+        create(&mut c, &dm);
+        let upsert = |items| CommandKind::Library {
+            op: beholder_core::library::LibraryOp::UpsertMany { items },
+        };
+        let (a, b) = (LibraryId(Uuid::now_v7()), LibraryId(Uuid::now_v7()));
+        assert_eq!(
+            run(&mut c, &dm, upsert(vec![(draft(a, "DM entry"), 0)])).reply,
+            Reply::Ack(Some(Seq(1)))
+        );
+        assert_eq!(
+            run(
+                &mut c,
+                &player,
+                upsert(vec![(draft(b, "New"), 0), (draft(a, "Hijack"), 1)])
+            )
+            .reply,
+            Reply::Reject(RejectReason::Forbidden),
+            "a player can't replace a DM's entry, and the batch writes nothing"
+        );
+        assert!(
+            !crate::library::bundle(&c)
+                .unwrap()
+                .entries
+                .iter()
+                .any(|e| e.name == "New"),
+            "all or nothing"
+        );
+        assert_eq!(
+            run(&mut c, &dm, upsert(vec![(draft(a, "Stale"), 7)])).reply,
+            Reply::Reject(RejectReason::Stale)
+        );
+        assert_eq!(
+            run(
+                &mut c,
+                &dm,
+                upsert(vec![(draft(a, "Replaced"), 1), (draft(b, "Added"), 0)])
+            )
+            .reply,
+            Reply::Ack(Some(Seq(3)))
+        );
+        let names: Vec<String> = crate::library::bundle(&c)
+            .unwrap()
+            .entries
+            .into_iter()
+            .map(|e| e.name)
+            .collect();
+        assert!(names.contains(&"Replaced".to_owned()) && names.contains(&"Added".to_owned()));
+    }
+
+    #[test]
     fn catch_up_snapshots_across_visibility_changes() {
         let (mut c, dm, _) = setup();
         let id = create(&mut c, &dm);
