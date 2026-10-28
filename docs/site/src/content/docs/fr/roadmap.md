@@ -22,7 +22,7 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 - **Révéler** au groupe en un clic ; un document révélé apparaît aussitôt chez tous.
 - Édition à plusieurs pour les notes partagées, avec copies de conflit au lieu de texte perdu.
 
-### Phase 3 : compendium (en cours)
+### Phase 3 : compendium
 - **SRD 5.2** (règles 2024) : tous les sorts, monstres, objets, classes, sous-classes, espèces, historiques, dons, aptitudes, traits et états, consultables hors ligne.
 - **Livres Open5e :** Kobold Press, Black Flag, Level Up A5E, SRD 5.1 et d'autres, 20 livres en tout.
 - Le MJ choisit les sources de règles par campagne ; les joueurs ne téléchargent que celles-là.
@@ -30,15 +30,14 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 - Écran de crédits avec toutes les mentions de licence.
 - **Bibliothèque du serveur :** les entrées propres à votre groupe (création maison et contenu des livres que vous possédez), partagées sur votre serveur, avec un éditeur par type d'entrée, l'import/export JSON et YAML et la priorité sur les autres sources. Le MJ peut masquer une entrée aux joueurs d'une campagne.
 - **Import par collage :** coller une entrée ou un chapitre entier de sorts, monstres, objets magiques, dons ou sous-classes, relire les entrées détectées avec les doublons signalés, modifier n'importe laquelle et en accepter tout ou partie.
+- **Gros imports :** des dizaines de milliers d'entrées par fichier, envoyées par lots, avec l'option de remplacer les entrées déjà présentes, l'annulation d'un import entier en une action (en conservant les entrées modifiées depuis), et les fichiers JSON de toute structure lus via des profils de correspondance enregistrés et exportables, avec un résumé avant l'import. Un convertisseur transforme les fichiers JSON de `dnd-data` en fichiers de bibliothèque, et le format des fichiers de bibliothèque est une norme documentée, avec un schéma JSON.
+- **Import à l'installation :** avec `BEHOLDER_IMPORT_REPO`, le serveur importe une fois un dépôt organisé comme dnd-data, en un seul import annulable.
 
 ## En cours
 
-- **Gros imports :** des dizaines de milliers d'entrées par fichier, envoyées par lots, avec l'option de remplacer les entrées déjà présentes, l'annulation d'un import entier en une action (en conservant les entrées modifiées depuis), et les fichiers JSON de toute structure lus via des profils de correspondance enregistrés et exportables, avec un résumé avant l'import. Un convertisseur transforme les fichiers JSON de `dnd-data` en fichiers de bibliothèque, et le format des fichiers de bibliothèque est une norme documentée, avec un schéma JSON.
+Rien pour l'instant : la phase 4 est la suivante.
 
 ## Prévu
-
-### Phase 3, reste
-- **Import en masse, la suite :** import depuis un dépôt externe à l'installation du serveur.
 
 ### Phase 4 : fiches de personnage
 - Fiches assistées : l'application calcule modificateurs, maîtrise, sauvegardes, compétences, emplacements de sorts et CA ; vous choisissez espèce, classe, historique et dons dans le compendium.

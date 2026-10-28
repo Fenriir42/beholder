@@ -42,6 +42,19 @@ docker compose start server
 
 Le volume s'appelle `<dossier>_beholder-data` ; vérifiez avec `docker volume ls`. Pour restaurer, arrêtez le serveur, extrayez l'archive dans le volume de la même manière, puis redémarrez-le.
 
+## Import depuis un dépôt externe
+
+Pour remplir la bibliothèque du serveur depuis un dépôt de fichiers JSON organisé comme [`nick-aschenbach/dnd-data`](https://github.com/nick-aschenbach/dnd-data) (un fichier par catégorie : `spells.json`, `monsters.json`, `items.json`, `classes.json`, `species.json`, `backgrounds.json`), indiquez ceci dans `.env` et lancez `docker compose up -d` :
+
+```sh
+BEHOLDER_IMPORT_REPO=https://github.com/proprietaire/depot
+BEHOLDER_IMPORT_REF=HEAD
+```
+
+Au démarrage suivant, le serveur télécharge l'archive `.tar.gz` du dépôt en HTTPS (adresses de type GitHub, GitLab, Gitea et Codeberg, ou lien direct vers un `.tar.gz`), lit ses fichiers JSON un enregistrement à la fois, les convertit comme `cargo xtask dnd-data`, et les ajoute à la bibliothèque en un seul import. Les entrées déjà présentes (même type, nom, livre et version des règles) sont ignorées. Cela ne se fait qu'une fois : après un import réussi, il n'est pas refait, même si les variables restent définies. En cas d'échec (pas de réseau, mauvaise adresse), le journal en donne la raison et l'import est retenté au démarrage suivant. `BEHOLDER_IMPORT_REF` est une branche ou une étiquette ; `HEAD` désigne la branche par défaut sur GitHub, et GitLab demande un nom de branche.
+
+Les entrées importées appartiennent au serveur et non à un utilisateur : seul un MJ peut les modifier. Un MJ peut aussi annuler tout l'import depuis **Imports récents** dans le Compendium. Le contenu reste sur votre serveur et n'est jamais livré avec l'application ; n'importez que du contenu que vous avez le droit d'utiliser.
+
 ## Journaux
 
 ```sh

@@ -42,6 +42,19 @@ docker compose start server
 
 The volume name is `<folder>_beholder-data`; check it with `docker volume ls`. To restore, stop the server, extract the archive into the volume the same way, and start it again.
 
+## Import from an external repository
+
+To fill the server library from a repository of JSON files laid out like [`nick-aschenbach/dnd-data`](https://github.com/nick-aschenbach/dnd-data) (one file per category: `spells.json`, `monsters.json`, `items.json`, `classes.json`, `species.json`, `backgrounds.json`), set these in `.env` and run `docker compose up -d`:
+
+```sh
+BEHOLDER_IMPORT_REPO=https://github.com/owner/repository
+BEHOLDER_IMPORT_REF=HEAD
+```
+
+On its next start the server downloads the repository's `.tar.gz` archive over HTTPS (GitHub, GitLab, Gitea and Codeberg style URLs, or a direct link to a `.tar.gz`), reads the JSON files in it one record at a time, converts them like `cargo xtask dnd-data` does, and adds them to the library as one import. Entries already in the library (same type, name, book and rules version) are skipped. It runs once: after a successful import it isn't repeated, even if the variables stay set. If it fails (no network, wrong URL), the log says why and it's tried again at the next start. `BEHOLDER_IMPORT_REF` is a branch or tag; `HEAD` means the default branch on GitHub, and GitLab needs a branch name.
+
+The imported entries belong to the server rather than to a user, so only a DM can edit them. A DM can also undo the whole import from **Recent imports** in the Compendium. The content stays on your server and is never bundled with the app; only import content you're allowed to use.
+
 ## Logs
 
 ```sh

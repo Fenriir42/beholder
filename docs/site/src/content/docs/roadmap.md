@@ -22,7 +22,7 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 - One-click **Reveal** to the party; a revealed handout appears for everyone at once.
 - Collaborative editing for shared notes, with conflict copies instead of lost text.
 
-### Phase 3: Compendium (in progress)
+### Phase 3: Compendium
 - **SRD 5.2** (2024 rules): every spell, monster, item, class, subclass, species, background, feat, feature, trait and condition, searchable offline.
 - **Open5e books:** Kobold Press, Black Flag, Level Up A5E, SRD 5.1 and more, 20 books in all.
 - The DM chooses the rules sources per campaign; players download only those.
@@ -30,15 +30,14 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 - Credits screen with every licence notice.
 - **Server library:** your group's own entries (homebrew and content from books you own), shared on your server, with an editor per entry type, JSON and YAML import and export, and priority over other sources. The DM can hide single entries from a campaign's players.
 - **Paste import:** paste one entry or a whole chapter of spells, monsters, magic items, feats or subclasses, review the parsed entries with duplicates flagged, edit any of them, and accept some or all.
+- **Large imports:** tens of thousands of entries per file, sent in batches, with the option to replace entries already in the library, undoing a whole import in one action (keeping entries edited since), and JSON files of any shape read through saved, exportable mapping profiles with a summary review before importing. A converter turns the `dnd-data` JSON files into library files, and the library file format is a documented standard with a JSON Schema.
+- **Setup import:** set `BEHOLDER_IMPORT_REPO` and the server imports a dnd-data style repository once, as one undoable import.
 
 ## In progress
 
-- **Large imports:** tens of thousands of entries per file, sent in batches, with the option to replace entries already in the library, undoing a whole import in one action (keeping entries edited since), and JSON files of any shape read through saved, exportable mapping profiles with a summary review before importing. A converter turns the `dnd-data` JSON files into library files, and the library file format is a documented standard with a JSON Schema.
+Nothing at the moment: Phase 4 is next.
 
 ## Planned
-
-### Phase 3, remaining
-- **Bulk import, rest:** the setup-time import from an external repository.
 
 ### Phase 4: Character sheets
 - Assisted sheets: the app computes modifiers, proficiency, saves, skills, spell slots and AC; you choose species, class, background and feats from the compendium.
