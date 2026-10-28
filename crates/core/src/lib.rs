@@ -3,6 +3,7 @@ pub mod compendium;
 pub mod ids;
 pub mod library;
 pub mod note;
+pub mod paste;
 pub mod user;
 
 pub use campaign::{

@@ -1,6 +1,7 @@
 mod dnd_data;
 mod dnd_tables;
 mod open5e;
+mod paste_check;
 mod srd;
 
 use std::collections::BTreeMap;
