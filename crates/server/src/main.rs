@@ -31,6 +31,16 @@ fn main() -> anyhow::Result<()> {
             .await
             .context("binding")?;
         tracing::info!(%bind, "listening");
+        if let Ok(repo) = std::env::var("BEHOLDER_IMPORT_REPO")
+            && !repo.trim().is_empty()
+        {
+            let git_ref = std::env::var("BEHOLDER_IMPORT_REF").unwrap_or_else(|_| "HEAD".into());
+            tokio::spawn(beholder_server::setup_import::run(
+                std::sync::Arc::clone(&state),
+                repo,
+                git_ref,
+            ));
+        }
         serve(listener, state, shutdown_signal()).await?;
         Ok(())
     })

@@ -9,6 +9,7 @@ pub mod library;
 pub mod notes;
 pub mod permissions;
 pub mod rate_limit;
+pub mod setup_import;
 pub mod ws;
 
 use std::future::Future;

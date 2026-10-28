@@ -9,6 +9,7 @@ const MIGRATIONS: &[&str] = &[
     include_str!("../migrations/0003_sources.sql"),
     include_str!("../migrations/0004_library.sql"),
     include_str!("../migrations/0005_imports.sql"),
+    include_str!("../migrations/0006_server_meta.sql"),
 ];
 
 #[derive(Debug, thiserror::Error)]

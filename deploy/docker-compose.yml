@@ -6,6 +6,8 @@ services:
     restart: unless-stopped
     environment:
       BEHOLDER_LOG: ${BEHOLDER_LOG:-info}
+      BEHOLDER_IMPORT_REPO: ${BEHOLDER_IMPORT_REPO:-}
+      BEHOLDER_IMPORT_REF: ${BEHOLDER_IMPORT_REF:-HEAD}
     volumes:
       - beholder-data:/data
     expose:
