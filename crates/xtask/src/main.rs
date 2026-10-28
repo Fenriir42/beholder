@@ -1,4 +1,5 @@
 mod dnd_data;
+mod dnd_tables;
 mod open5e;
 mod srd;
 

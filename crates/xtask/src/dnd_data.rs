@@ -3,6 +3,8 @@ use std::path::Path;
 use anyhow::{Context, Result};
 use serde_json::{Map, Value, json};
 
+use crate::dnd_tables;
+
 pub const FILES: [&str; 6] = [
     "spells",
     "monsters",
@@ -156,8 +158,8 @@ fn convert_one(file: &str, r: &Value) -> Option<Value> {
         "monsters" => monster(r, description, &mut e),
         "items" => item(r, description, &mut e),
         "classes" => ("class", class_text(description)),
-        "species" => ("species", restore_labels(description)),
-        _ => ("background", restore_labels(description)),
+        "species" => ("species", species_text(description)),
+        _ => ("background", background_text(description)),
     };
     e.insert("kind".into(), json!(kind));
     e.insert("text".into(), json!(truncate_bytes(&text, 64 * 1024)));
@@ -178,7 +180,14 @@ fn truncate_bytes(s: &str, max: usize) -> String {
     s[..end].to_owned()
 }
 
-fn spell(r: &Value, description: &str, e: &mut Map<String, Value>) -> (&'static str, String) {
+fn spell(r: &Value, raw: &str, e: &mut Map<String, Value>) -> (&'static str, String) {
+    let mut normalized = raw
+        .replace("Rang e:", "Range:")
+        .replace("Casting time", "Casting Time");
+    for label in SPELL_LABELS {
+        normalized = normalized.replace(&format!("{label} :"), &format!("{label}:"));
+    }
+    let description = normalized.as_str();
     let head: String = description.chars().take(160).collect();
     let head_lower = head.to_lowercase();
     let level = prop(r, "Level")
@@ -234,8 +243,32 @@ fn spell(r: &Value, description: &str, e: &mut Map<String, Value>) -> (&'static 
     if concentration {
         e.insert("concentration".into(), json!(true));
     }
-    ("spell", spell_text(description))
+    let text = spell_text(description);
+    let missing: Vec<String> = [
+        ("Casting Time", "Casting Time"),
+        ("Range", "data-RangeAoe"),
+        ("Components", "Components"),
+    ]
+    .iter()
+    .filter(|(label, _)| !description.contains(&format!("{label}:")))
+    .filter_map(|(label, key)| prop(r, key).map(|v| format!("**{label}:** {v}\n\n")))
+    .collect();
+    let (level_line, body) = match text.split_once("\n\n") {
+        Some((first, rest))
+            if (1..=6).contains(&first.split_whitespace().count())
+                && ["level", "cantrip"]
+                    .iter()
+                    .any(|w| first.to_lowercase().contains(w)) =>
+        {
+            (format!("*{}*\n\n", first.trim()), rest)
+        }
+        _ => (String::new(), text.as_str()),
+    };
+    let text = format!("{level_line}{}{body}", missing.concat());
+    ("spell", text)
 }
+
+const SPELL_LABELS: [&str; 5] = ["Casting Time", "Range", "Components", "Duration", "Classes"];
 
 fn spell_text(d: &str) -> String {
     let mut s = d.to_owned();
@@ -371,7 +404,94 @@ fn item(r: &Value, description: &str, e: &mut Map<String, Value>) -> (&'static s
     header.push('*');
     let name = r["name"].as_str().unwrap_or_default().trim();
     let body = strip_item_header(description, name);
-    (kind, format!("{header}\n\n{}", restore_labels(&body)))
+    (
+        kind,
+        format!(
+            "{header}\n\n{}",
+            outside_tables(&dnd_tables::die_tables(&body), restore_labels)
+        ),
+    )
+}
+
+fn outside_tables(s: &str, f: fn(&str) -> String) -> String {
+    s.split("\n\n")
+        .map(|b| {
+            if b.starts_with('|') {
+                b.to_owned()
+            } else {
+                f(b)
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
+const BACKGROUND_2024: [&str; 6] = [
+    "Ability Scores",
+    "Feat",
+    "Skill Proficiencies",
+    "Tool Proficiency",
+    "Tool Proficiencies",
+    "Equipment",
+];
+
+const BACKGROUND_2014: [&str; 4] = [
+    "Skill Proficiencies:",
+    "Tool Proficiencies:",
+    "Languages:",
+    "Equipment:",
+];
+
+fn species_text(d: &str) -> String {
+    let mut s = d.to_owned();
+    if let Some(p) = s.find(" Traits As ") {
+        let q = s[..p].rfind(' ').map_or(0, |i| i + 1);
+        let head = dnd_tables::trait_list(&s[..q], &["Creature Type", "Size", "Speed"], "", false);
+        if head != s[..q] {
+            s = format!(
+                "{}\n\n### {}\n\n{}",
+                head.trim_end(),
+                &s[q..p + " Traits".len()],
+                &s[p + " Traits ".len()..]
+            );
+        }
+    }
+    outside_tables(&dnd_tables::die_tables(&s), |b| {
+        dnd_tables::sub_labels(&restore_labels(b))
+    })
+}
+
+fn background_text(d: &str) -> String {
+    let mut s = d.to_owned();
+    for label in [
+        "Skill Proficiencies",
+        "Tool Proficiencies",
+        "Languages",
+        "Equipment",
+        "Feature",
+    ] {
+        s = s.replace(&format!("{label} :"), &format!("{label}:"));
+    }
+    s = if s.starts_with("Ability Scores ") {
+        dnd_tables::trait_list(&s, &BACKGROUND_2024, " GP ", true)
+    } else {
+        dnd_tables::trait_list(&s, &BACKGROUND_2014, " Feature:", false)
+    };
+    if let Some(i) = s.find("Feature: ") {
+        let body = &s[i + "Feature: ".len()..];
+        let words: Vec<&str> = body.split(' ').collect();
+        let n = heading_len(&words);
+        if n > 0 {
+            let consumed: usize = words[..n].iter().map(|w| w.len() + 1).sum();
+            let rest = body
+                .get(consumed.min(body.len())..)
+                .unwrap_or_default()
+                .to_owned();
+            let heading = words[..n].join(" ");
+            s = format!("{}\n\n### Feature: {heading}\n\n{rest}", s[..i].trim_end());
+        }
+    }
+    outside_tables(&dnd_tables::die_tables(&s), restore_labels)
 }
 
 fn restore_sections(d: &str) -> String {
@@ -413,7 +533,7 @@ const INLINE_LABELS: [&str; 12] = [
     "Melee or Ranged Weapon Attack",
 ];
 
-const SENTENCE_STARTS: [&str; 30] = [
+pub const SENTENCE_STARTS: [&str; 30] = [
     "You",
     "Your",
     "When",
@@ -482,7 +602,7 @@ fn heading_len(words: &[&str]) -> usize {
     n
 }
 
-fn restore_features(d: &str) -> String {
+fn restore_features(d: &str, known: &[String]) -> String {
     let mut out = String::with_capacity(d.len() + 512);
     let mut rest = d;
     while let Some(i) = rest.find("Level ") {
@@ -495,7 +615,13 @@ fn restore_features(d: &str) -> String {
         }
         let body = &after[digits + 2..];
         let words: Vec<&str> = body.split(' ').collect();
-        let n = heading_len(&words);
+        let n = known
+            .iter()
+            .map(|k| k.split(' ').collect::<Vec<_>>())
+            .filter(|k| words.starts_with(k))
+            .map(|k| k.len())
+            .max()
+            .unwrap_or_else(|| heading_len(&words));
         if n == 0 {
             out.push_str(&rest[..i + 6]);
             rest = after;
@@ -642,8 +768,15 @@ const SUBCLASS_BOOKS: [&str; 14] = [
 
 const NAMES_ONLY: &str = "*Only the names are in this file; their rules aren't included.*";
 
-fn class_text(d: &str) -> String {
-    let tail_from = d.len() * 4 / 5;
+fn class_text(raw: &str) -> String {
+    let (gridded, features) = dnd_tables::level_grids(&dnd_tables::drop_cards(raw));
+    let structured =
+        dnd_tables::class_rules(&dnd_tables::core_traits(&dnd_tables::slot_grid(&gridded)));
+    let d = structured.as_str();
+    let mut tail_from = d.len() * 4 / 5;
+    while !d.is_char_boundary(tail_from) {
+        tail_from -= 1;
+    }
     let text = match d[tail_from..].rfind(" Subclasses ").map(|i| i + tail_from) {
         Some(i) if d.is_char_boundary(i) => {
             let mut names = d[i + " Subclasses ".len()..].to_owned();
@@ -654,7 +787,11 @@ fn class_text(d: &str) -> String {
         }
         _ => d.to_owned(),
     };
-    restore_labels(&restore_features(&text))
+    let names = dnd_tables::feature_names(&features);
+    let headed = dnd_tables::feature_headings(&restore_features(&text, &names), &names);
+    outside_tables(&dnd_tables::die_tables(&headed), |b| {
+        dnd_tables::sub_labels(&restore_labels(b))
+    })
 }
 
 fn subclass_start(d: &str, name: &str) -> Option<usize> {
@@ -708,7 +845,7 @@ fn split_free_subclass(mut class: Value) -> Vec<Value> {
             class_text(head)
         )
     };
-    let sub_part = restore_labels(&restore_features(raw[start + sub.len()..].trim()));
+    let sub_part = restore_labels(&restore_features(raw[start + sub.len()..].trim(), &[]));
     class["text"] = json!(truncate_bytes(&class_part, 64 * 1024));
     let subclass = json!({
         "kind": "subclass",
@@ -814,6 +951,7 @@ mod tests {
     fn class_features_become_headings() {
         let t = restore_features(
             "Intro. Level 1: Rage You can imbue yourself. Level 3: Barbarian Subclass You gain a subclass.",
+            &[],
         );
         assert!(t.contains("\n\n### Level 1: Rage\n\nYou can imbue"), "{t}");
         assert!(
@@ -822,6 +960,7 @@ mod tests {
         );
         let t = restore_features(
             "You can rage. Persistent Rage Beginning at 15th level, your rage is fierce. Primal Champion At 20th level, you embody power.",
+            &[],
         );
         assert!(
             t.contains("\n\n### Persistent Rage\n\nBeginning at 15th level"),
@@ -830,6 +969,17 @@ mod tests {
         assert!(
             t.contains("\n\n### Primal Champion\n\nAt 20th level"),
             "{t}"
+        );
+    }
+
+    #[test]
+    fn species_traits_2024() {
+        let t = species_text(
+            "Elves are old. Creature Type Humanoid Size Medium (about 5–6 feet tall) Speed 30 feet Elf Traits As an Elf, you have these traits. Darkvision. You have Darkvision. Trance. You don’t sleep.",
+        );
+        assert_eq!(
+            t,
+            "Elves are old.\n\n- **Creature Type:** Humanoid\n- **Size:** Medium (about 5–6 feet tall)\n- **Speed:** 30 feet\n\n### Elf Traits\n\nAs an Elf, you have these traits.\n\n**Darkvision.** You have Darkvision.\n\n**Trance.** You don’t sleep."
         );
     }
 
