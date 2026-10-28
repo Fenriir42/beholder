@@ -55,6 +55,17 @@ Au démarrage suivant, le serveur télécharge l'archive `.tar.gz` du dépôt en
 
 Les entrées importées appartiennent au serveur et non à un utilisateur : seul un MJ peut les modifier. Un MJ peut aussi annuler tout l'import depuis **Imports récents** dans le Compendium. Le contenu reste sur votre serveur et n'est jamais livré avec l'application ; n'importez que du contenu que vous avez le droit d'utiliser.
 
+## Utilisateurs et mots de passe perdus
+
+Les mots de passe ne sont jamais enregistrés, seulement leur empreinte Argon2id : personne ne peut relire un mot de passe, pas même l'administrateur. Quand quelqu'un oublie le sien, donnez-lui-en un nouveau :
+
+```sh
+docker compose exec server /beholder-server users
+docker compose exec server /beholder-server reset-password alice
+```
+
+`users` liste tous les comptes avec leur nom affiché et leur nombre de sessions actives. `reset-password` attribue un nouveau mot de passe aléatoire à ce nom d'utilisateur (sans tenir compte de la casse), l'affiche une seule fois et déconnecte l'utilisateur partout. Transmettez-le-lui en privé ; il se connecte avec. En local, lancez les mêmes commandes avec `BEHOLDER_DATA_DIR=./data-dev cargo run -p beholder-server -- users`. Elles fonctionnent pendant que le serveur tourne.
+
 ## Journaux
 
 ```sh

@@ -55,6 +55,17 @@ On its next start the server downloads the repository's `.tar.gz` archive over H
 
 The imported entries belong to the server rather than to a user, so only a DM can edit them. A DM can also undo the whole import from **Recent imports** in the Compendium. The content stays on your server and is never bundled with the app; only import content you're allowed to use.
 
+## Users and lost passwords
+
+Passwords are never stored, only an Argon2id hash of them, so nobody can read a password back, not even the admin. When someone forgets theirs, give them a new one:
+
+```sh
+docker compose exec server /beholder-server users
+docker compose exec server /beholder-server reset-password alice
+```
+
+`users` lists every account with its display name and number of active sessions. `reset-password` sets a new random password for that username (case doesn't matter), prints it once, and signs the user out everywhere. Send it to them privately; they log in with it. Locally, run the same commands with `BEHOLDER_DATA_DIR=./data-dev cargo run -p beholder-server -- users`. They work while the server is running.
+
 ## Logs
 
 ```sh

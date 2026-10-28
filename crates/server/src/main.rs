@@ -25,6 +25,10 @@ fn main() -> anyhow::Result<()> {
         .max_blocking_threads(8)
         .enable_all()
         .build()?;
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if !args.is_empty() {
+        return rt.block_on(admin(&data_dir, &args));
+    }
     rt.block_on(async {
         let state = Server::open(data_dir).context("starting server")?;
         let listener = tokio::net::TcpListener::bind(bind)
@@ -44,6 +48,37 @@ fn main() -> anyhow::Result<()> {
         serve(listener, state, shutdown_signal()).await?;
         Ok(())
     })
+}
+
+async fn admin(data_dir: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
+    use beholder_server::{auth, db::Db, now};
+    let db = Db::open(&data_dir.join("beholder.db")).context("opening the database")?;
+    match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+        ["users"] => {
+            let list = db.call(|c| auth::accounts(c)).await?;
+            println!("{:<24} {:<24} {:>8}", "username", "display name", "sessions");
+            for a in list {
+                println!("{:<24} {:<24} {:>8}", a.username, a.display_name, a.sessions);
+            }
+            Ok(())
+        }
+        ["reset-password", name] => {
+            let password = auth::random_password().map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            let phc = auth::hash_password(&password).map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            let name = (*name).to_owned();
+            let target = name.clone();
+            let found = db
+                .call(move |c| auth::reset_password(c, &target, &phc, now()))
+                .await?;
+            if !found {
+                anyhow::bail!("no user named {name}");
+            }
+            println!("New password for {name}: {}", password.expose());
+            println!("All of {name}'s sessions were signed out.");
+            Ok(())
+        }
+        _ => anyhow::bail!("usage: beholder-server [users | reset-password <username>]"),
+    }
 }
 
 async fn shutdown_signal() {

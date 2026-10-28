@@ -238,6 +238,68 @@ pub fn delete_session(conn: &Connection, token: &SessionToken) -> Result<(), DbE
     Ok(())
 }
 
+pub struct Account {
+    pub username: String,
+    pub display_name: String,
+    pub created_at: UnixMillis,
+    pub sessions: u32,
+}
+
+pub fn accounts(conn: &Connection) -> Result<Vec<Account>, DbError> {
+    let mut stmt = conn.prepare(
+        "SELECT u.username, u.display_name, u.created_at,
+                (SELECT COUNT(*) FROM sessions s WHERE s.user_id = u.id)
+         FROM users u ORDER BY u.username COLLATE NOCASE",
+    )?;
+    stmt.query_map([], |r| {
+        Ok(Account {
+            username: r.get(0)?,
+            display_name: r.get(1)?,
+            created_at: UnixMillis(r.get(2)?),
+            sessions: r.get(3)?,
+        })
+    })?
+    .map(|row| Ok(row?))
+    .collect()
+}
+
+pub fn reset_password(
+    conn: &mut Connection,
+    username: &str,
+    phc: &str,
+    now: UnixMillis,
+) -> Result<bool, DbError> {
+    let tx = conn.transaction()?;
+    let Some(id): Option<Vec<u8>> = tx
+        .query_row(
+            "SELECT id FROM users WHERE username = ?1 COLLATE NOCASE",
+            [username],
+            |r| r.get(0),
+        )
+        .optional()?
+    else {
+        return Ok(false);
+    };
+    tx.execute(
+        "INSERT INTO password_credentials (user_id, phc, updated_at) VALUES (?1, ?2, ?3)
+         ON CONFLICT (user_id) DO UPDATE SET phc = excluded.phc, updated_at = excluded.updated_at",
+        params![id, phc, now.0],
+    )?;
+    tx.execute("DELETE FROM sessions WHERE user_id = ?1", [&id])?;
+    tx.commit()?;
+    Ok(true)
+}
+
+pub fn random_password() -> Result<Password, AuthError> {
+    const ALPHABET: &[u8] = b"abcdefghijkmnpqrstuvwxyzACDEFGHJKLMNPQRTUVWXY34679";
+    let bytes: [u8; 16] = crate::random_bytes().map_err(|_| AuthError::Random)?;
+    let text: String = bytes
+        .iter()
+        .map(|b| char::from(ALPHABET[usize::from(*b) % ALPHABET.len()]))
+        .collect();
+    Password::new(text).map_err(|_| AuthError::Random)
+}
+
 pub fn purge_sessions(conn: &Connection, now: UnixMillis) -> Result<(), DbError> {
     conn.execute("DELETE FROM sessions WHERE expires_at <= ?1", [now.0])?;
     Ok(())
@@ -275,6 +337,27 @@ mod tests {
         )
         .unwrap()
         .unwrap()
+    }
+
+    #[test]
+    fn admin_can_list_accounts_and_reset_a_password() {
+        let mut c = conn();
+        let alice = user(&mut c, "alice");
+        user(&mut c, "Bob");
+        create_session(&c, alice.id, UnixMillis(1)).unwrap();
+        let list = accounts(&c).unwrap();
+        let names: Vec<(&str, u32)> = list.iter().map(|a| (a.username.as_str(), a.sessions)).collect();
+        assert_eq!(names, [("alice", 1), ("Bob", 0)]);
+        let pw = random_password().unwrap();
+        assert_eq!(pw.expose().len(), 16);
+        let phc = hash_password(&pw).unwrap();
+        assert!(reset_password(&mut c, "ALICE", &phc, UnixMillis(2)).unwrap());
+        assert!(!reset_password(&mut c, "nobody", &phc, UnixMillis(2)).unwrap());
+        let (_, stored) = credentials(&c, &Username::new("alice".into()).unwrap())
+            .unwrap()
+            .unwrap();
+        assert!(verify_password(&pw, Some(&stored)).unwrap());
+        assert_eq!(accounts(&c).unwrap()[0].sessions, 0, "the user is signed out everywhere");
     }
 
     #[test]
