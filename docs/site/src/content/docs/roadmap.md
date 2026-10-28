@@ -33,12 +33,12 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 
 ## In progress
 
-- **Large imports:** tens of thousands of entries per file, sent in batches, with the option to replace entries already in the library. A converter turns the `dnd-data` JSON files into library files, and the library file format is a documented standard with a JSON Schema.
+- **Large imports:** tens of thousands of entries per file, sent in batches, with the option to replace entries already in the library, and undoing a whole import in one action, keeping entries edited since. A converter turns the `dnd-data` JSON files into library files, and the library file format is a documented standard with a JSON Schema.
 
 ## Planned
 
 ### Phase 3, remaining
-- **Bulk import, rest:** JSON files of any shape read through mapping profiles, undoing a whole import in one action, and the setup-time import from an external repository.
+- **Bulk import, rest:** JSON files of any shape read through mapping profiles, and the setup-time import from an external repository.
 
 ### Phase 4: Character sheets
 - Assisted sheets: the app computes modifiers, proficiency, saves, skills, spell slots and AC; you choose species, class, background and feats from the compendium.

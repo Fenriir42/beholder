@@ -53,6 +53,10 @@ The DM can also hide single entries from the players of one campaign: open the e
 
 The format is described in [Library file format](/dev/library-format/). Imports of tens of thousands of entries are fine: they're sent in batches, and a banner shows how many are still on their way to the server.
 
+### Undoing an import
+
+Every file import and every paste is recorded as one import. Right after it, an **Undo this import** button appears; older imports are listed under **Recent imports** with who made them, when, and how many entries they wrote. Undoing removes the entries the import added and puts back the previous text of the entries it replaced, in one action and for everyone. Entries someone edited or deleted after the import are left as they are, and the list shows how many were kept. You can undo your own imports; a DM of any campaign can undo anyone's.
+
 ### Importing the dnd-data files
 
 Files in another layout are refused until they're converted. For the `dnd-data` JSON files kept in `data/`, run `cargo xtask dnd-data` in the project folder: it writes ready-to-import files to `data/converted/` (one per category). Import them one at a time from the Compendium. After the converter improves, run it again and re-import with **Replace entries already in the library** ticked to update what you imported before. See [Converting dnd-data files](/dev/library-format/#converting-dnd-data-files) for what's converted and how.

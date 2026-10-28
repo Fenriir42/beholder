@@ -53,6 +53,10 @@ Le MJ peut aussi masquer une entrée aux joueurs d'une campagne : ouvrez l'entr�
 
 Le format est décrit dans [Format des fichiers de bibliothèque](/fr/dev/library-format/). Les imports de plusieurs dizaines de milliers d'entrées ne posent pas de problème : elles partent par lots, et un bandeau indique combien sont encore en route vers le serveur.
 
+### Annuler un import
+
+Chaque import de fichier et chaque collage est enregistré comme un import. Juste après, un bouton **Annuler cet import** apparaît ; les imports plus anciens sont listés sous **Imports récents**, avec leur auteur, leur date et le nombre d'entrées écrites. L'annulation retire les entrées ajoutées par l'import et remet le texte précédent des entrées qu'il a remplacées, en une seule action et pour tout le monde. Les entrées modifiées ou supprimées par quelqu'un après l'import restent telles quelles, et la liste indique combien ont été conservées. Vous pouvez annuler vos propres imports ; un MJ de n'importe quelle campagne peut annuler ceux de tout le monde.
+
 ### Importer les fichiers dnd-data
 
 Les fichiers d'une autre structure sont refusés tant qu'ils ne sont pas convertis. Pour les fichiers JSON de `dnd-data` rangés dans `data/`, lancez `cargo xtask dnd-data` dans le dossier du projet : la commande écrit des fichiers prêts à importer dans `data/converted/` (un par catégorie). Importez-les un par un depuis le Compendium. Quand le convertisseur s'améliore, relancez-le et réimportez en cochant **Remplacer les entrées déjà dans la bibliothèque** pour mettre à jour ce que vous aviez importé. Voir [Convertir les fichiers dnd-data](/fr/dev/library-format/#convertir-les-fichiers-dnd-data) pour le détail.
