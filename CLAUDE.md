@@ -20,6 +20,7 @@ When two of these conflict, name the tradeoff and propose an option instead of c
 | `crates/protocol` | `beholder-protocol` | Wire messages, `PROTOCOL_VERSION`, postcard + zstd codec |
 | `crates/server` | `beholder-server` | axum + SQLite server, permissions, event log, sync |
 | `crates/client-core` | `beholder-client-core` | Connection manager, outbox, local cache. No Tauri dependency |
+| `crates/dnd-data` | `beholder-dnd-data` | Converts dnd-data style JSON records into library entries (used by `xtask` and the server's setup import) |
 | `crates/e2e` | `beholder-e2e` | Test-only: end-to-end tests (flaky-network proxy) spanning server and client-core |
 | `crates/xtask` | `beholder-xtask` | Dev-only: converts vendored data into compendium bundles (`cargo xtask srd`) |
 | `apps/desktop/ipc` | `beholder-ipc` | Serde DTOs shared by the UI (wasm32) and the Tauri shell |

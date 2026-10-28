@@ -1,9 +1,13 @@
 use std::path::Path;
 
-use anyhow::{Context, Result};
+use beholder_core::compendium::{ChallengeRating, Facets, Kind, RulesVersion};
+use beholder_core::paste::{default_facets, parse_cr};
+use beholder_core::{NoteBody, NoteTitle};
 use serde_json::{Map, Value, json};
 
-use crate::dnd_tables;
+mod tables;
+
+use tables as dnd_tables;
 
 pub const FILES: [&str; 6] = [
     "spells",
@@ -40,7 +44,13 @@ pub struct Converted {
     pub json: String,
 }
 
-pub fn convert_all(dir: &Path) -> Result<Vec<Converted>> {
+#[derive(Debug, thiserror::Error)]
+pub enum Error {
+    #[error("{0}: {1}")]
+    Json(String, serde_json::Error),
+}
+
+pub fn convert_all(dir: &Path) -> Result<Vec<Converted>, Error> {
     let mut out = Vec::new();
     for name in FILES {
         let path = dir.join(format!("{name}.json"));
@@ -48,7 +58,7 @@ pub fn convert_all(dir: &Path) -> Result<Vec<Converted>> {
             continue;
         };
         let mut rows: Vec<Value> =
-            serde_json::from_str(&text).with_context(|| path.display().to_string())?;
+            serde_json::from_str(&text).map_err(|e| Error::Json(path.display().to_string(), e))?;
         rows.iter_mut().for_each(numbers_as_text);
         let entries: Vec<Value> = rows.iter().flat_map(|r| convert(name, r)).collect();
         let n = entries.len();
@@ -56,13 +66,14 @@ pub fn convert_all(dir: &Path) -> Result<Vec<Converted>> {
         out.push(Converted {
             file: format!("{name}.json"),
             entries: n,
-            json: serde_json::to_string_pretty(&file)?,
+            json: serde_json::to_string_pretty(&file)
+                .map_err(|e| Error::Json(name.to_owned(), e))?,
         });
     }
     Ok(out)
 }
 
-fn numbers_as_text(r: &mut Value) {
+pub fn numbers_as_text(r: &mut Value) {
     if let Some(props) = r["properties"].as_object_mut() {
         for v in props.values_mut() {
             if let Value::Number(n) = v {
@@ -110,7 +121,7 @@ fn rules_of(book: &str) -> &'static str {
     }
 }
 
-fn convert(file: &str, r: &Value) -> Vec<Value> {
+pub fn convert(file: &str, r: &Value) -> Vec<Value> {
     let Some(entry) = convert_one(file, r) else {
         return Vec::new();
     };
@@ -881,9 +892,171 @@ fn strip_item_header(d: &str, name: &str) -> String {
     }
 }
 
+pub struct Draft {
+    pub name: NoteTitle,
+    pub facets: Facets,
+    pub text: NoteBody,
+    pub book: Option<NoteTitle>,
+    pub rules: RulesVersion,
+}
+
+pub fn to_draft(v: &Value) -> Option<Draft> {
+    let str_of = |k: &str| v.get(k).and_then(Value::as_str).map(str::to_owned);
+    let kind = Kind::parse(v.get("kind")?.as_str()?)?;
+    let (mut facets, _) = default_facets(kind);
+    match &mut facets {
+        Facets::Spell {
+            level,
+            school,
+            classes,
+            ritual,
+            concentration,
+        } => {
+            *level = v.get("level").and_then(Value::as_u64).unwrap_or(0).min(9) as u8;
+            if let Some(s) = str_of("school") {
+                *school = s;
+            }
+            *classes = v
+                .get("classes")
+                .and_then(Value::as_array)
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|c| c.as_str().map(str::to_owned))
+                        .collect()
+                })
+                .unwrap_or_default();
+            *ritual = v.get("ritual").and_then(Value::as_bool).unwrap_or(false);
+            *concentration = v
+                .get("concentration")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+        }
+        Facets::Monster {
+            cr,
+            creature_type,
+            size,
+        } => {
+            if let Some(c) = str_of("cr").as_deref().and_then(cr_of) {
+                *cr = c;
+            }
+            if let Some(t) = str_of("creature_type") {
+                *creature_type = t;
+            }
+            if let Some(s) = str_of("size") {
+                *size = s;
+            }
+        }
+        Facets::MagicItem {
+            rarity,
+            category,
+            attunement,
+        } => {
+            if let Some(r) = str_of("rarity") {
+                *rarity = r;
+            }
+            if let Some(c) = str_of("category") {
+                *category = c;
+            }
+            *attunement = v
+                .get("attunement")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+        }
+        Facets::Equipment { category } | Facets::Feat { category } => {
+            if let Some(c) = str_of("category") {
+                *category = c;
+            }
+        }
+        Facets::Subclass { class } | Facets::Feature { class, .. } => {
+            if let Some(c) = str_of("class") {
+                *class = c;
+            }
+        }
+        Facets::Class
+        | Facets::Species
+        | Facets::Background
+        | Facets::Trait
+        | Facets::Condition => {}
+    }
+    let rules = match str_of("rules").as_deref() {
+        Some("2024") => RulesVersion::R2024,
+        Some("level-up") => RulesVersion::LevelUp,
+        _ => RulesVersion::R2014,
+    };
+    Some(Draft {
+        name: NoteTitle::new(&str_of("name")?).ok()?,
+        facets,
+        text: NoteBody::new(str_of("text").unwrap_or_default()).ok()?,
+        book: str_of("book").and_then(|b| NoteTitle::new(&b).ok()),
+        rules,
+    })
+}
+
+fn cr_of(s: &str) -> Option<ChallengeRating> {
+    parse_cr(s).or_else(|| {
+        let e = (s.parse::<f64>().ok()? * 8.0).round();
+        (0.0..=320.0)
+            .contains(&e)
+            .then(|| ChallengeRating::from_eighths(e as u16))
+    })
+}
+
+struct Records<F>(F);
+
+impl<'de, F: FnMut(Value)> serde::de::Visitor<'de> for Records<F> {
+    type Value = ();
+
+    fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("a JSON array of records")
+    }
+
+    fn visit_seq<A: serde::de::SeqAccess<'de>>(mut self, mut seq: A) -> Result<(), A::Error> {
+        while let Some(v) = seq.next_element::<Value>()? {
+            (self.0)(v);
+        }
+        Ok(())
+    }
+}
+
+pub fn each_record(
+    reader: impl std::io::Read,
+    f: impl FnMut(Value),
+) -> Result<(), serde_json::Error> {
+    use serde::Deserializer;
+    serde_json::Deserializer::from_reader(reader).deserialize_seq(Records(f))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn streamed_records_become_drafts() {
+        let raw = r#"[{"name":"Goblin","description":"Traits Nimble Escape : Hides.","book":"Monster Manual","publisher":"WotC","properties":{"Category":"Monsters","Size":"Small","Type":"humanoid","Challenge Rating":0.25}},
+            {"name":"Fireball","description":"3rd-Level Evocation Casting Time : 1 action","book":"Player's Handbook (2024)","properties":{"Category":"Spells","Level":3,"School":"evocation"}}]"#;
+        let mut drafts = Vec::new();
+        each_record(raw.as_bytes(), |mut v| {
+            numbers_as_text(&mut v);
+            let file = match v["properties"]["Category"].as_str() {
+                Some("Spells") => "spells",
+                _ => "monsters",
+            };
+            drafts.extend(convert(file, &v).iter().filter_map(to_draft));
+        })
+        .unwrap();
+        assert_eq!(drafts.len(), 2);
+        assert_eq!(drafts[0].name.as_str(), "Goblin");
+        assert!(matches!(
+            drafts[0].facets,
+            Facets::Monster { cr, ref size, .. } if cr.eighths() == 2 && size == "Small"
+        ));
+        assert_eq!(drafts[0].rules, RulesVersion::R2014);
+        assert!(
+            matches!(drafts[1].facets, Facets::Spell { level: 3, ref school, .. } if school == "Evocation")
+        );
+        assert_eq!(drafts[1].rules, RulesVersion::R2024);
+        assert!(each_record(&b"{}"[..], |_| {}).is_err());
+    }
 
     #[test]
     fn monster_text_gets_its_structure_back() {

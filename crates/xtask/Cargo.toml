@@ -11,6 +11,7 @@ publish.workspace = true
 anyhow.workspace = true
 beholder-client-core.workspace = true
 beholder-core.workspace = true
+beholder-dnd-data.workspace = true
 postcard.workspace = true
 serde_json = "1.0.154"
 zstd.workspace = true

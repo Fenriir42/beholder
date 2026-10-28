@@ -294,6 +294,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "beholder-dnd-data"
+version = "0.1.0"
+dependencies = [
+ "beholder-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "beholder-e2e"
 version = "0.1.0"
 dependencies = [
@@ -382,6 +392,7 @@ dependencies = [
  "anyhow",
  "beholder-client-core",
  "beholder-core",
+ "beholder-dnd-data",
  "postcard",
  "serde_json",
  "zstd",

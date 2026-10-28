@@ -5,6 +5,7 @@ members = [
     "crates/protocol",
     "crates/server",
     "crates/client-core",
+    "crates/dnd-data",
     "crates/e2e",
     "crates/xtask",
     "apps/desktop/ipc",
@@ -23,6 +24,7 @@ beholder-core = { path = "crates/core" }
 beholder-protocol = { path = "crates/protocol" }
 beholder-server = { path = "crates/server" }
 beholder-client-core = { path = "crates/client-core" }
+beholder-dnd-data = { path = "crates/dnd-data" }
 beholder-ipc = { path = "apps/desktop/ipc" }
 anyhow = "1.0.104"
 argon2 = { version = "0.6.0", default-features = false, features = ["alloc", "password-hash"] }

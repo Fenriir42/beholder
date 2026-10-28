@@ -1,5 +1,3 @@
-mod dnd_data;
-mod dnd_tables;
 mod open5e;
 mod paste_check;
 mod srd;
@@ -91,7 +89,7 @@ fn main() -> Result<()> {
             use beholder_client_core::library_file::{FileFormat, parse_entry, read};
             let out_dir = root().join("data/converted");
             std::fs::create_dir_all(&out_dir)?;
-            let converted = dnd_data::convert_all(&root().join("data"))?;
+            let converted = beholder_dnd_data::convert_all(&root().join("data"))?;
             if converted.is_empty() {
                 bail!("no dnd-data files found in data/");
             }

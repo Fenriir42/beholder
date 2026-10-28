@@ -773,7 +773,7 @@ pub fn feature_headings(s: &str, names: &[String]) -> String {
             while let Some(i) = out[from..].find(&pat).map(|i| i + from) {
                 let after = i + pat.len();
                 let next = out[after..].split_whitespace().next().unwrap_or_default();
-                if crate::dnd_data::SENTENCE_STARTS.contains(&next) {
+                if crate::SENTENCE_STARTS.contains(&next) {
                     let rep = format!("\n\n### {name}\n\n");
                     let head = out[..i].trim_end().len();
                     out.replace_range(head..after, &rep);
@@ -820,7 +820,7 @@ fn label_at(toks: &[(usize, &str)], i: usize) -> Option<(usize, String)> {
         }
     }
     let first = toks.get(i)?.1;
-    if crate::dnd_data::SENTENCE_STARTS.contains(&first) || NOT_LABELS.contains(&first) {
+    if crate::SENTENCE_STARTS.contains(&first) || NOT_LABELS.contains(&first) {
         return None;
     }
     for k in 1..=6 {
