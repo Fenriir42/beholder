@@ -14,9 +14,10 @@ use beholder_core::compendium::{
 };
 use beholder_core::compendium::{Kind, RulesVersion};
 use beholder_core::library::{ImportSummary, LibraryDraft, LibraryOp, MAX_BATCH};
-use beholder_core::{CampaignId, CommandId, LibraryId, UserId};
+use beholder_core::paste::{self, Pasted};
+use beholder_core::{CampaignId, CommandId, LibraryId, NoteBody, NoteTitle, UserId};
 use beholder_protocol::{Command, CommandKind, RejectReason, ServerMsg, SessionToken};
-use library_file::{FileError, FileFormat};
+use library_file::{FileError, FileFormat, Parsed};
 use tokio::sync::mpsc;
 
 use crate::cache::{Cache, CacheError};
@@ -32,6 +33,30 @@ pub enum ConnectionState {
 }
 
 const BATCH_BYTES: usize = 1024 * 1024;
+
+type TargetKey = (Kind, String, Option<String>, Option<RulesVersion>);
+
+type Target = (LibraryId, u32, bool);
+
+fn target_key(
+    kind: Kind,
+    name: &str,
+    book: Option<&str>,
+    rules: Option<RulesVersion>,
+) -> TargetKey {
+    (
+        kind,
+        name.to_lowercase(),
+        book.map(str::to_lowercase),
+        rules,
+    )
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct PastePreview {
+    pub entry: Pasted,
+    pub duplicate: bool,
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum ClientError {
@@ -272,6 +297,65 @@ impl Client {
     ) -> Result<ImportSummary, ClientError> {
         let text = std::str::from_utf8(bytes).map_err(|_| FileError::NotLibrary)?;
         let file = library_file::read(text, format)?;
+        let items = file.iter().enumerate().map(|(i, f)| {
+            (
+                format!("#{} {}", i + 1, f.name),
+                library_file::parse_entry(f),
+            )
+        });
+        self.upsert(items, replace)
+    }
+
+    pub fn library_paste(
+        &self,
+        text: &str,
+        book: Option<&str>,
+        rules: RulesVersion,
+        default: Kind,
+    ) -> Result<Vec<PastePreview>, ClientError> {
+        let targets = self.library_targets()?;
+        Ok(paste::parse(text, default)
+            .into_iter()
+            .map(|entry| {
+                let duplicate = targets.contains_key(&target_key(
+                    entry.facets.kind(),
+                    &entry.name,
+                    book,
+                    Some(rules),
+                ));
+                PastePreview { entry, duplicate }
+            })
+            .collect())
+    }
+
+    pub fn library_accept(
+        &self,
+        entries: Vec<Pasted>,
+        book: Option<&str>,
+        rules: RulesVersion,
+        replace: bool,
+    ) -> Result<ImportSummary, ClientError> {
+        let book = book.map(str::trim).filter(|b| !b.is_empty());
+        let items = entries.into_iter().map(|p| {
+            let label = p.name.clone();
+            let parsed = (|| {
+                Ok(Parsed {
+                    name: NoteTitle::new(&p.name).map_err(|e| format!("name: {e}"))?,
+                    facets: p.facets,
+                    text: NoteBody::new(p.text).map_err(|e| format!("text: {e}"))?,
+                    book: book
+                        .map(NoteTitle::new)
+                        .transpose()
+                        .map_err(|e| format!("book: {e}"))?,
+                    rules,
+                })
+            })();
+            (label, parsed)
+        });
+        self.upsert(items, replace)
+    }
+
+    fn library_targets(&self) -> Result<HashMap<TargetKey, Option<Target>>, ClientError> {
         let (existing, me, campaigns) = self
             .shared
             .with_cache(|c| Ok((c.library_entries()?, c.user()?, c.campaigns()?)))?;
@@ -281,15 +365,7 @@ impl Client {
                 .iter()
                 .any(|(_, c)| c.role_of(m) == Some(beholder_core::Role::Dm))
         });
-        let key = |kind: Kind, name: &str, book: Option<&str>, rules: Option<RulesVersion>| {
-            (
-                kind,
-                name.to_lowercase(),
-                book.map(str::to_lowercase),
-                rules,
-            )
-        };
-        let mut known: HashMap<_, Option<(LibraryId, u32, bool)>> = existing
+        Ok(existing
             .iter()
             .map(|e| {
                 let target = e
@@ -300,25 +376,31 @@ impl Client {
                     .zip(e.library)
                     .map(|(id, m)| (id, m.version, dm_anywhere || Some(m.author) == me));
                 (
-                    key(e.facets.kind(), &e.name, e.book.as_deref(), e.rules),
+                    target_key(e.facets.kind(), &e.name, e.book.as_deref(), e.rules),
                     target,
                 )
             })
-            .collect();
+            .collect())
+    }
+
+    fn upsert(
+        &self,
+        items: impl Iterator<Item = (String, Result<Parsed, String>)>,
+        replace: bool,
+    ) -> Result<ImportSummary, ClientError> {
+        let mut known = self.library_targets()?;
         let mut summary = ImportSummary::default();
         let mut batch: Vec<(LibraryDraft, u32)> = Vec::new();
         let mut batch_bytes = 0;
-        for (i, f) in file.iter().enumerate() {
-            let p = match library_file::parse_entry(f) {
+        for (label, parsed) in items {
+            let p = match parsed {
                 Ok(p) => p,
                 Err(reason) => {
-                    summary
-                        .invalid
-                        .push(format!("#{} {}: {reason}", i + 1, f.name));
+                    summary.invalid.push(format!("{label}: {reason}"));
                     continue;
                 }
             };
-            let k = key(
+            let k = target_key(
                 p.facets.kind(),
                 p.name.as_str(),
                 p.book.as_ref().map(|b| b.as_str()),
@@ -346,7 +428,7 @@ impl Client {
                 rules: p.rules,
             };
             if let Err(e) = draft.check_facets() {
-                summary.invalid.push(format!("#{} {}: {e}", i + 1, f.name));
+                summary.invalid.push(format!("{label}: {e}"));
                 continue;
             }
             let size = draft.text.as_str().len() + draft.name.as_str().len() + 256;

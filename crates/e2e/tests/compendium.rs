@@ -291,6 +291,38 @@ async fn library_entries_sync_fold_hide_and_import() {
     .await;
     let exported = b.library_export(FileFormat::Json).unwrap();
     assert!(exported.contains("\"Dazed\"") && exported.contains("sparks"));
+
+    let pasted = "Storm Sorcery Spark\nLevel 1 Evocation (Sorcerer)\nCasting Time: Action\nA spark leaps from you.\nSorcerer: Storm Sorcery\nYour innate magic comes from elemental air.";
+    let preview = a
+        .library_paste(
+            pasted,
+            Some("Table rules"),
+            RulesVersion::R2014,
+            Kind::Trait,
+        )
+        .unwrap();
+    assert_eq!(preview.len(), 2);
+    assert!(preview.iter().all(|p| !p.duplicate));
+    let entries: Vec<_> = preview.into_iter().map(|p| p.entry).collect();
+    let accepted = a
+        .library_accept(entries, Some("Table rules"), RulesVersion::R2014, false)
+        .unwrap();
+    assert_eq!(accepted.added, 2, "{accepted:?}");
+    wait_for("bob gets the pasted subclass", || {
+        search(&b, "storm sorcery", vec![])
+            .iter()
+            .any(|h| h.source == "library" && h.facets.kind() == Kind::Subclass)
+    })
+    .await;
+    let again = a
+        .library_paste(
+            pasted,
+            Some("Table rules"),
+            RulesVersion::R2014,
+            Kind::Trait,
+        )
+        .unwrap();
+    assert!(again.iter().all(|p| p.duplicate), "{again:?}");
     a.shutdown();
     b.shutdown();
 }
