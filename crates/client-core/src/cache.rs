@@ -11,7 +11,7 @@ use beholder_protocol::http::LibraryChange;
 use beholder_protocol::{Command, EventEnvelope};
 use rusqlite::{Connection, OptionalExtension, params};
 
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 
 const SCHEMA: &str = "
 CREATE TABLE meta (key TEXT PRIMARY KEY, value BLOB NOT NULL) WITHOUT ROWID;
@@ -194,10 +194,21 @@ impl Cache {
     pub fn outbox(&self) -> Result<Vec<Command>, CacheError> {
         let mut stmt = self
             .conn
-            .prepare_cached("SELECT body FROM outbox ORDER BY n")?;
-        stmt.query_map([], |r| r.get::<_, Vec<u8>>(0))?
-            .map(|b| Ok(postcard::from_bytes(&b?)?))
-            .collect()
+            .prepare_cached("SELECT n, body FROM outbox ORDER BY n")?;
+        let rows = stmt
+            .query_map([], |r| Ok((r.get::<_, i64>(0)?, r.get::<_, Vec<u8>>(1)?)))?
+            .collect::<Result<Vec<_>, _>>()?;
+        let mut out = Vec::with_capacity(rows.len());
+        for (n, body) in rows {
+            match postcard::from_bytes(&body) {
+                Ok(cmd) => out.push(cmd),
+                // A command queued by an older app version can't be sent any more; drop it so it can't block the queue.
+                Err(_) => {
+                    self.conn.execute("DELETE FROM outbox WHERE n = ?1", [n])?;
+                }
+            }
+        }
+        Ok(out)
     }
 
     pub fn remove_outbox(&self, id: CommandId) -> Result<bool, CacheError> {
@@ -703,6 +714,20 @@ mod tests {
                 .apply_events(CampaignId(Uuid::nil()), &[renamed(1, "x")])
                 .unwrap()
         );
+    }
+
+    #[test]
+    fn unreadable_outbox_commands_are_dropped() {
+        let cache = Cache::open_in_memory().unwrap();
+        cache
+            .conn
+            .execute(
+                "INSERT INTO outbox (id, body) VALUES (?1, ?2)",
+                rusqlite::params![[9u8; 16].as_slice(), [255u8, 255, 255].as_slice()],
+            )
+            .unwrap();
+        assert!(cache.outbox().unwrap().is_empty());
+        assert_eq!(cache.outbox_len().unwrap(), 0, "the bad row is gone");
     }
 
     #[test]
