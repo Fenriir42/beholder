@@ -2,7 +2,7 @@
 title: Bibliothèque du serveur
 description: Ajouter les entrées propres à votre groupe (création maison et contenu des livres que vous possédez), les modifier, les importer et les exporter.
 sidebar:
-  order: 5
+  order: 6
 ---
 
 La bibliothèque du serveur contient les entrées de compendium propres à votre groupe : création maison et contenu des livres que vous possédez. Elle reste sur votre serveur et n'est jamais livrée avec l'application. Tous les utilisateurs du serveur la partagent.

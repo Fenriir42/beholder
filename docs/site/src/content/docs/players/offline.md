@@ -2,7 +2,7 @@
 title: Bad connections and offline play
 description: What the connection pill and banner mean, and what happens to your changes while offline.
 sidebar:
-  order: 6
+  order: 7
 ---
 
 Beholder is built for connections that come and go. Everything you do is saved on your computer first, then sent to the server when possible.

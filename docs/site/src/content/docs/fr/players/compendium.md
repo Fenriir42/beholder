@@ -2,7 +2,7 @@
 title: Compendium
 description: Consulter sorts, monstres, objets, classes et plus du SRD 5.2, hors ligne.
 sidebar:
-  order: 4
+  order: 5
 ---
 
 Ouvrez **Compendium** dans la barre latérale de la campagne pour consulter les règles : sorts, monstres, objets magiques, équipement, classes, sous-classes, espèces, historiques, dons, aptitudes de classe, traits d'espèce et états.

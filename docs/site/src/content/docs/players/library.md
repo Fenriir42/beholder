@@ -2,7 +2,7 @@
 title: Server library
 description: Add your group's own entries (homebrew and content from books you own), edit them, import and export them.
 sidebar:
-  order: 5
+  order: 6
 ---
 
 The server library holds your group's own compendium entries: homebrew, and content from books you own. It lives on your server only and is never bundled with the app. Everyone on the server shares it.

@@ -2,7 +2,7 @@
 title: Compendium
 description: Look up spells, monsters, items, classes and more from the SRD 5.2, offline.
 sidebar:
-  order: 4
+  order: 5
 ---
 
 Open **Compendium** in the campaign sidebar to look up the rules: spells, monsters, magic items, equipment, classes, subclasses, species, backgrounds, feats, class features, species traits and conditions.

@@ -1,0 +1,37 @@
+---
+title: Fiches de personnage
+description: Créer des personnages, remplir une fiche assistée, et voir ce que le reste du groupe en voit.
+sidebar:
+  order: 4
+---
+
+Chaque joueur peut avoir plusieurs personnages dans une campagne, dont un seul **actif** à la fois : le personnage actif est celui montré au groupe (et, plus tard, utilisé par le suivi de combat et les dés).
+
+## Créer un personnage
+
+Sur l'accueil de la campagne, ouvrez l'onglet **Personnages**. Tapez un nom, choisissez la version des règles (2024 ou 2014) et cliquez sur **Nouveau personnage** : la fiche s'ouvre. Votre premier personnage est actif ; utilisez **Rendre actif** pour passer à un autre. **Fiche de personnage** dans la barre latérale de la campagne ouvre toujours votre personnage actif.
+
+## La fiche
+
+Chaque champ s'enregistre dès que vous le quittez, même hors ligne (les modifications partent quand la connexion revient). L'application calcule :
+
+- les modificateurs, les jets de sauvegarde et les compétences, avec maîtrise, **expertise** et **Touche-à-tout** ;
+- la Perception, l'Intuition et l'Investigation passives, et l'initiative ;
+- le bonus de maîtrise selon votre niveau total ;
+- la **CA** selon la formule choisie : sans armure (10 + DEX), armure (base + DEX plafonnée), défense sans armure (10 + DEX + une autre caractéristique), armure naturelle ou valeur fixe, plus un bouclier et d'autres bonus ;
+- le DD et l'attaque des sorts pour chaque classe qui a une caractéristique d'incantation ;
+- les **emplacements de sorts** selon vos classes, avec la table du multiclassage et les emplacements de pacte de l'occultiste ;
+- les PV maximum moyens selon vos dés de vie, applicables en un clic.
+
+**Classes :** ajoutez une classe et choisissez-la dans le compendium. Pour les classes standard, le dé de vie, le type de lanceur de sorts et la caractéristique d'incantation sont remplis pour vous ; pour les autres, indiquez-les vous-même. Les types sont : lanceur complet, demi-lanceur (paladin, rôdeur), demi-lanceur arrondi au supérieur (artificier), tiers de lanceur (chevalier occulte, escroc arcanique) et magie de pacte (occultiste). En 2014, les demi-lanceurs ont des emplacements à partir du niveau 2, en 2024 dès le niveau 1.
+
+**Espèce, historique, dons, aptitudes, sorts et objets** se choisissent dans le compendium de la campagne pendant la saisie (marqués « du compendium »), ou se tapent librement pour ce qui n'y est pas.
+
+Vous suivez aussi les PV (actuels, maximum, temporaires), les dés de vie dépensés, les jets contre la mort, les états, l'épuisement (en 2024, chaque niveau donne −2 à chaque test de d20), les emplacements dépensés, des ressources comme les points de sorcellerie ou les rages, l'inventaire et l'argent, et des notes libres.
+
+La montée de niveau est manuelle : changez un niveau de classe et tout ce qui précède est recalculé. L'application n'applique pas les aptitudes de classe pour vous.
+
+## Qui voit quoi
+
+- **Vous et le MJ** voyez et modifiez votre fiche complète. Le MJ peut tout corriger, par exemple pour appliquer des dégâts.
+- **Les autres joueurs** ne voient qu'un résumé dans l'onglet **Groupe** : le nom, les classes et niveaux, la CA et les PV du personnage actif. Le reste de votre fiche (notes, inventaire, sorts…) n'arrive jamais dans leur application.
