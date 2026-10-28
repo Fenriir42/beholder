@@ -39,6 +39,26 @@ pub struct Counter {
     pub name: String,
     pub current: u16,
     pub max: u16,
+    #[serde(default)]
+    pub reset: Reset,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Reset {
+    Never,
+    ShortRest,
+    #[default]
+    LongRest,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RestKind {
+    Short,
+    Long,
+}
+
+fn yes() -> bool {
+    true
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -54,6 +74,8 @@ pub struct Item {
     pub quantity: u32,
     pub equipped: bool,
     pub note: String,
+    #[serde(default = "yes")]
+    pub proficient: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -89,6 +111,8 @@ pub struct Character {
     pub currency: [u32; 5],
     pub notes: String,
     pub active: bool,
+    #[serde(default)]
+    pub concentration: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -135,6 +159,14 @@ pub enum CharacterChange {
     Inventory(Vec<Item>),
     Currency([u32; 5]),
     Notes(String),
+    Rest(RestKind),
+    Cast {
+        spell: String,
+        level: u8,
+        pact: bool,
+        concentration: bool,
+    },
+    Concentration(Option<String>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -263,7 +295,36 @@ impl Character {
             currency: [0; 5],
             notes: String::new(),
             active: false,
+            concentration: None,
         }
+    }
+
+    fn rest(&mut self, kind: RestKind) {
+        let resets = |r: Reset| match kind {
+            RestKind::Short => r == Reset::ShortRest,
+            RestKind::Long => r != Reset::Never,
+        };
+        for c in &mut self.counters {
+            if resets(c.reset) {
+                c.current = c.max;
+            }
+        }
+        self.pact_spent = 0;
+        if kind == RestKind::Short {
+            return;
+        }
+        self.hp.current = self.hp.max;
+        self.hp.temp = 0;
+        self.slots_spent = [0; 9];
+        let level = self.level();
+        let regained = match self.rules {
+            RulesVersion::R2024 => level,
+            RulesVersion::R2014 | RulesVersion::LevelUp => (level / 2).max(1),
+        };
+        self.hit_dice_spent = self.hit_dice_spent.saturating_sub(regained);
+        self.death_saves = (0, 0);
+        self.exhaustion = self.exhaustion.saturating_sub(1);
+        self.concentration = None;
     }
 
     pub fn apply(&mut self, change: CharacterChange) {
@@ -302,6 +363,28 @@ impl Character {
             CharacterChange::Inventory(i) => self.inventory = i,
             CharacterChange::Currency(c) => self.currency = c,
             CharacterChange::Notes(n) => self.notes = n,
+            CharacterChange::Rest(kind) => self.rest(kind),
+            CharacterChange::Cast {
+                spell,
+                level,
+                pact,
+                concentration,
+            } => {
+                if pact {
+                    if self.pact_slots().is_some_and(|(n, _)| self.pact_spent < n) {
+                        self.pact_spent += 1;
+                    }
+                } else if (1..=9).contains(&level) {
+                    let i = usize::from(level - 1);
+                    if self.slots_spent[i] < self.spell_slots()[i] {
+                        self.slots_spent[i] += 1;
+                    }
+                }
+                if concentration {
+                    self.concentration = Some(spell);
+                }
+            }
+            CharacterChange::Concentration(c) => self.concentration = c,
         }
     }
 
@@ -351,7 +434,8 @@ impl Character {
                 .inventory
                 .iter()
                 .all(|i| link_ok(&i.item) && text_ok(&i.note))
-            && self.notes.len() <= MAX_BODY_BYTES;
+            && self.notes.len() <= MAX_BODY_BYTES
+            && self.concentration.as_deref().is_none_or(text_ok);
         if ok {
             Ok(())
         } else {
@@ -618,6 +702,77 @@ mod tests {
                 owner: copy.owner,
                 ..original
             }
+        );
+    }
+
+    #[test]
+    fn rests_and_casting() {
+        let mut c = hero();
+        c.hp = HitPoints {
+            current: 3,
+            max: 30,
+            temp: 5,
+        };
+        c.counters = vec![
+            Counter {
+                name: "Channel".into(),
+                current: 0,
+                max: 1,
+                reset: Reset::ShortRest,
+            },
+            Counter {
+                name: "Sorcery".into(),
+                current: 0,
+                max: 3,
+                reset: Reset::LongRest,
+            },
+            Counter {
+                name: "Charges".into(),
+                current: 0,
+                max: 7,
+                reset: Reset::Never,
+            },
+        ];
+        c.apply(CharacterChange::Cast {
+            spell: "Bless".into(),
+            level: 1,
+            pact: false,
+            concentration: true,
+        });
+        assert_eq!(
+            (c.slots_spent[0], c.concentration.as_deref()),
+            (1, Some("Bless"))
+        );
+        for _ in 0..5 {
+            c.apply(CharacterChange::Cast {
+                spell: "Shield".into(),
+                level: 1,
+                pact: false,
+                concentration: false,
+            });
+        }
+        assert_eq!(c.slots_spent[0], 4, "no more than the slots you have");
+        c.hit_dice_spent = 5;
+        c.exhaustion = 2;
+        c.apply(CharacterChange::Rest(RestKind::Short));
+        let current: Vec<u16> = c.counters.iter().map(|k| k.current).collect();
+        assert_eq!(current, [1, 0, 0]);
+        assert_eq!(c.hp.current, 3, "a short rest doesn't heal by itself");
+        c.apply(CharacterChange::Rest(RestKind::Long));
+        let current: Vec<u16> = c.counters.iter().map(|k| k.current).collect();
+        assert_eq!(current, [1, 3, 0]);
+        assert_eq!((c.hp.current, c.hp.temp, c.slots_spent), (30, 0, [0; 9]));
+        assert_eq!(
+            (c.hit_dice_spent, c.exhaustion, c.concentration.clone()),
+            (0, 1, None),
+            "2024 regains every hit die"
+        );
+        c.rules = RulesVersion::R2014;
+        c.hit_dice_spent = 5;
+        c.apply(CharacterChange::Rest(RestKind::Long));
+        assert_eq!(
+            c.hit_dice_spent, 3,
+            "2014 regains half the level, at least one"
         );
     }
 

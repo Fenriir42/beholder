@@ -520,3 +520,20 @@ sheet-other-versions = { $count ->
     [one] 1 other version with this name
    *[other] { $count } other versions with this name
 }
+sheet-weapon-proficient = Proficient with this weapon
+sheet-no-slots = No spell slot left for this spell
+sheet-cast = Cast
+sheet-concentrating = Concentrating on { $spell }
+sheet-end-concentration = End concentration
+sheet-short-rest = Short rest
+sheet-long-rest = Long rest
+sheet-long-rest-confirm = Long rest: full HP, all spell slots, resources and hit dice back, exhaustion −1, concentration ends.
+sheet-short-rest-confirm = Short rest: short-rest resources and pact slots come back. Spend hit dice with Heal.
+sheet-rest-confirm = Rest
+sheet-cast-ending = Cast (ends { $spell })
+sheet-slot-choice = Slot to use
+sheet-needs-concentration = Needs concentration.
+sheet-counter-reset = Comes back on
+reset-short = short rest
+reset-long = long rest
+reset-never = never (manual)

@@ -14,7 +14,7 @@ use beholder_core::{
 };
 use serde::{Deserialize, Serialize};
 
-pub const PROTOCOL_VERSION: u16 = 5;
+pub const PROTOCOL_VERSION: u16 = 6;
 
 pub const PROTOCOL_HEADER: &str = "x-beholder-protocol";
 

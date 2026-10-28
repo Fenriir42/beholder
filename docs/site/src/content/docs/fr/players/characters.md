@@ -34,6 +34,13 @@ Quand un sort ou une arme est dans le compendium, la fiche calcule ce qu'il fait
 
 L'onglet **Actions** regroupe vos armes équipées, sorts mineurs et sorts préparés avec ces valeurs, prêts pour les dés à venir. Les sorts dont les dégâts ne sont pas écrits en dés n'affichent que leur texte.
 
+### Repos et incantation
+
+- **Repos court** et **Repos long**, en haut, demandent une confirmation puis appliquent le repos pour vous. Un repos court rend les ressources réglées pour revenir après un repos court, et les emplacements de pacte de l'occultiste. Dépensez vous-même les dés de vie avec **Soins**. Un repos long rend vos PV, tous les emplacements de sorts, les ressources de repos court et long et vos dés de vie (tous en règles 2024, la moitié de votre niveau et au moins un en 2014), efface les jets contre la mort, réduit l'épuisement de un et met fin à la concentration. Le réglage « Revient après un » de chaque ressource se trouve dans **Modifier le personnage**.
+- **Lancer**, à côté d'un sort, dépense un emplacement du plus petit niveau qui vous reste (ou un emplacement de pacte). Il est grisé quand aucun emplacement ne permet de le lancer. Les sorts mineurs sont gratuits. Dans le panneau latéral, vous pouvez choisir un emplacement plus élevé avant de lancer.
+- **Concentration :** lancer un sort de concentration affiche « Concentration sur… » en haut, avec **Arrêter la concentration**. Si vous êtes déjà concentré sur un autre sort, **Lancer** ouvre le panneau latéral, où le bouton indique quel sort il interrompra.
+- **Maîtrise des armes :** dans le panneau latéral d'une arme, décochez **Maîtrise de cette arme** et son bonus d'attaque n'inclut plus votre bonus de maîtrise.
+
 ## Modifier le personnage
 
 **Modifier le personnage**, en haut, ouvre la vue de construction : nom et version des règles, espèce et historique, classes (niveau, dé de vie, type de lanceur, caractéristique d'incantation), caractéristiques et maîtrise des sauvegardes, maîtrise des compétences, armure et vitesse, PV maximum, ressources, dons et aptitudes, plus **Exporter** et **Supprimer**. Cliquez sur **Terminé** pour revenir à la vue de jeu. Chaque champ s'enregistre dès que vous le quittez, même hors ligne (les modifications partent quand la connexion revient).

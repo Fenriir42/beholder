@@ -520,3 +520,20 @@ sheet-other-versions = { $count ->
     [one] 1 autre version de ce nom
    *[other] { $count } autres versions de ce nom
 }
+sheet-weapon-proficient = Maîtrise de cette arme
+sheet-no-slots = Plus d'emplacement disponible pour ce sort
+sheet-cast = Lancer
+sheet-concentrating = Concentration sur { $spell }
+sheet-end-concentration = Arrêter la concentration
+sheet-short-rest = Repos court
+sheet-long-rest = Repos long
+sheet-long-rest-confirm = Repos long : PV au maximum, emplacements, ressources et dés de vie récupérés, épuisement −1, fin de la concentration.
+sheet-short-rest-confirm = Repos court : les ressources de repos court et les emplacements de pacte reviennent. Dépensez des dés de vie avec Soins.
+sheet-rest-confirm = Se reposer
+sheet-cast-ending = Lancer (met fin à { $spell })
+sheet-slot-choice = Emplacement à utiliser
+sheet-needs-concentration = Demande de la concentration.
+sheet-counter-reset = Revient après un
+reset-short = repos court
+reset-long = repos long
+reset-never = jamais (manuel)

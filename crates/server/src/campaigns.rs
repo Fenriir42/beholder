@@ -523,7 +523,11 @@ pub fn catch_up(conn: &Connection, id: CampaignId, after: Seq) -> Result<CatchUp
                 event: postcard::from_bytes(&body)?,
             })
         })
-        .collect::<Result<Vec<_>, DbError>>()?;
+        .collect::<Result<Vec<_>, DbError>>();
+    // Events stored under an older layout can't be replayed; the current snapshot replaces them.
+    let Ok(events) = events else {
+        return Ok(CatchUp::Snapshot);
+    };
     // Replay is filtered with today's audiences and settings, which is only right if none changed in range.
     if events.iter().any(|e| {
         matches!(

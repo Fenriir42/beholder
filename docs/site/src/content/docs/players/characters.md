@@ -34,6 +34,13 @@ When a spell or weapon is in the compendium, the sheet works out what it does fo
 
 The **Actions** tab gathers your equipped weapons, cantrips and prepared spells with these numbers, ready for the dice to come. Spells whose damage isn't written as dice show only their text.
 
+### Resting and casting
+
+- **Short rest** and **Long rest** at the top ask for a confirmation, then apply the rest for you. A short rest brings back the resources set to come back on a short rest, and warlock pact slots. Spend hit dice yourself with **Heal**. A long rest restores your HP, every spell slot, the short- and long-rest resources and your hit dice (all of them under the 2024 rules, half your level and at least one under 2014), clears death saves, lowers exhaustion by one and ends concentration. Each resource's "comes back on" setting is in **Edit character**.
+- **Cast** next to a spell spends a slot of the lowest level you have left (or a pact slot). It's greyed out when no slot can cast it. Cantrips are free. In the side panel you can pick a higher slot level before casting.
+- **Concentration:** casting a concentration spell shows "Concentrating on…" at the top, with **End concentration**. If you're already concentrating on another spell, **Cast** opens the side panel, where the button says which spell it will end.
+- **Weapon proficiency:** in a weapon's side panel, untick **Proficient with this weapon** and its attack bonus no longer includes your proficiency bonus.
+
 ## Editing the character
 
 **Edit character** at the top opens the build view: name and rules version, species and background, classes (level, hit die, kind of spellcaster, spellcasting ability), ability scores and saving throw proficiencies, skill proficiencies, armor and speed, maximum HP, resources, feats and features, plus **Export** and **Delete**. Click **Done** to go back to the play view. Every field saves as soon as you leave it, even offline (changes are sent when the connection comes back).

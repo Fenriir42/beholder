@@ -23,3 +23,8 @@ Phase 4 (SPEC §5.1) adds assisted character sheets. Each player can have severa
 
 - Each change sends the whole character to its owner and the DM, a few kilobytes compressed. That's acceptable for the frequency of play edits.
 - A future rules engine or level-up assistant can build on `Character::apply` and the same events.
+
+## Addendum: rests, casting and concentration (protocol 6)
+
+`Counter` gained a reset rule (never, short rest, long rest), `Item` a weapon proficiency flag, and `Character` the spell being concentrated on. `CharacterChange` gained `Rest`, `Cast` and `Concentration`, applied on the server like every other change: a long rest restores HP, slots, short- and long-rest resources and hit dice (all of them in 2024, half the level and at least one in 2014), clears death saves and concentration and lowers exhaustion by one. A cast spends a slot only when one is left. The postcard layout of `Character` changed, so `PROTOCOL_VERSION` is now 6. Characters stored in the old layout are still decoded (a legacy struct in `characters.rs` fills the new fields with defaults), and a catch-up whose stored events can't be decoded any more is answered with a snapshot. Character files without the new fields still import, with the same defaults.
+

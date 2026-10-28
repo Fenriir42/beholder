@@ -150,8 +150,10 @@ mod tests {
             quantity: 1,
             equipped: true,
             note: String::new(),
+            proficient: true,
         });
         ch.active = true;
+        ch.concentration = Some("Bless".into());
         ch
     }
     fn lid(n: u8) -> LibraryId {

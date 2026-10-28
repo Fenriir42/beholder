@@ -427,7 +427,7 @@ pub fn spell_effect(
     }
 }
 
-pub fn weapon_effect(ch: &Character, w: &Weapon, two_handed: bool) -> Effect {
+pub fn weapon_effect(ch: &Character, w: &Weapon, two_handed: bool, proficient: bool) -> Effect {
     let (str_mod, dex_mod) = (ch.modifier(Ability::Str), ch.modifier(Ability::Dex));
     let m = if w.ranged {
         dex_mod
@@ -443,7 +443,11 @@ pub fn weapon_effect(ch: &Character, w: &Weapon, two_handed: bool) -> Effect {
     };
     Effect {
         resolution: Resolution::Attack {
-            bonus: m + ch.proficiency_bonus(),
+            bonus: m + if proficient {
+                ch.proficiency_bonus()
+            } else {
+                0
+            },
         },
         damage: Some(Roll {
             bonus: base.bonus + i16::from(m),
@@ -675,8 +679,10 @@ mod tests {
         );
         assert_eq!(parse_weapon("A shiny ring that glows."), None);
         let ch = sorcerer(5);
-        let e = weapon_effect(&ch, &parse_weapon(rapier).unwrap(), false);
+        let e = weapon_effect(&ch, &parse_weapon(rapier).unwrap(), false, true);
         assert_eq!(e.resolution, Resolution::Attack { bonus: 7 });
+        let untrained = weapon_effect(&ch, &parse_weapon(rapier).unwrap(), false, false);
+        assert_eq!(untrained.resolution, Resolution::Attack { bonus: 4 });
         assert_eq!(e.damage.map(|r| r.to_string()).as_deref(), Some("1d8+4"));
     }
 }

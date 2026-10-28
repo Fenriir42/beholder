@@ -1,5 +1,5 @@
 use beholder_core::character::{
-    Character, CharacterChange, CharacterOp, ClassLevel, Counter, HitPoints, Link,
+    Character, CharacterChange, CharacterOp, ClassLevel, Counter, HitPoints, Link, Reset,
 };
 use beholder_core::compendium::{Hit, Kind, RulesVersion, SearchQuery};
 use beholder_core::rules::{Ability, ArmorFormula, Caster, Proficiency, Skill, class_defaults};
@@ -836,6 +836,21 @@ fn Counters(campaign: CampaignId, ch: Character) -> impl IntoView {
                     <label class="filter"><span>{move || i18n.t("sheet-counter-max")}</span>
                         <input type="number" min="0" prop:value=c.max.to_string()
                             on:change=on_num(move |v: u16| { edit(Box::new(move |c| c.max = v)) })/></label>
+                    <label class="filter"><span>{move || i18n.t("sheet-counter-reset")}</span>
+                        <select prop:value=format!("{:?}", c.reset)
+                            on:change=move |ev| {
+                                let r = match event_target_value(&ev).as_str() {
+                                    "Never" => Reset::Never,
+                                    "ShortRest" => Reset::ShortRest,
+                                    _ => Reset::LongRest,
+                                };
+                                edit(Box::new(move |c| c.reset = r));
+                            }>
+                            <option value="ShortRest">{move || i18n.t("reset-short")}</option>
+                            <option value="LongRest">{move || i18n.t("reset-long")}</option>
+                            <option value="Never">{move || i18n.t("reset-never")}</option>
+                        </select>
+                    </label>
                     <button type="button" class="ghost" on:click=remove>{move || i18n.t("sheet-remove")}</button>
                 </div>
             }
@@ -846,6 +861,7 @@ fn Counters(campaign: CampaignId, ch: Character) -> impl IntoView {
         move |_| {
             let mut l = list.get_value();
             l.push(Counter {
+                reset: Reset::default(),
                 name: i18n.t("sheet-counter-new"),
                 current: 0,
                 max: 0,

@@ -2,7 +2,8 @@ use std::collections::HashMap;
 
 use beholder_core::actions::{Details, Effect as Fx, Resolution, spell_effect, weapon_effect};
 use beholder_core::character::{
-    Character, CharacterChange, CharacterOp, Counter, HitPoints, Item, KnownSpell, Link,
+    Character, CharacterChange, CharacterOp, Counter, HitPoints, Item, KnownSpell, Link, Reset,
+    RestKind,
 };
 use beholder_core::compendium::{Facets, Hit, Kind, SearchQuery};
 use beholder_core::rules::{Ability, Proficiency, Skill};
@@ -230,6 +231,70 @@ fn spell_fx(ch: &Character, look: Lookups, s: &KnownSpell, cast_level: u8) -> Op
         cast_level.max(s.level),
         ability,
     ))
+}
+
+fn cast_options(ch: &Character, level: u8) -> Vec<(u8, bool)> {
+    if level == 0 {
+        return vec![(0, false)];
+    }
+    let slots = ch.spell_slots();
+    let mut out: Vec<(u8, bool)> = (level..=9)
+        .filter(|l| {
+            let i = usize::from(l - 1);
+            ch.slots_spent[i] < slots[i]
+        })
+        .map(|l| (l, false))
+        .collect();
+    if let Some((count, pact_level)) = ch.pact_slots()
+        && pact_level >= level
+        && ch.pact_spent < count
+    {
+        out.push((pact_level, true));
+    }
+    out
+}
+
+fn concentrates(look: Lookups, link: &Link) -> bool {
+    matches!(
+        look.facets(link),
+        Some(Facets::Spell {
+            concentration: true,
+            ..
+        })
+    ) || look
+        .details(link)
+        .and_then(|d| d.spell)
+        .and_then(|s| s.duration)
+        .is_some_and(|d| d.to_lowercase().contains("concentration"))
+}
+
+fn cast(
+    campaign: CampaignId,
+    id: CharacterId,
+    spell: String,
+    (level, pact): (u8, bool),
+    concentration: bool,
+) {
+    send(
+        campaign,
+        CharacterOp::Change {
+            id,
+            change: CharacterChange::Cast {
+                spell,
+                level,
+                pact,
+                concentration,
+            },
+        },
+    );
+}
+
+fn option_label(i18n: I18n, (level, pact): (u8, bool)) -> String {
+    match (level, pact) {
+        (0, _) => i18n.t("sheet-cantrips"),
+        (l, true) => i18n.tr("sheet-pact-label", &[("level", l.into())]),
+        (l, false) => level_label(i18n, l),
+    }
 }
 
 fn meaningful(e: &Fx) -> bool {
@@ -511,6 +576,18 @@ fn Vitals(campaign: CampaignId, ch: Character) -> impl IntoView {
     let conditions = ch.conditions.join(", ");
     let exhaustion = ch.exhaustion;
     let penalty = ch.d20_penalty();
+    let confirm = RwSignal::new(None::<RestKind>);
+    let rest = move |kind: RestKind| {
+        confirm.set(None);
+        send(
+            campaign,
+            CharacterOp::Change {
+                id,
+                change: CharacterChange::Rest(kind),
+            },
+        );
+    };
+    let concentration = ch.concentration.clone();
     view! {
         <div class="vitals">
             <div class="stats">
@@ -534,6 +611,29 @@ fn Vitals(campaign: CampaignId, ch: Character) -> impl IntoView {
                 </div>
             </div>
             <div class="abilities-strip">{abilities}</div>
+            <div class="toolbar">
+                {concentration.map(|c| view! {
+                    <span class="concentration" role="status">
+                        {move || i18n.tr("sheet-concentrating", &[("spell", c.clone().into())])}
+                    </span>
+                    <button type="button" class="ghost"
+                        on:click=move |_| send(campaign, CharacterOp::Change { id, change: CharacterChange::Concentration(None) })>
+                        {move || i18n.t("sheet-end-concentration")}
+                    </button>
+                })}
+                <span class="grow"></span>
+                {move || match confirm.get() {
+                    None => view! {
+                        <button type="button" on:click=move |_| confirm.set(Some(RestKind::Short))>{move || i18n.t("sheet-short-rest")}</button>
+                        <button type="button" on:click=move |_| confirm.set(Some(RestKind::Long))>{move || i18n.t("sheet-long-rest")}</button>
+                    }.into_any(),
+                    Some(kind) => view! {
+                        <span class="small">{move || i18n.t(if kind == RestKind::Long { "sheet-long-rest-confirm" } else { "sheet-short-rest-confirm" })}</span>
+                        <button type="button" class="primary" on:click=move |_| rest(kind)>{move || i18n.t("sheet-rest-confirm")}</button>
+                        <button type="button" class="ghost" on:click=move |_| confirm.set(None)>{move || i18n.t("cancel")}</button>
+                    }.into_any(),
+                }}
+            </div>
             {(!conditions.is_empty() || exhaustion > 0).then(|| view! {
                 <p class="small">
                     {(!conditions.is_empty()).then(|| view! {
@@ -639,7 +739,14 @@ fn counter_row(
     };
     view! {
         <div class="row">
-            <span class="grow">{c.name.clone()}</span>
+            <span class="grow">
+                {c.name.clone()}
+                <span class="muted small">" · "{move || i18n.t(match c.reset {
+                    Reset::ShortRest => "reset-short",
+                    Reset::LongRest => "reset-long",
+                    Reset::Never => "reset-never",
+                })}</span>
+            </span>
             <button type="button" class="ghost" aria-label=move || i18n.t("sheet-use-one") on:click=move |_| set(-1)>"−"</button>
             <strong>{format!("{} / {}", c.current, c.max)}</strong>
             <button type="button" class="ghost" aria-label=move || i18n.t("sheet-restore-one") on:click=move |_| set(1)>"+"</button>
@@ -664,10 +771,11 @@ fn ActionsTab(
             let link = i.item.clone();
             let name = link.name.clone();
             let weapon = look.details(&link).and_then(|d| d.weapon);
+            let proficient = i.proficient;
             let line = weapon.as_ref().map(|w| {
-                let mut l = effect_line(i18n, &weapon_effect(&ch, w, false));
+                let mut l = effect_line(i18n, &weapon_effect(&ch, w, false, proficient));
                 if w.versatile.is_some() {
-                    let two = weapon_effect(&ch, w, true);
+                    let two = weapon_effect(&ch, w, true, proficient);
                     if let Some(d) = two.damage {
                         l.push_str(&i18n.tr("fx-two-handed", &[("roll", d.to_string().into())]));
                     }
@@ -889,6 +997,17 @@ fn SpellsTab(
                             .map(|e| effect_line(i18n, &e));
                         let prepared = s.prepared;
                         let toggle_name = name.clone();
+                        let options = cast_options(&ch, s.level);
+                        let conc = concentrates(look, &link);
+                        let conflict = conc && ch.concentration.as_ref().is_some_and(|c| *c != name);
+                        let cast_name = name.clone();
+                        let cast_link = link.clone();
+                        let first = options.first().copied();
+                        let quick_cast = move |_| match first {
+                            Some(_) if conflict => panel.set(Panel::Entry { link: cast_link.clone(), owner: Owner::Spell }),
+                            Some(o) => cast(campaign, id, cast_name.clone(), o, conc),
+                            None => {}
+                        };
                         view! {
                             <div class="row spell-row">
                                 <button type="button" class="pip" class:used=!prepared
@@ -904,6 +1023,11 @@ fn SpellsTab(
                                         <span class="muted small">" "{badges}</span>
                                     </span>
                                     {fx.map(|f| view! { <span class="effect">{f}</span> })}
+                                </button>
+                                <button type="button" disabled=first.is_none()
+                                    title=move || if first.is_none() { i18n.t("sheet-no-slots") } else { first.map(|o| option_label(i18n, o)).unwrap_or_default() }
+                                    on:click=quick_cast>
+                                    {move || i18n.t("sheet-cast")}
                                 </button>
                             </div>
                         }
@@ -1266,24 +1390,46 @@ fn EntryDetail(
                     Some(view! { <li><span class="muted small">{label}</span>" "{effect_line(i18n, &fx)}</li> })
                 })
                 .collect::<Vec<_>>();
+            let conc = concentrates(look, &link);
             Some(view! {
                 <div class="computed">
                     <p class="small">{facts}</p>
                     <ul class="plain-list">{rows}</ul>
+                    <CastControls campaign=campaign ch=ch.clone() known=known.clone() conc=conc/>
                 </div>
             }
             .into_any())
         }),
         Owner::Item => look.details(&link).and_then(|d| d.weapon).map(|w| {
-            let one = effect_line(i18n, &weapon_effect(&ch, &w, false));
+            let proficient = ch
+                .inventory
+                .iter()
+                .find(|i| i.item.name == name)
+                .is_none_or(|i| i.proficient);
+            let one = effect_line(i18n, &weapon_effect(&ch, &w, false, proficient));
             let two = w
                 .versatile
                 .is_some()
-                .then(|| effect_line(i18n, &weapon_effect(&ch, &w, true)));
+                .then(|| effect_line(i18n, &weapon_effect(&ch, &w, true, proficient)));
+            let toggle = {
+                let ch = ch.clone();
+                let name = name.clone();
+                move |_| {
+                    change_list(campaign, id, &ch, Owner::Item, |c| {
+                        for i in c.inventory.iter_mut().filter(|i| i.item.name == name) {
+                            i.proficient = !i.proficient;
+                        }
+                    })
+                }
+            };
             view! {
                 <div class="computed">
                     <p>{one}</p>
                     {two.map(|t| view! { <p>{move || i18n.t("fx-two-handed-label")}" "{t}</p> })}
+                    <label class="choice small">
+                        <input type="checkbox" prop:checked=proficient on:change=toggle/>
+                        {move || i18n.t("sheet-weapon-proficient")}
+                    </label>
                 </div>
             }
             .into_any()
@@ -1354,6 +1500,49 @@ fn EntryDetail(
                 .into_any()
             }
         }}
+    }
+}
+
+#[component]
+fn CastControls(
+    campaign: CampaignId,
+    ch: Character,
+    known: KnownSpell,
+    conc: bool,
+) -> impl IntoView {
+    let i18n = use_i18n();
+    let id = ch.id;
+    let options = cast_options(&ch, known.level);
+    let choice = RwSignal::new(0usize);
+    let other = ch
+        .concentration
+        .clone()
+        .filter(|c| conc && *c != known.spell.name);
+    let name = known.spell.name.clone();
+    let stored = StoredValue::new(options.clone());
+    let go = move |_| {
+        if let Some(o) = stored.with_value(|o| o.get(choice.get_untracked()).copied()) {
+            cast(campaign, id, name.clone(), o, conc);
+        }
+    };
+    let label = other.clone().map_or_else(
+        || i18n.t("sheet-cast"),
+        |o| i18n.tr("sheet-cast-ending", &[("spell", o.into())]),
+    );
+    view! {
+        <div class="field-row">
+            {(options.len() > 1).then(|| view! {
+                <select aria-label=move || i18n.t("sheet-slot-choice")
+                    on:change=move |ev| choice.set(event_target_value(&ev).parse().unwrap_or(0))>
+                    {options.iter().enumerate().map(|(k, o)| view! {
+                        <option value=k.to_string()>{option_label(i18n, *o)}</option>
+                    }).collect_view()}
+                </select>
+            })}
+            <button type="button" class="primary" disabled=options.is_empty() on:click=go>{label}</button>
+        </div>
+        {options.is_empty().then(|| view! { <p class="muted small">{move || i18n.t("sheet-no-slots")}</p> })}
+        {conc.then(|| view! { <p class="muted small">{move || i18n.t("sheet-needs-concentration")}</p> })}
     }
 }
 
@@ -1455,6 +1644,7 @@ fn Browse(campaign: CampaignId, ch: Character, owner: Owner) -> impl IntoView {
                 quantity: 1,
                 equipped: false,
                 note: String::new(),
+                proficient: true,
             }),
             Owner::Feat => c.feats.push(link),
             Owner::Feature | Owner::Other => c.features.push(link),
@@ -1487,6 +1677,7 @@ fn Browse(campaign: CampaignId, ch: Character, owner: Owner) -> impl IntoView {
                 quantity: 1,
                 equipped: false,
                 note: String::new(),
+                proficient: true,
             }),
             Owner::Feat => c.feats.push(link),
             Owner::Feature | Owner::Other => c.features.push(link),
