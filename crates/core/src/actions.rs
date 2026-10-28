@@ -39,6 +39,7 @@ pub struct SpellInfo {
     pub half_on_save: bool,
     pub damage: Option<Roll>,
     pub damage_type: Option<String>,
+    pub damage_adds_modifier: bool,
     pub healing: Option<Roll>,
     pub adds_modifier: bool,
     pub cantrip_scaling: bool,
@@ -162,25 +163,54 @@ fn find_seq(w: &[String], seq: &[&str]) -> Option<usize> {
         .find(|&i| seq.iter().enumerate().all(|(k, s)| w[i + k] == *s))
 }
 
-fn damage_after(w: &[String], from: usize) -> Option<(Roll, Option<String>)> {
+const SPELL_MODIFIER: [&str; 4] = ["your", "spellcasting", "ability", "modifier"];
+
+fn modifier_at(w: &[String], j: usize) -> Option<usize> {
+    let plus = matches!(w.get(j).map(String::as_str), Some("+" | "plus"));
+    let rest = w.get(j + 1..j + 5)?;
+    (plus && rest.iter().zip(SPELL_MODIFIER).all(|(a, b)| a == b)).then_some(j + 5)
+}
+
+struct Found {
+    roll: Roll,
+    kind: Option<String>,
+    adds_modifier: bool,
+}
+
+fn damage_after(w: &[String], from: usize) -> Option<Found> {
     for i in from..w.len() {
         let Some(mut roll) = dice(&w[i]) else {
             continue;
         };
         let mut j = i + 1;
-        if w.get(j).map(String::as_str) == Some("+")
+        let mut adds_modifier = false;
+        if let Some(after) = modifier_at(w, j) {
+            adds_modifier = true;
+            j = after;
+        } else if w.get(j).map(String::as_str) == Some("+")
             && let Some(b) = w.get(j + 1).and_then(|b| b.parse::<i16>().ok())
         {
             roll.bonus = b;
             j += 2;
         }
+        let before = &w[i.saturating_sub(4)..i];
+        let equal_to = before.len() >= 2
+            && before[before.len() - 2] == "equal"
+            && before[before.len() - 1] == "to";
         let window = &w[j..w.len().min(j + 3)];
         let kind = window
             .iter()
+            .chain(before.iter().filter(|_| equal_to))
             .find(|x| DAMAGE_TYPES.contains(&x.as_str()))
             .cloned();
-        if kind.is_some() || window.iter().any(|x| x == "damage") {
-            return Some((roll, kind));
+        let damage_word = window.iter().any(|x| x == "damage")
+            || (equal_to && before.iter().any(|x| x == "damage"));
+        if kind.is_some() || damage_word {
+            return Some(Found {
+                roll,
+                kind,
+                adds_modifier,
+            });
         }
     }
     None
@@ -206,15 +236,35 @@ pub fn parse_spell(text: &str) -> SpellInfo {
             .find(|(n, _)| w[s] == *n)
             .map(|(_, a)| Check::Save(*a))
     };
+    let header_save = find_seq(&w, &["saving", "throw"])
+        .and_then(|i| w.get(i + 2))
+        .and_then(|a| ABILITY_NAMES.iter().find(|(n, _)| a == n))
+        .map(|(_, a)| Check::Save(*a));
     let check = match (attack, save) {
         (Some(a), Some(s)) if s < a => save_check(s),
         (Some(_), _) => Some(Check::Attack),
         (None, Some(s)) => save_check(s),
-        (None, None) => None,
+        (None, None) => header_save,
     };
     let higher = find_seq(&w, &["higher", "levels"])
         .or_else(|| find_seq(&w, &["higher-level", "spell", "slot"]))
-        .or_else(|| find_seq(&w, &["of", "higher", "level"]));
+        .or_else(|| find_seq(&w, &["of", "higher", "level"]))
+        .or_else(|| {
+            (0..w.len().saturating_sub(1)).find(|&i| {
+                w[i] == "or"
+                    && w[i + 1] == "higher"
+                    && w[i + 2..w.len().min(i + 30)]
+                        .iter()
+                        .any(|x| x == "increases" || x == "each")
+            })
+        })
+        .map(|h| {
+            w[..h]
+                .iter()
+                .rposition(|x| x == "when" || x == "at")
+                .filter(|&k| h - k < 12)
+                .unwrap_or(h)
+        });
     let healing_at = find_seq(&w, &["regains"]).or_else(|| find_seq(&w, &["regain"]));
     let healing = healing_at.and_then(|h| w[h..w.len().min(h + 14)].iter().find_map(|x| dice(x)));
     let body_end = higher.unwrap_or(w.len());
@@ -228,11 +278,21 @@ pub fn parse_spell(text: &str) -> SpellInfo {
         dice(w.get(by)?)
     });
     let upcast_above = higher.and_then(|h| {
-        let at = find_seq(&w[h..], &["level", "above"])? + h + 2;
-        ordinal(w.get(at)?)
+        let at = find_seq(&w[h..], &["level", "above"])
+            .or_else(|| find_seq(&w[h..], &["rank", "above"]))
+            .or_else(|| find_seq(&w[h..], &["ranks", "above"]))?
+            + h
+            + 2;
+        let n = if w.get(at).map(String::as_str) == Some("rank") {
+            at + 1
+        } else {
+            at
+        };
+        ordinal(w.get(n)?)
     });
-    let cantrip_scaling = find_seq(&w, &["when", "you", "reach", "5th", "level"]).is_some()
-        || find_seq(&w, &["when", "you", "reach", "levels", "5"]).is_some();
+    let cantrip_scaling = find_seq(&w, &["reach", "5th", "level"]).is_some()
+        || find_seq(&w, &["reaches", "5th", "level"]).is_some()
+        || find_seq(&w, &["reach", "levels", "5"]).is_some();
     let projectile_words = [
         "dart", "darts", "beam", "beams", "ray", "rays", "missiles", "bolts",
     ];
@@ -259,8 +319,14 @@ pub fn parse_spell(text: &str) -> SpellInfo {
         components: field(text, "Components"),
         check,
         half_on_save: find_seq(&w, &["half", "as", "much", "damage"]).is_some(),
-        damage: damage.as_ref().map(|(r, _)| *r),
-        damage_type: damage.and_then(|(_, t)| t),
+        damage: damage.as_ref().map(|f| f.roll),
+        damage_adds_modifier: damage.as_ref().is_some_and(|f| f.adds_modifier),
+        damage_type: damage.and_then(|f| f.kind).or_else(|| {
+            find_seq(&w, &["damage", "type"])
+                .and_then(|i| w.get(i + 2))
+                .filter(|t| DAMAGE_TYPES.contains(&t.as_str()))
+                .cloned()
+        }),
         healing,
         adds_modifier: healing.is_some()
             && find_seq(&w, &["plus", "your", "spellcasting", "ability", "modifier"]).is_some(),
@@ -348,7 +414,13 @@ pub fn spell_effect(
     }
     Effect {
         resolution,
-        damage: info.damage.map(scale),
+        damage: info.damage.map(|d| {
+            let mut r = scale(d);
+            if info.damage_adds_modifier {
+                r.bonus += i16::from(ch.modifier(ability));
+            }
+            r
+        }),
         damage_type: info.damage_type.clone(),
         healing,
         times,
@@ -474,6 +546,57 @@ mod tests {
         );
         let h = parse_spell(HOLD);
         assert_eq!((h.check, h.damage), (Some(Check::Save(Ability::Wis)), None));
+    }
+
+    #[test]
+    fn other_phrasings_from_libraries() {
+        let conjure = "Make a melee spell attack. On a hit, the target takes psychic damage equal to 3d12 plus your spellcasting ability modifier.";
+        let c = parse_spell(conjure);
+        assert_eq!(
+            (
+                c.damage.map(|r| r.to_string()),
+                c.damage_type.as_deref(),
+                c.damage_adds_modifier
+            ),
+            (Some("3d12".into()), Some("psychic"), true)
+        );
+        let shards =
+            "A comet deals 2d4 + your spellcasting ability modifier force damage to its target.";
+        let s = parse_spell(shards);
+        assert_eq!(
+            (s.damage_type.as_deref(), s.damage_adds_modifier),
+            (Some("force"), true)
+        );
+        let effect = spell_effect(&sorcerer(5), &c, 2, 2, Ability::Cha);
+        assert_eq!(
+            effect.damage.map(|r| r.to_string()).as_deref(),
+            Some("3d12+3")
+        );
+        let power = "Each creature must make a Dexterity saving throw, taking 3d6 cold damage on a failure. When you use this power at rank 2 or higher, the damage increases by 1d6 for each rank above 1.";
+        let p = parse_spell(power);
+        assert_eq!(
+            (p.upcast.map(|r| r.to_string()), p.upcast_above),
+            (Some("1d6".into()), Some(1))
+        );
+        let slot = "The target takes 4d8 fire damage. When you cast this spell using a spell slot of 3rd level or higher, the damage increases by 1d8 for each slot level above 2nd.";
+        let sl = parse_spell(slot);
+        assert_eq!(
+            (
+                sl.upcast.map(|r| r.to_string()),
+                sl.upcast_above,
+                sl.damage.map(|r| r.to_string())
+            ),
+            (Some("1d8".into()), Some(2), Some("4d8".into()))
+        );
+        let hinted = parse_spell(
+            "**Saving Throw:** Constitution\n\n**Damage Type:** necrotic\n\nIt takes 2d8 damage on a failure.",
+        );
+        assert_eq!(
+            (hinted.check, hinted.damage_type.as_deref()),
+            (Some(Check::Save(Ability::Con)), Some("necrotic"))
+        );
+        let tap = "The target takes 1d8 necrotic damage. The damage of this spell increases by 1d8 when the caster reaches 5th level (2d8), 11th level (3d8), and 17th level (4d8).";
+        assert!(parse_spell(tap).cantrip_scaling);
     }
 
     #[test]

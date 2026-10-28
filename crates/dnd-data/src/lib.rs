@@ -263,6 +263,7 @@ fn spell(r: &Value, raw: &str, e: &mut Map<String, Value>) -> (&'static str, Str
     .iter()
     .filter(|(label, _)| !description.contains(&format!("{label}:")))
     .filter_map(|(label, key)| prop(r, key).map(|v| format!("**{label}:** {v}\n\n")))
+    .chain(spell_hints(r, description))
     .collect();
     let (level_line, body) = match text.split_once("\n\n") {
         Some((first, rest))
@@ -277,6 +278,35 @@ fn spell(r: &Value, raw: &str, e: &mut Map<String, Value>) -> (&'static str, Str
     };
     let text = format!("{level_line}{}{body}", missing.concat());
     ("spell", text)
+}
+
+const ABILITIES: [&str; 6] = [
+    "strength",
+    "dexterity",
+    "constitution",
+    "intelligence",
+    "wisdom",
+    "charisma",
+];
+
+fn spell_hints(r: &Value, description: &str) -> Vec<String> {
+    let lower = description.to_lowercase();
+    let mut out = Vec::new();
+    if let Some(save) = prop(r, "Save")
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| ABILITIES.contains(&s.as_str()))
+        && !lower.contains(&format!("{save} saving throw"))
+        && !lower.contains(&format!("{save} save"))
+    {
+        out.push(format!("**Saving Throw:** {}\n\n", title(&save)));
+    }
+    if let Some(kind) = prop(r, "Damage Type").map(|k| k.trim().to_lowercase())
+        && !kind.is_empty()
+        && !lower.contains(&kind)
+    {
+        out.push(format!("**Damage Type:** {kind}\n\n"));
+    }
+    out
 }
 
 const SPELL_LABELS: [&str; 5] = ["Casting Time", "Range", "Components", "Duration", "Classes"];
@@ -1029,6 +1059,28 @@ pub fn each_record(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn spell_properties_fill_what_the_text_lacks() {
+        let raw = json!({"name": "Arrhythmia", "description": "Your target's heart skips. It takes 2d8 damage on a failure.", "book": "Deep Magic",
+            "properties": {"Category": "Spells", "Level": 2, "School": "necromancy", "Save": "Constitution", "Damage Type": "necrotic", "Casting Time": "1 action"}});
+        let text = convert("spells", &raw)[0]["text"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert!(text.contains("**Saving Throw:** Constitution"), "{text}");
+        assert!(text.contains("**Damage Type:** necrotic"), "{text}");
+        let named = json!({"name": "Zap", "description": "Make a Dexterity saving throw or take 1d6 fire damage.", "book": "X",
+            "properties": {"Category": "Spells", "Level": 1, "School": "evocation", "Save": "Dexterity", "Damage Type": "fire"}});
+        let text = convert("spells", &named)[0]["text"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert!(
+            !text.contains("Saving Throw:") && !text.contains("Damage Type:"),
+            "{text}"
+        );
+    }
 
     #[test]
     fn streamed_records_become_drafts() {
