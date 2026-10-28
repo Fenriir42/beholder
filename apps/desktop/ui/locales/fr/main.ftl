@@ -474,3 +474,6 @@ slot-6 = Emplacements de niveau 6 dépensés (sur { $total })
 slot-7 = Emplacements de niveau 7 dépensés (sur { $total })
 slot-8 = Emplacements de niveau 8 dépensés (sur { $total })
 slot-9 = Emplacements de niveau 9 dépensés (sur { $total })
+sheet-import = Importer un personnage…
+sheet-export = Exporter
+sheet-exported = Enregistré dans { $path }

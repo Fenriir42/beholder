@@ -31,6 +31,10 @@ Vous suivez aussi les PV (actuels, maximum, temporaires), les dés de vie dépen
 
 La montée de niveau est manuelle : changez un niveau de classe et tout ce qui précède est recalculé. L'application n'applique pas les aptitudes de classe pour vous.
 
+## Export et import
+
+**Exporter**, en bas de la fiche, enregistre le personnage dans votre dossier Téléchargements sous forme de fichier JSON `beholder-character` (version 1), comme sauvegarde ou pour l'emmener dans une autre campagne ou sur un autre serveur. **Importer un personnage…**, dans l'onglet Personnages, choisit un tel fichier et l'ajoute comme nouveau personnage à vous dans cette campagne.
+
 ## Qui voit quoi
 
 - **Vous et le MJ** voyez et modifiez votre fiche complète. Le MJ peut tout corriger, par exemple pour appliquer des dégâts.

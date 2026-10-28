@@ -35,7 +35,7 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 
 ## In progress
 
-- **Character sheets (Phase 4):** characters with an assisted sheet (computed modifiers, saves, skills, AC, spell slots including multiclass and pact magic), compendium links, edits by the owner and the DM, and summaries for the rest of the party. Still to come: importing and exporting a character, and an optional guided level-up.
+- **Character sheets (Phase 4):** characters with an assisted sheet (computed modifiers, saves, skills, AC, spell slots including multiclass and pact magic), compendium links, edits by the owner and the DM, and summaries for the rest of the party. Export and import as JSON files. Still to come: an optional guided level-up.
 
 ## Planned
 

@@ -31,6 +31,10 @@ You also track HP (current, maximum, temporary), hit dice spent, death saves, co
 
 Leveling up is manual: change a class level and everything above is recomputed. The app doesn't apply class features for you.
 
+## Export and import
+
+**Export** at the bottom of the sheet saves the character to your Downloads folder as a `beholder-character` JSON file (version 1), for a backup or to bring the character to another campaign or server. **Import a character…** in the Characters tab picks such a file and adds it as a new character of yours in this campaign.
+
 ## Who sees what
 
 - **You and the DM** see and edit your full sheet. The DM can fix anything, for example to apply damage.

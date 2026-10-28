@@ -359,6 +359,44 @@ impl Character {
         }
     }
 
+    pub fn to_changes(&self) -> Vec<CharacterChange> {
+        let mut out = vec![
+            CharacterChange::Species(self.species.clone()),
+            CharacterChange::Background(self.background.clone()),
+            CharacterChange::Classes(self.classes.clone()),
+            CharacterChange::Feats(self.feats.clone()),
+            CharacterChange::Features(self.features.clone()),
+            CharacterChange::Abilities(self.abilities),
+            CharacterChange::Saves(self.saves),
+            CharacterChange::JackOfAllTrades(self.jack_of_all_trades),
+            CharacterChange::Armor {
+                formula: self.armor,
+                shield: self.shield,
+                bonus: self.ac_bonus,
+            },
+            CharacterChange::InitiativeBonus(self.initiative_bonus),
+            CharacterChange::Speed(self.speed),
+            CharacterChange::Hp(self.hp),
+            CharacterChange::HitDiceSpent(self.hit_dice_spent),
+            CharacterChange::DeathSaves(self.death_saves.0, self.death_saves.1),
+            CharacterChange::Conditions(self.conditions.clone()),
+            CharacterChange::Exhaustion(self.exhaustion),
+            CharacterChange::Counters(self.counters.clone()),
+            CharacterChange::SlotsSpent(self.slots_spent),
+            CharacterChange::PactSpent(self.pact_spent),
+            CharacterChange::Spells(self.spells.clone()),
+            CharacterChange::Inventory(self.inventory.clone()),
+            CharacterChange::Currency(self.currency),
+            CharacterChange::Notes(self.notes.clone()),
+        ];
+        out.extend(
+            Skill::ALL
+                .into_iter()
+                .map(|s| CharacterChange::Skill(s, self.skills[s.index()])),
+        );
+        out
+    }
+
     pub fn summary(&self) -> CharacterSummary {
         CharacterSummary {
             id: self.id,
@@ -558,6 +596,28 @@ mod tests {
             }
             .events(me, &party)
             .is_err()
+        );
+    }
+
+    #[test]
+    fn changes_rebuild_an_imported_character() {
+        let original = hero();
+        let mut copy = Character::new(
+            CharacterId::from_bytes([5; 16]),
+            UserId::from_bytes([6; 16]),
+            original.name.clone(),
+            original.rules,
+        );
+        for c in original.to_changes() {
+            copy.apply(c);
+        }
+        assert_eq!(
+            copy,
+            Character {
+                id: copy.id,
+                owner: copy.owner,
+                ..original
+            }
         );
     }
 

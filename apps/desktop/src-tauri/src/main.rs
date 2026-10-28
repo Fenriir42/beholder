@@ -86,6 +86,8 @@ fn main() {
             commands::library_undo_import,
             commands::character_command,
             commands::character_create,
+            commands::character_export,
+            commands::character_import,
             commands::bulk_open,
             commands::bulk_values,
             commands::bulk_preview,

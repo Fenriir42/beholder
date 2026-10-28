@@ -35,7 +35,7 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 
 ## En cours
 
-- **Fiches de personnage (phase 4) :** personnages avec une fiche assistée (modificateurs, sauvegardes, compétences, CA et emplacements de sorts calculés, multiclassage et magie de pacte compris), liens vers le compendium, modifications par le propriétaire et le MJ, et résumés pour le reste du groupe. Reste à venir : l'import et l'export d'un personnage, et une montée de niveau guidée facultative.
+- **Fiches de personnage (phase 4) :** personnages avec une fiche assistée (modificateurs, sauvegardes, compétences, CA et emplacements de sorts calculés, multiclassage et magie de pacte compris), liens vers le compendium, modifications par le propriétaire et le MJ, et résumés pour le reste du groupe. Export et import en fichiers JSON. Reste à venir : une montée de niveau guidée facultative.
 
 ## Prévu
 

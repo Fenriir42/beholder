@@ -474,3 +474,6 @@ slot-6 = 6th-level slots spent (of { $total })
 slot-7 = 7th-level slots spent (of { $total })
 slot-8 = 8th-level slots spent (of { $total })
 slot-9 = 9th-level slots spent (of { $total })
+sheet-import = Import a character…
+sheet-export = Export
+sheet-exported = Saved to { $path }

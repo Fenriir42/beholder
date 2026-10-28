@@ -799,3 +799,101 @@ pub fn character_create(
     character_command(shell, campaign_id, CharacterOp::Create { id, name, rules })?;
     Ok(id.to_string())
 }
+
+#[derive(serde::Serialize, serde::Deserialize)]
+struct CharacterFile {
+    format: String,
+    version: u32,
+    character: beholder_core::character::Character,
+}
+
+const CHARACTER_FORMAT: &str = "beholder-character";
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn character_export(
+    app: AppHandle,
+    shell: State<'_, Shell>,
+    campaign_id: String,
+    id: beholder_core::CharacterId,
+) -> Result<String, IpcError> {
+    let campaign = self::campaign_id(&campaign_id)?;
+    let view = shell
+        .session()?
+        .client
+        .view()
+        .map_err(|_| IpcError::Storage)?;
+    let character = view
+        .campaigns
+        .into_iter()
+        .find(|c| c.campaign.id == campaign)
+        .and_then(|c| c.campaign.character(id).cloned())
+        .ok_or(IpcError::BadFile)?;
+    let slug: String = character
+        .name
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() {
+                c.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect();
+    let file = CharacterFile {
+        format: CHARACTER_FORMAT.into(),
+        version: 1,
+        character,
+    };
+    let dir = app.path().download_dir().map_err(|_| IpcError::Storage)?;
+    let mut path = dir.join(format!("beholder-character-{slug}.json"));
+    let mut n = 1;
+    while path.exists() {
+        n += 1;
+        path = dir.join(format!("beholder-character-{slug}-{n}.json"));
+    }
+    let text = serde_json::to_vec_pretty(&file).map_err(|_| IpcError::Storage)?;
+    std::fs::write(&path, text).map_err(|_| IpcError::Storage)?;
+    Ok(path.display().to_string())
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub async fn character_import(
+    app: AppHandle,
+    shell: State<'_, Shell>,
+    campaign_id: String,
+) -> Result<Option<String>, IpcError> {
+    let picked = tauri::async_runtime::spawn_blocking(move || pick_json(&app))
+        .await
+        .map_err(|_| IpcError::Server)?;
+    let Some(path) = picked else {
+        return Ok(None);
+    };
+    let bytes = std::fs::read(&path).map_err(|_| IpcError::BadFile)?;
+    let file: CharacterFile = serde_json::from_slice(&bytes).map_err(|_| IpcError::BadFile)?;
+    if file.format != CHARACTER_FORMAT || file.version != 1 {
+        return Err(IpcError::BadFile);
+    }
+    let source = file.character;
+    source.validate().map_err(IpcError::Invalid)?;
+    let campaign = self::campaign_id(&campaign_id)?;
+    let client = shell.session()?.client;
+    let id = beholder_core::CharacterId(uuid::Uuid::now_v7());
+    let submit = |op| {
+        client
+            .submit(CommandKind::Character {
+                campaign_id: campaign,
+                op,
+            })
+            .map(|_| ())
+            .map_err(|_| IpcError::Storage)
+    };
+    submit(CharacterOp::Create {
+        id,
+        name: source.name.clone(),
+        rules: source.rules,
+    })?;
+    for change in source.to_changes() {
+        submit(CharacterOp::Change { id, change })?;
+    }
+    Ok(Some(id.to_string()))
+}

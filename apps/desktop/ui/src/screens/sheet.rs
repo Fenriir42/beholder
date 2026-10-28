@@ -28,6 +28,17 @@ struct CreateArgs {
 }
 
 #[derive(serde::Serialize)]
+struct CampaignArgs {
+    campaign_id: String,
+}
+
+#[derive(serde::Serialize)]
+struct ExportArgs {
+    campaign_id: String,
+    id: CharacterId,
+}
+
+#[derive(serde::Serialize)]
 struct SearchArgs {
     query: SearchQuery,
 }
@@ -142,6 +153,22 @@ pub fn CharacterList(
             }
         });
     };
+    let import = move |_| {
+        spawn_local(async move {
+            let args = CampaignArgs {
+                campaign_id: campaign.to_string(),
+            };
+            match ipc::call::<Option<String>>("character_import", args).await {
+                Ok(Some(id)) => {
+                    if let Ok(uuid) = id.parse() {
+                        open.run(CharacterId(uuid));
+                    }
+                }
+                Ok(None) => {}
+                Err(e) => ctx.notify(error_key(e)),
+            }
+        });
+    };
     let owner_name = |owner: UserId| {
         c.campaign
             .members
@@ -206,6 +233,7 @@ pub fn CharacterList(
                     }).collect_view()}
                 </select>
                 <button type="submit" class="primary">{move || i18n.t("sheet-new")}</button>
+                <button type="button" on:click=import>{move || i18n.t("sheet-import")}</button>
             </form>
         </div>
     }
@@ -325,7 +353,9 @@ pub fn Sheet(id: CampaignId, selected: RwSignal<Option<CharacterId>>) -> impl In
 
 #[component]
 fn SheetBody(campaign: CampaignId, ch: Character) -> impl IntoView {
+    let ctx = use_app();
     let i18n = use_i18n();
+    let exported = RwSignal::new(None::<String>);
     let id = ch.id;
     let change = move |c: CharacterChange| send(campaign, CharacterOp::Change { id, change: c });
     let pb = ch.proficiency_bonus();
@@ -380,7 +410,17 @@ fn SheetBody(campaign: CampaignId, ch: Character) -> impl IntoView {
                     on:change=move |ev| change(CharacterChange::Notes(event_target_value(&ev)))></textarea>
             </fieldset>
             <div class="toolbar">
+                {move || exported.get().map(|p| view! { <span class="muted small">{p}</span> })}
                 <span class="grow"></span>
+                <button type="button" on:click=move |_| {
+                    spawn_local(async move {
+                        let args = ExportArgs { campaign_id: campaign.to_string(), id };
+                        match ipc::call::<String>("character_export", args).await {
+                            Ok(path) => exported.set(Some(i18n.tr("sheet-exported", &[("path", path.into())]))),
+                            Err(e) => ctx.notify(error_key(e)),
+                        }
+                    });
+                }>{move || i18n.t("sheet-export")}</button>
                 <button type="button" class="ghost"
                     on:click=move |_| send(campaign, CharacterOp::Delete { id })>
                     {move || i18n.t("sheet-delete")}
