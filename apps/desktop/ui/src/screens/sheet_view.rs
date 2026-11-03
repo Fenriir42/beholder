@@ -538,7 +538,7 @@ fn Play(
                     .into_any()
             }
             Tab::Spells => {
-                view! { <SpellsTab campaign=campaign ch=ch.clone() panel=panel look=look/> }
+                view! { <SpellsTab campaign=campaign ch=ch.clone() panel=panel look=look roller=roller/> }
                     .into_any()
             }
             Tab::Inventory => {
@@ -961,6 +961,7 @@ fn SpellsTab(
     ch: Character,
     panel: RwSignal<Panel>,
     look: Lookups,
+    roller: Roller,
 ) -> impl IntoView {
     let i18n = use_i18n();
     let id = ch.id;
@@ -1088,6 +1089,12 @@ fn SpellsTab(
                         let fx = spell_fx(&ch, look, s, s.level)
                             .filter(meaningful)
                             .map(|e| effect_line(i18n, &e));
+                        let rolls = fx.is_some();
+                        let economy = look
+                            .details(&link)
+                            .and_then(|d| d.spell)
+                            .and_then(|i| i.casting_time)
+                            .and_then(|t| Economy::of_casting_time(&t));
                         let prepared = s.prepared;
                         let toggle_name = name.clone();
                         let options = cast_options(&ch, s.level);
@@ -1097,8 +1104,13 @@ fn SpellsTab(
                         let cast_link = link.clone();
                         let first = options.first().copied();
                         let quick_cast = move |_| match first {
-                            Some(_) if conflict => panel.set(Panel::Entry { link: cast_link.clone(), owner: Owner::Spell }),
-                            Some(o) => cast(campaign, id, cast_name.clone(), o, conc),
+                            Some(_) if conflict || rolls => panel.set(Panel::Entry { link: cast_link.clone(), owner: Owner::Spell }),
+                            Some(o) => {
+                                cast(campaign, id, cast_name.clone(), o, conc);
+                                if let Some(which) = economy {
+                                    roller.mark(which);
+                                }
+                            }
                             None => {}
                         };
                         view! {
