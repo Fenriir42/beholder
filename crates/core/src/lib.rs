@@ -2,6 +2,7 @@ pub mod actions;
 pub mod campaign;
 pub mod character;
 pub mod compendium;
+pub mod dice;
 pub mod ids;
 pub mod library;
 pub mod mapping;
