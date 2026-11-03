@@ -93,6 +93,8 @@ pub struct Details {
     pub weapon: Option<Weapon>,
     #[serde(default)]
     pub monster: Option<MonsterStats>,
+    #[serde(default)]
+    pub actions: Vec<MonsterAction>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -401,11 +403,38 @@ fn ability_word(w: &str) -> Option<Ability> {
         .map(|(_, a)| *a)
 }
 
+fn dice_inline(t: &str) -> Option<Roll> {
+    let t = t.trim_matches(|c: char| !c.is_ascii_alphanumeric());
+    let at = t.find(['+', '-', '−'])?;
+    let mut roll = dice(&t[..at])?;
+    let sign = if t[at..].starts_with('+') { 1 } else { -1 };
+    roll.bonus = sign
+        * t[at..]
+            .trim_start_matches(['+', '-', '−'])
+            .parse::<i16>()
+            .ok()?;
+    Some(roll)
+}
+
+fn flat_hit(w: &[String]) -> Option<Damage> {
+    w.windows(3).find_map(|p| {
+        let n = p[1].parse::<i16>().ok().filter(|_| p[0] == "hit")?;
+        DAMAGE_TYPES.contains(&p[2].as_str()).then(|| Damage {
+            roll: Roll {
+                count: 0,
+                sides: 0,
+                bonus: n,
+            },
+            kind: Some(p[2].clone()),
+        })
+    })
+}
+
 fn rolls_in(w: &[String], need_kind: bool) -> Vec<Damage> {
     let mut out = Vec::new();
     let mut i = 0;
     while i < w.len() {
-        let Some(mut roll) = dice(&w[i]) else {
+        let Some(mut roll) = dice(&w[i]).or_else(|| dice_inline(&w[i])) else {
             i += 1;
             continue;
         };
@@ -474,7 +503,10 @@ pub fn parse_monster_actions(text: &str) -> Vec<MonsterAction> {
             let save = save_in(&w);
             let half_on_save = find_seq(&w, &["half", "damage"]).is_some()
                 || find_seq(&w, &["half", "as", "much"]).is_some();
-            let damage = rolls_in(&w, true);
+            let mut damage = rolls_in(&w, true);
+            if damage.is_empty() {
+                damage.extend(flat_hit(&w));
+            }
             (to_hit.is_some() || save.is_some() || !damage.is_empty()).then(|| MonsterAction {
                 name: name.to_owned(),
                 to_hit,
@@ -721,6 +753,26 @@ mod tests {
         assert_eq!(
             (b[1].save, b[1].half_on_save),
             (Some((Ability::Con, 11)), true)
+        );
+        let packed = parse_monster_actions(
+            "**Tail.** _Melee Weapon Attack:_ +12 to hit, reach 15 ft. _Hit:_ 16 (2d8+7) bludgeoning damage.\n**Bite.** Melee Attack Roll: +2, reach 5 ft. Hit: 1 Piercing damage.\n**Rake.** Melee Weapon Attack: +1 to hit, reach 5 ft. Hit: 1 slashing damage.",
+        );
+        assert_eq!(packed[2].damage[0].roll.bonus, 1);
+        assert_eq!(
+            packed[0].damage[0].roll,
+            Roll {
+                count: 2,
+                sides: 8,
+                bonus: 7
+            }
+        );
+        assert_eq!(
+            packed[1].damage[0].roll,
+            Roll {
+                count: 0,
+                sides: 0,
+                bonus: 1
+            }
         );
         let n = parse_note("Burning floor: DC 13 Dex, 2d6 fire, then 1d4");
         assert_eq!(n.save, Some((Ability::Dex, 13)));

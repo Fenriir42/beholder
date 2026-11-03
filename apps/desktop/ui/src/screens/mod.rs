@@ -1,3 +1,4 @@
+mod acting;
 mod auth;
 mod battle_map;
 mod bulk;

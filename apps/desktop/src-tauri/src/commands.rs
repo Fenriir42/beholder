@@ -982,6 +982,7 @@ pub fn sheet_details(
                 },
                 Facets::Monster { .. } => Details {
                     monster: Some(beholder_core::actions::parse_monster(&entry.text)),
+                    actions: beholder_core::actions::parse_monster_actions(&entry.text),
                     ..Details::default()
                 },
                 _ => Details::default(),

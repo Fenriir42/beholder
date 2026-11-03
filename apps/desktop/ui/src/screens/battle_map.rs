@@ -35,6 +35,7 @@ pub struct MapCtx {
     pub me: Signal<Option<UserId>>,
     pub interactive: bool,
     pub roller: Roller,
+    pub acting: Option<RwSignal<Option<CombatantId>>>,
 }
 
 impl MapCtx {
@@ -566,6 +567,12 @@ pub fn BattleMap(m: MapCtx) -> impl IntoView {
                 .cloned()
         });
         selected.set(found_shape.as_ref().map(|s| s.id));
+        if let Some(acting) = m.acting
+            && acting.get_untracked().is_some()
+            && let Some(cid) = found_shape.as_ref().and_then(|s| s.combatant)
+        {
+            acting.set(Some(cid));
+        }
         let Some(s) = found_shape.filter(|s| can_move(s)) else {
             return;
         };

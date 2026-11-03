@@ -10,6 +10,7 @@ use serde::de::DeserializeOwned;
 
 use crate::app::{AppCtx, error_key, use_app};
 use crate::i18n::use_i18n;
+use crate::screens::acting::ActingPanel;
 use crate::screens::battle_map::{BattleMap, MapCtx};
 use crate::screens::dice_view::{RollToast, Roller};
 use crate::{icons, ipc};
@@ -109,6 +110,8 @@ struct Tracker {
     encounter: EncounterId,
     is_dm: Memo<bool>,
     pending: RwSignal<Vec<(CommandId, EncounterId, CombatantId)>>,
+    acting: RwSignal<Option<CombatantId>>,
+    follow: RwSignal<bool>,
 }
 
 impl Tracker {
@@ -216,6 +219,8 @@ pub fn Combat(id: CampaignId) -> impl IntoView {
             roller.visibility.set(Visibility::ToDm);
         }
     });
+    let acting = RwSignal::new(None::<CombatantId>);
+    let follow = RwSignal::new(false);
     let selected = RwSignal::new(None::<EncounterId>);
     let current = Memo::new(move |_| {
         encounters.with(|list| {
@@ -309,7 +314,7 @@ pub fn Combat(id: CampaignId) -> impl IntoView {
             })}
             {move || match current.get() {
                 Some(eid) => {
-                    let t = Tracker { campaign: id, encounter: eid, is_dm, pending };
+                    let t = Tracker { campaign: id, encounter: eid, is_dm, pending, acting, follow };
                     let encounter = Memo::new(move |_| ctx.view.with(|v| {
                         v.campaigns
                             .iter()
@@ -324,13 +329,20 @@ pub fn Combat(id: CampaignId) -> impl IntoView {
                         me: me.into(),
                         interactive: true,
                         roller,
+                        acting: Some(acting),
                     };
+                    let actor = Memo::new(move |_| {
+                        let cid = acting.get()?;
+                        encounter.with(|e| e.as_ref()?.combatants.iter().find(|c| c.id == cid).cloned())
+                    });
+                    let close = Callback::new(move |()| { acting.set(None); follow.set(false); });
                     view! {
                         <RollToast roller=roller/>
                         <div class="combat-layout">
                             <div class="tracker-col"><TrackerView t=t/></div>
                             <BattleMap m=m/>
                         </div>
+                        {move || actor.with(Option::is_some).then(|| view! { <ActingPanel campaign=id combatant=actor on_close=close/> })}
                     }.into_any()
                 }
                 None => view! {
@@ -369,6 +381,13 @@ fn TrackerView(t: Tracker) -> impl IntoView {
         encounter.with(|e| e.as_ref().map(|e| e.combatants.clone()).unwrap_or_default())
     });
     let turn = Memo::new(move |_| encounter.with(|e| e.as_ref().and_then(|e| e.turn)));
+    Effect::new(move |_| {
+        if let Some(cid) = turn.get()
+            && t.follow.get()
+        {
+            t.acting.set(Some(cid));
+        }
+    });
     let round = Memo::new(move |_| encounter.with(|e| e.as_ref().map_or(0, |e| e.round)));
     let eid = t.encounter;
 
@@ -425,6 +444,11 @@ fn TrackerView(t: Tracker) -> impl IntoView {
                     {move || if r == 0 { i18n.t("combat-not-started") } else { i18n.tr("combat-round", &[("n", r.into())]) }}
                 </strong>
                 {dm.then(|| view! {
+                    <label class="choice small">
+                        <input type="checkbox" prop:checked=move || t.follow.get()
+                            on:change=move |ev| t.follow.set(event_target_checked(&ev))/>
+                        {move || i18n.t("acting-follow")}
+                    </label>
                     <button type="button" class="ghost" on:click=roll_others>{icons::dice()}{move || i18n.t("combat-roll-others")}</button>
                     <button type="button" class="ghost" on:click=move |_| t.send(EncounterOp::ResetCombat { id: eid })>{move || i18n.t("combat-reset")}</button>
                     <button type="button" disabled=r == 0 on:click=move |_| t.send(EncounterOp::PreviousTurn { id: eid })>{move || i18n.t("combat-previous")}</button>
@@ -660,7 +684,20 @@ fn CombatantRow(
             <span class="turn-mark" aria-hidden="true">{move || if current() { "▶" } else { "" }}</span>
             {initiative}
             <span class="grow combatant-name">
-                <strong>{move || combatant.get().map(|c| c.name).unwrap_or_default()}</strong>
+                {move || {
+                    let c = combatant.get()?;
+                    let name = c.name.clone();
+                    Some(if t.is_dm.get() || t.own(ctx, &c) {
+                        view! {
+                            <button type="button" class="link-row" aria-pressed=move || (t.acting.get() == Some(cid)).to_string()
+                                title=move || i18n.t("acting-open") on:click=move |_| t.acting.set(Some(cid))>
+                                <strong>{name.clone()}</strong>
+                            </button>
+                        }.into_any()
+                    } else {
+                        view! { <strong>{name}</strong> }.into_any()
+                    })
+                }}
                 {move || current().then(|| view! { <span class="muted small">" · "{move || i18n.t("combat-turn")}</span> })}
                 {conditions}
             </span>

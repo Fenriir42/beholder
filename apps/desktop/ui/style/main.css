@@ -406,3 +406,12 @@ button.ability-chip, button.stat { height: auto; padding: var(--space-2); flex-d
 .battle-map .template-origin { stroke: var(--text); stroke-width: 2; }
 .battle-map .selected .template-origin, .battle-map .selected .object-body, .battle-map .selected .door { stroke: var(--accent); stroke-width: 4; }
 .shape-editor textarea { width: 100%; }
+.acting-panel { position: fixed; top: var(--space-3); right: var(--space-3); bottom: var(--space-3); width: min(var(--acting-w), calc(100vw - 2 * var(--space-3))); overflow: auto; z-index: 10; padding: var(--space-4); background: var(--surface-raised); border: 1px solid var(--border-strong); border-radius: var(--radius-card); display: flex; flex-direction: column; gap: var(--space-3); container-type: inline-size; }
+.acting-action { flex-wrap: wrap; }
+.acting-sheet .play { padding: 0; }
+.stat-block summary { min-height: var(--touch); display: flex; align-items: center; cursor: pointer; }
+@container (max-width: 760px) {
+  .play-layout, .play-layout.with-panel { grid-template-columns: minmax(0, 1fr); }
+  .abilities-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .play-panel { position: static; max-height: none; }
+}
