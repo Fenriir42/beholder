@@ -331,3 +331,13 @@ select option, select optgroup { color: var(--text); background: var(--surface-r
 .computed { border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: var(--space-2) 0; }
 .concentration { padding: var(--space-1) var(--space-3); border: 1px solid var(--accent); border-radius: 999px; font-size: var(--text-sm); }
 .spell-row > button:last-child { flex: none; }
+
+/* Dice */
+.roll-toast { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3) var(--space-4); background: var(--surface-raised); border: 1px solid var(--accent); border-radius: var(--radius-card); }
+.roll-total { font-size: var(--text-2xl); font-family: var(--font-display); }
+.roll-buttons { display: inline-flex; gap: var(--space-1); flex: none; }
+.roll-row { align-items: center; }
+.list.plain { list-style: none; margin: 0; padding: 0; }
+.dice-box { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); }
+button.ability-chip, button.stat { height: auto; padding: var(--space-2); flex-direction: column; gap: 0; }
+.plain-list li .link-row { min-height: 32px; }

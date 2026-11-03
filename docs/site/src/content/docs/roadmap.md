@@ -36,14 +36,13 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 ## In progress
 
 - **Character sheets (Phase 4):** characters with an assisted sheet (computed modifiers, saves, skills, AC, spell slots including multiclass and pact magic), compendium links, edits by the owner and the DM, and summaries for the rest of the party. Export and import as JSON files. Still to come: an optional guided level-up.
+- **Dice (Phase 5):** rolls made on the server from the sheet (saves, skills, checks, initiative, attacks, damage and healing at any slot level, advantage, critical damage) or typed by hand, a shared log of the last 50 rolls, rolls to the DM and secret DM rolls, and physical dice entry.
 
 ## Planned
 
 ### Phase 4: Character sheets
 - Assisted sheets: the app computes modifiers, proficiency, saves, skills, spell slots and AC; you choose species, class, background and feats from the compendium.
 
-### Phase 5: Dice
-- Rolls from the sheet, shared roll log, secret DM rolls, physical dice entry.
 
 ### Phase 6: Combat tracker and battle map
 - Initiative, turns, HP and conditions, with exact, vague or hidden monster health for players.

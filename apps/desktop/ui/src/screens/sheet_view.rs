@@ -6,6 +6,7 @@ use beholder_core::character::{
     RestKind,
 };
 use beholder_core::compendium::{Facets, Hit, Kind, SearchQuery};
+use beholder_core::dice::Expr;
 use beholder_core::rules::{Ability, Proficiency, Skill};
 use beholder_core::{CampaignId, CharacterId};
 use beholder_ipc::{EntryView, ResolveItem};
@@ -15,6 +16,7 @@ use leptos::task::spawn_local;
 use crate::app::use_app;
 use crate::i18n::{I18n, use_i18n};
 use crate::screens::compendium::{kind_label, meta};
+use crate::screens::dice_view::{RollOptions, RollToast, Roller};
 use crate::screens::sheet::{ABILITY_KEYS, EditSheet, class_line, send, signed, skill_key};
 use crate::{ipc, markdown};
 
@@ -297,6 +299,48 @@ fn option_label(i18n: I18n, (level, pact): (u8, bool)) -> String {
     }
 }
 
+fn fx_buttons(roller: Roller, name: String, fx: &Fx, penalty: i8) -> impl IntoView + use<> {
+    let i18n = use_i18n();
+    let times = i32::from(fx.times.max(1));
+    let bundle = |r: beholder_core::actions::Roll| {
+        let mut e = Expr::from(r);
+        if fx.resolution == Resolution::Automatic && times > 1 {
+            for t in &mut e.terms {
+                t.count = t.count.saturating_mul(times as u8);
+            }
+            e.modifier *= times;
+        }
+        e
+    };
+    let damage = fx.damage.map(bundle);
+    let healing = fx.healing.map(Expr::from);
+    let n = name.clone();
+    let damage_ctx = move || i18n.tr("dice-ctx-damage", &[("what", n.clone().into())]);
+    let attack = match fx.resolution {
+        Resolution::Attack { bonus } => {
+            let crit = damage.clone().map(|d| (d.critical(), damage_ctx()));
+            let n = name.clone();
+            Some(view! {
+                <button type="button" on:click=move |_| roller.test(
+                    i32::from(bonus + penalty),
+                    i18n.tr("dice-ctx-attack", &[("what", n.clone().into())]),
+                    crit.clone(),
+                )>{move || i18n.t("dice-to-hit")}</button>
+            })
+        }
+        _ => None,
+    };
+    let damage_button = damage.map(|d| {
+        let ctx = damage_ctx();
+        view! { <button type="button" on:click=move |_| roller.roll(d.clone(), ctx.clone(), None)>{move || i18n.t("dice-damage")}</button> }
+    });
+    let heal_button = healing.map(|h| {
+        let ctx = i18n.tr("dice-ctx-heal", &[("what", name.clone().into())]);
+        view! { <button type="button" on:click=move |_| roller.roll(h.clone(), ctx.clone(), None)>{move || i18n.t("dice-heal")}</button> }
+    });
+    view! { <span class="roll-buttons">{attack}{damage_button}{heal_button}</span> }
+}
+
 fn meaningful(e: &Fx) -> bool {
     e.damage.is_some() || e.healing.is_some() || e.resolution != Resolution::Automatic
 }
@@ -313,6 +357,7 @@ pub fn Sheet(id: CampaignId, selected: RwSignal<Option<CharacterId>>) -> impl In
     let details = RwSignal::new(DetailsMap::new());
     let fetched = StoredValue::new(std::collections::HashSet::<(String, String)>::new());
     let look = Lookups { resolved, details };
+    let roller = Roller::new(id);
     let character = Memo::new(move |_| {
         let me = ctx.view.with(|v| v.user.as_ref().map(|u| u.id));
         ctx.view.with(|v| {
@@ -402,6 +447,11 @@ pub fn Sheet(id: CampaignId, selected: RwSignal<Option<CharacterId>>) -> impl In
             }
         });
     });
+    Effect::new(move |_| {
+        roller
+            .character
+            .set(character.with(|c| c.as_ref().map(|c| c.name.clone())));
+    });
     move || match character.get() {
         Some(ch) if editing.get() => view! {
             <section class="home sheet">
@@ -416,7 +466,7 @@ pub fn Sheet(id: CampaignId, selected: RwSignal<Option<CharacterId>>) -> impl In
         }
         .into_any(),
         Some(ch) => view! {
-            <Play campaign=id ch=ch tab=tab editing=editing panel=panel look=look/>
+            <Play campaign=id ch=ch tab=tab editing=editing panel=panel look=look roller=roller/>
         }
         .into_any(),
         None => view! {
@@ -436,6 +486,7 @@ fn Play(
     editing: RwSignal<bool>,
     panel: RwSignal<Panel>,
     look: Lookups,
+    roller: Roller,
 ) -> impl IntoView {
     let i18n = use_i18n();
     let classes: Vec<(String, u8)> = ch
@@ -470,9 +521,10 @@ fn Play(
     };
     let body = {
         let ch = ch.clone();
-        move || match tab.get() {
+        move || {
+            match tab.get() {
             Tab::Actions => {
-                view! { <ActionsTab campaign=campaign ch=ch.clone() panel=panel look=look/> }
+                view! { <ActionsTab campaign=campaign ch=ch.clone() panel=panel look=look roller=roller/> }
                     .into_any()
             }
             Tab::Spells => {
@@ -484,6 +536,7 @@ fn Play(
             }
             Tab::Features => view! { <FeaturesTab ch=ch.clone() panel=panel/> }.into_any(),
             Tab::Notes => view! { <NotesTab campaign=campaign ch=ch.clone()/> }.into_any(),
+        }
         }
     };
     view! {
@@ -497,10 +550,12 @@ fn Play(
                     {move || i18n.t("sheet-edit")}
                 </button>
             </header>
-            <Vitals campaign=campaign ch=ch.clone()/>
+            <Vitals campaign=campaign ch=ch.clone() roller=roller/>
+            <RollOptions roller=roller/>
+            <RollToast roller=roller/>
             <div class="play-layout" class:with-panel=move || panel.with(|p| *p != Panel::Closed)>
                 <aside class="play-side">
-                    <SavesAndSkills ch=ch.clone()/>
+                    <SavesAndSkills ch=ch.clone() roller=roller/>
                 </aside>
                 <div class="play-main">
                     <div class="tabs" role="tablist">
@@ -513,7 +568,7 @@ fn Play(
                     {body}
                 </div>
                 {move || (panel.get() != Panel::Closed).then(|| view! {
-                    <DetailPanel campaign=campaign ch=ch.clone() panel=panel look=look/>
+                    <DetailPanel campaign=campaign ch=ch.clone() panel=panel look=look roller=roller/>
                 })}
             </div>
         </section>
@@ -521,7 +576,7 @@ fn Play(
 }
 
 #[component]
-fn Vitals(campaign: CampaignId, ch: Character) -> impl IntoView {
+fn Vitals(campaign: CampaignId, ch: Character, roller: Roller) -> impl IntoView {
     let i18n = use_i18n();
     let id = ch.id;
     let amount = RwSignal::new(String::new());
@@ -559,12 +614,15 @@ fn Vitals(campaign: CampaignId, ch: Character) -> impl IntoView {
     let abilities = Ability::ALL
         .into_iter()
         .map(|a| {
+            let modifier = i32::from(ch.modifier(a) + ch.d20_penalty());
             view! {
-                <div class="ability-chip">
+                <button type="button" class="ability-chip"
+                    title=move || i18n.tr("dice-ctx-check", &[("what", i18n.t(ABILITY_KEYS[a.index()]).into())])
+                    on:click=move |_| roller.test(modifier, i18n.tr("dice-ctx-check", &[("what", i18n.t(ABILITY_KEYS[a.index()]).into())]), None)>
                     <span class="muted small">{move || i18n.t(ABILITY_KEYS[a.index()])}</span>
                     <strong>{signed(ch.modifier(a))}</strong>
                     <span class="muted small">{ch.abilities[a.index()]}</span>
-                </div>
+                </button>
             }
         })
         .collect_view();
@@ -573,6 +631,7 @@ fn Vitals(campaign: CampaignId, ch: Character) -> impl IntoView {
             <div class="stat"><span class="muted small">{move || i18n.t(key)}</span><strong>{value}</strong></div>
         }
     };
+    let initiative_roll = i32::from(ch.initiative() + ch.d20_penalty());
     let conditions = ch.conditions.join(", ");
     let exhaustion = ch.exhaustion;
     let penalty = ch.d20_penalty();
@@ -592,7 +651,11 @@ fn Vitals(campaign: CampaignId, ch: Character) -> impl IntoView {
         <div class="vitals">
             <div class="stats">
                 {stat("sheet-ac", ch.armor_class().to_string())}
-                {stat("sheet-initiative", signed(ch.initiative()))}
+                <button type="button" class="stat"
+                    on:click=move |_| roller.test(initiative_roll, i18n.t("sheet-initiative"), None)>
+                    <span class="muted small">{move || i18n.t("sheet-initiative")}</span>
+                    <strong>{signed(ch.initiative())}</strong>
+                </button>
                 {stat("sheet-speed", ch.speed.to_string())}
                 {stat("sheet-proficiency", signed(ch.proficiency_bonus()))}
                 <div class="hp-box">
@@ -665,7 +728,7 @@ fn prof_key(p: Proficiency) -> &'static str {
 }
 
 #[component]
-fn SavesAndSkills(ch: Character) -> impl IntoView {
+fn SavesAndSkills(ch: Character, roller: Roller) -> impl IntoView {
     let i18n = use_i18n();
     let saves = Ability::ALL
         .into_iter()
@@ -675,11 +738,15 @@ fn SavesAndSkills(ch: Character) -> impl IntoView {
             } else {
                 Proficiency::None
             };
+            let modifier = i32::from(ch.save(a) + ch.d20_penalty());
+            let context = move || i18n.tr("dice-ctx-save", &[("what", i18n.t(ABILITY_KEYS[a.index()]).into())]);
             view! {
                 <li>
-                    <span class="mark" title=move || i18n.t(prof_key(p))>{prof_mark(p)}</span>
-                    <span class="grow">{move || i18n.t(ABILITY_KEYS[a.index()])}</span>
-                    <strong>{signed(ch.save(a))}</strong>
+                    <button type="button" class="link-row grow" on:click=move |_| roller.test(modifier, context(), None)>
+                        <span class="mark" title=move || i18n.t(prof_key(p))>{prof_mark(p)}</span>
+                        <span class="grow">{move || i18n.t(ABILITY_KEYS[a.index()])}</span>
+                        <strong>{signed(ch.save(a))}</strong>
+                    </button>
                 </li>
             }
         })
@@ -688,13 +755,17 @@ fn SavesAndSkills(ch: Character) -> impl IntoView {
         .into_iter()
         .map(|s| {
             let p = ch.skills[s.index()];
+            let modifier = i32::from(ch.skill(s) + ch.d20_penalty());
+            let context = move || i18n.tr("dice-ctx-check", &[("what", i18n.t(skill_key(s)).into())]);
             view! {
                 <li>
-                    <span class="mark" title=move || i18n.t(prof_key(p))>{prof_mark(p)}</span>
-                    <span class="grow">{move || i18n.t(skill_key(s))}
-                        <span class="muted small">" "{move || i18n.t(ABILITY_KEYS[s.ability().index()])}</span>
-                    </span>
-                    <strong>{signed(ch.skill(s))}</strong>
+                    <button type="button" class="link-row grow" on:click=move |_| roller.test(modifier, context(), None)>
+                        <span class="mark" title=move || i18n.t(prof_key(p))>{prof_mark(p)}</span>
+                        <span class="grow">{move || i18n.t(skill_key(s))}
+                            <span class="muted small">" "{move || i18n.t(ABILITY_KEYS[s.ability().index()])}</span>
+                        </span>
+                        <strong>{signed(ch.skill(s))}</strong>
+                    </button>
                 </li>
             }
         })
@@ -760,9 +831,11 @@ fn ActionsTab(
     ch: Character,
     panel: RwSignal<Panel>,
     look: Lookups,
+    roller: Roller,
 ) -> impl IntoView {
     let i18n = use_i18n();
     let id = ch.id;
+    let penalty = ch.d20_penalty();
     let equipped = ch
         .inventory
         .iter()
@@ -782,12 +855,18 @@ fn ActionsTab(
                 }
                 l
             });
+            let buttons = weapon.as_ref().map(|w| {
+                fx_buttons(roller, name.clone(), &weapon_effect(&ch, w, false, proficient), penalty)
+            });
             view! {
-                <button type="button" class="row link-row"
-                    on:click=move |_| panel.set(Panel::Entry { link: link.clone(), owner: Owner::Item })>
-                    <span class="spell-name"><strong>{name}</strong></span>
-                    {line.map(|l| view! { <span class="effect">{l}</span> })}
-                </button>
+                <div class="row">
+                    <button type="button" class="link-row grow"
+                        on:click=move |_| panel.set(Panel::Entry { link: link.clone(), owner: Owner::Item })>
+                        <span class="spell-name"><strong>{name}</strong></span>
+                        {line.map(|l| view! { <span class="effect">{l}</span> })}
+                    </button>
+                    {buttons}
+                </div>
             }
         })
         .collect_view();
@@ -800,12 +879,16 @@ fn ActionsTab(
             let link = s.spell.clone();
             let name = link.name.clone();
             let line = effect_line(i18n, &fx);
+            let buttons = fx_buttons(roller, name.clone(), &fx, penalty);
             Some(view! {
-                <button type="button" class="row link-row"
-                    on:click=move |_| panel.set(Panel::Entry { link: link.clone(), owner: Owner::Spell })>
-                    <span class="spell-name"><strong>{name}</strong></span>
-                    <span class="effect">{line}</span>
-                </button>
+                <div class="row">
+                    <button type="button" class="link-row grow"
+                        on:click=move |_| panel.set(Panel::Entry { link: link.clone(), owner: Owner::Spell })>
+                        <span class="spell-name"><strong>{name}</strong></span>
+                        <span class="effect">{line}</span>
+                    </button>
+                    {buttons}
+                </div>
             })
         })
         .collect_view();
@@ -1246,6 +1329,7 @@ fn DetailPanel(
     ch: Character,
     panel: RwSignal<Panel>,
     look: Lookups,
+    roller: Roller,
 ) -> impl IntoView {
     let i18n = use_i18n();
     let close = move |_| panel.set(Panel::Closed);
@@ -1253,7 +1337,7 @@ fn DetailPanel(
         match panel.get() {
         Panel::Closed => ().into_any(),
         Panel::Entry { link, owner } => {
-            view! { <EntryDetail campaign=campaign ch=ch.clone() link=link owner=owner look=look panel=panel/> }
+            view! { <EntryDetail campaign=campaign ch=ch.clone() link=link owner=owner look=look panel=panel roller=roller/> }
                 .into_any()
         }
         Panel::Browse(owner) => view! { <Browse campaign=campaign ch=ch.clone() owner=owner/> }.into_any(),
@@ -1278,6 +1362,7 @@ fn EntryDetail(
     owner: Owner,
     look: Lookups,
     panel: RwSignal<Panel>,
+    roller: Roller,
 ) -> impl IntoView {
     let ctx = use_app();
     let i18n = use_i18n();
@@ -1387,7 +1472,13 @@ fn EntryDetail(
                     } else {
                         level_label(i18n, l)
                     };
-                    Some(view! { <li><span class="muted small">{label}</span>" "{effect_line(i18n, &fx)}</li> })
+                    let buttons = fx_buttons(roller, known.spell.name.clone(), &fx, ch.d20_penalty());
+                    Some(view! {
+                        <li>
+                            <span class="grow"><span class="muted small">{label}</span>" "{effect_line(i18n, &fx)}</span>
+                            {buttons}
+                        </li>
+                    })
                 })
                 .collect::<Vec<_>>();
             let conc = concentrates(look, &link);

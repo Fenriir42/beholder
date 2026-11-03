@@ -7,6 +7,7 @@ use wasm_bindgen::JsCast;
 use crate::app::{ConnBanner, ConnPill, Screen, error_key, image_url, use_app};
 use crate::i18n::use_i18n;
 use crate::screens::compendium::{Compendium, SourcesSetting};
+use crate::screens::dice_view::DiceLog;
 use crate::screens::notes::{Notes, NotesPreview};
 use crate::screens::sheet::{CharacterList, summary_line};
 use crate::screens::sheet_view::Sheet;
@@ -18,6 +19,7 @@ enum Section {
     Sheet,
     Notes,
     Compendium,
+    Dice,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -115,7 +117,7 @@ pub fn CampaignScreen(id: CampaignId) -> impl IntoView {
                     {nav_item("nav-notes", icons::notes().into_any(), Some(Section::Notes))}
                     {nav_item("nav-compendium", icons::book().into_any(), Some(Section::Compendium))}
                     {nav_item("nav-combat", icons::swords().into_any(), None)}
-                    {nav_item("nav-dice", icons::dice().into_any(), None)}
+                    {nav_item("nav-dice", icons::dice().into_any(), Some(Section::Dice))}
                 </nav>
                 <div class="bottom"><ConnPill/></div>
             </aside>
@@ -128,6 +130,7 @@ pub fn CampaignScreen(id: CampaignId) -> impl IntoView {
                     Section::Sheet => view! { <Sheet id=id selected=selected_character/> }.into_any(),
                     Section::Notes => view! { <Notes id=id selected=selected_note/> }.into_any(),
                     Section::Compendium => view! { <Compendium id=id/> }.into_any(),
+                    Section::Dice => view! { <DiceLog id=id/> }.into_any(),
                 }}
             </div>
         </div>

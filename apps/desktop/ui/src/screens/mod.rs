@@ -2,6 +2,7 @@ mod auth;
 mod bulk;
 mod campaign;
 mod compendium;
+mod dice_view;
 mod entry_editor;
 mod library;
 mod notes;
