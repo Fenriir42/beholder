@@ -37,6 +37,7 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 
 - **Fiches de personnage (phase 4) :** personnages avec une fiche assistée (modificateurs, sauvegardes, compétences, CA et emplacements de sorts calculés, multiclassage et magie de pacte compris), liens vers le compendium, modifications par le propriétaire et le MJ, et résumés pour le reste du groupe. Export et import en fichiers JSON. Reste à venir : une montée de niveau guidée facultative.
 - **Dés (phase 5) :** jets faits par le serveur depuis la fiche (sauvegardes, compétences, tests, initiative, attaques, dégâts et soins à tout niveau d'emplacement, avantage, dégâts critiques) ou tapés à la main, journal partagé des 50 derniers jets, jets pour le MJ et jets secrets du MJ, et saisie de dés physiques.
+- **Suivi de combat et carte de combat (phase 6) :** rencontres préparées à l'avance et jouées une à la fois, combattants issus du groupe, du compendium ou tapés à la main, initiative tapée ou lancée via le journal des dés, tours et rounds, dégâts et soins, états qui se décomptent, concentration, et santé des monstres exacte, vague ou masquée pour les joueurs. Une carte à grille carrée avec murs, zones et pions : le MJ contrôle tout et peut cacher n'importe quelle forme, les joueurs font glisser leur propre pion, et le MJ peut verrouiller la carte ou montrer les déplacements en direct.
 
 ## Prévu
 
@@ -45,8 +46,6 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 
 
 ### Phase 6 : suivi de combat et carte de combat
-- Initiative, tours, PV et états, avec la santé des monstres exacte, vague ou masquée pour les joueurs.
-- **Carte de combat :** une grille carrée avec des formes simples pour commencer (pions, murs, zones). Le MJ contrôle tout : il ajoute, déplace, nomme, supprime, masque ou révèle n'importe quelle forme ; les formes masquées n'arrivent jamais dans l'application des joueurs. Chaque joueur ne déplace que le pion de son personnage actif, et chaque joueur a sa propre couleur, avec les initiales du personnage sur le pion pour que la couleur ne soit pas le seul repère. Les pions peuvent être liés aux combattants du suivi.
 - Plus tard pour la carte : images de fond, brouillard de guerre, mesure et gabarits de zone, images de pions.
 
 ### Phase 7 : connexion Discord
@@ -72,6 +71,7 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 - Les descriptions converties depuis `dnd-data` retrouvent leurs tables, titres et listes quand la présentation est reconnue ; le reste reste en texte aplati. Dans ces fichiers, les blocs de statistiques des monstres n'ont ni CA, ni points de vie, ni caractéristiques.
 - Les fichiers `dnd-data` ne contiennent presque pas de règles de sous-classes : seules les 12 sous-classes des Free Basic Rules deviennent des entrées de sous-classe.
 - Masquer une entrée ne fonctionne que pour la bibliothèque du serveur, pas pour le SRD ni les livres Open5e.
+- Le combattant d'un personnage copie les PV de la fiche à l'ajout ; les dégâts dans le suivi de combat ne modifient pas la fiche.
 
 ## Tailles
 

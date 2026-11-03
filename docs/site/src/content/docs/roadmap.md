@@ -37,6 +37,7 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 
 - **Character sheets (Phase 4):** characters with an assisted sheet (computed modifiers, saves, skills, AC, spell slots including multiclass and pact magic), compendium links, edits by the owner and the DM, and summaries for the rest of the party. Export and import as JSON files. Still to come: an optional guided level-up.
 - **Dice (Phase 5):** rolls made on the server from the sheet (saves, skills, checks, initiative, attacks, damage and healing at any slot level, advantage, critical damage) or typed by hand, a shared log of the last 50 rolls, rolls to the DM and secret DM rolls, and physical dice entry.
+- **Combat tracker and battle map (Phase 6):** encounters prepared ahead and run one at a time, combatants from the party, the compendium or typed in, initiative typed or rolled through the dice log, turns and rounds, damage and healing, conditions that count down, concentration, and exact, vague or hidden monster health for players. A square-grid map with walls, zones and tokens: the DM controls everything and can hide any shape, players drag their own token, and the DM can lock the map or show moves live while dragging.
 
 ## Planned
 
@@ -45,8 +46,6 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 
 
 ### Phase 6: Combat tracker and battle map
-- Initiative, turns, HP and conditions, with exact, vague or hidden monster health for players.
-- **Battle map:** a square grid with basic shapes to start (tokens, walls, zones). The DM controls everything: adds, moves, labels, removes, and hides or reveals any shape; hidden shapes never reach the players' apps. Each player moves only the token of their active character, and each player has their own colour, with the character's initials on the token so colour isn't the only cue. Tokens can be linked to tracker combatants.
 - Later for the map: background images, fog of war, measuring and area templates, token images.
 
 ### Phase 7: Discord login
@@ -72,6 +71,7 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 - Converted `dnd-data` descriptions get their tables, headings and lists back where the layout is recognised; the rest stays flattened text. Monster stat blocks in those files have no AC, hit points or ability scores.
 - The `dnd-data` files hold almost no subclass rules: only the 12 Free Basic Rules subclasses become subclass entries.
 - Hiding single entries works for the server library only, not for the SRD or Open5e books.
+- A character's combatant copies the sheet's HP when added; damage in the combat tracker doesn't change the sheet.
 
 ## Sizes
 
