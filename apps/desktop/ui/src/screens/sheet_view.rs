@@ -561,6 +561,7 @@ fn Play(
         }
         }
     };
+    let maxed = ch.level() >= 20;
     view! {
         <section class="play">
             <header class="play-head">
@@ -568,7 +569,7 @@ fn Play(
                     <h1>{ch.name.clone()}</h1>
                     <p class="muted">{subtitle}</p>
                 </div>
-                <button type="button" class="primary" disabled=ch.level() >= 20
+                <button type="button" class="primary" disabled=maxed
                     on:click=move |_| { panel.set(Panel::Closed); leveling.set(true); }>
                     {move || i18n.t("levelup-open")}
                 </button>
