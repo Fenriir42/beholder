@@ -974,11 +974,15 @@ pub fn sheet_details(
             Ok(found.map(|(entry, _)| match entry.facets {
                 Facets::Spell { .. } => Details {
                     spell: Some(parse_spell(&entry.text)),
-                    weapon: None,
+                    ..Details::default()
                 },
                 Facets::Equipment { .. } | Facets::MagicItem { .. } => Details {
-                    spell: None,
                     weapon: parse_weapon(&entry.text),
+                    ..Details::default()
+                },
+                Facets::Monster { .. } => Details {
+                    monster: Some(beholder_core::actions::parse_monster(&entry.text)),
+                    ..Details::default()
                 },
                 _ => Details::default(),
             }))

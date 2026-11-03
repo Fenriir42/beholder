@@ -341,3 +341,21 @@ select option, select optgroup { color: var(--text); background: var(--surface-r
 .dice-box { display: flex; flex-direction: column; gap: var(--space-3); padding: var(--space-4); border: 1px solid var(--border); border-radius: var(--radius-card); }
 button.ability-chip, button.stat { height: auto; padding: var(--space-2); flex-direction: column; gap: 0; }
 .plain-list li .link-row { min-height: 32px; }
+
+/* Combat */
+.round-bar { padding: var(--space-2) 0; border-bottom: 1px solid var(--border); }
+.tracker { gap: var(--space-2); }
+.combatant { flex-wrap: wrap; }
+.combatant.current { border-color: var(--accent); background: var(--surface-raised); }
+.turn-mark { width: 1em; color: var(--accent); }
+.init-cell { display: inline-flex; align-items: center; gap: var(--space-1); min-width: 3em; }
+.init { width: 4.5em; }
+.icon-button { min-width: var(--touch); padding: 0; }
+.combatant-name { min-width: 10em; display: flex; flex-direction: column; gap: var(--space-1); }
+.chips { display: flex; flex-wrap: wrap; gap: var(--space-1); }
+.chips button.chip { min-height: var(--touch); border: none; }
+.hp-cell, .hp-controls { display: inline-flex; align-items: center; gap: var(--space-1); }
+.combatant-edit { flex-basis: 100%; }
+.combatant-edit summary, .add-combatants summary { min-height: var(--touch); display: flex; align-items: center; gap: var(--space-2); cursor: pointer; }
+.add-combatants summary h2 { margin: 0; font-size: var(--text-lg); }
+.add-combatants { display: flex; flex-direction: column; gap: var(--space-2); }

@@ -59,10 +59,19 @@ pub struct Weapon {
     pub ranged: bool,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MonsterStats {
+    pub hp: Option<i16>,
+    pub ac: Option<i16>,
+    pub initiative: Option<i16>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Details {
     pub spell: Option<SpellInfo>,
     pub weapon: Option<Weapon>,
+    #[serde(default)]
+    pub monster: Option<MonsterStats>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -364,6 +373,53 @@ pub fn parse_weapon(text: &str) -> Option<Weapon> {
     })
 }
 
+pub fn parse_monster(text: &str) -> MonsterStats {
+    let w = words(text);
+    let number_after = |at: usize| {
+        w[at..w.len().min(at + 3)]
+            .iter()
+            .find_map(|x| x.trim_start_matches('+').parse::<i16>().ok())
+    };
+    let hp = find_seq(&w, &["hit", "points"])
+        .map(|i| i + 2)
+        .or_else(|| w.iter().position(|x| x == "hp").map(|i| i + 1))
+        .and_then(number_after);
+    let ac = find_seq(&w, &["armor", "class"])
+        .map(|i| i + 2)
+        .or_else(|| w.iter().position(|x| x == "ac").map(|i| i + 1))
+        .and_then(number_after);
+    let initiative = w
+        .iter()
+        .position(|x| x == "initiative")
+        .and_then(|i| w.get(i + 1))
+        .and_then(|x| x.parse::<i16>().ok());
+    let dex = dex_modifier(text);
+    MonsterStats {
+        hp,
+        ac,
+        initiative: initiative.or(dex),
+    }
+}
+
+fn dex_modifier(text: &str) -> Option<i16> {
+    let cells = |line: &str| -> Vec<String> {
+        line.trim()
+            .trim_matches('|')
+            .split('|')
+            .map(|c| c.replace('*', "").trim().to_lowercase())
+            .collect()
+    };
+    let mut lines = text.lines();
+    let column = lines.find_map(|l| cells(l).iter().position(|c| c == "dex"))?;
+    let row = lines.map(cells).find(|r| {
+        r.get(column)
+            .is_some_and(|c| c.starts_with(|ch: char| ch.is_ascii_digit()))
+    })?;
+    let cell = row.get(column)?;
+    let score: i16 = cell.split_whitespace().next()?.parse().ok()?;
+    Some((score - 10).div_euclid(2))
+}
+
 fn tier(level: u8) -> u8 {
     1 + u8::from(level >= 5) + u8::from(level >= 11) + u8::from(level >= 17)
 }
@@ -496,6 +552,23 @@ mod tests {
             spell_ability: Some(Ability::Cha),
         }];
         c
+    }
+
+    #[test]
+    fn monster_stat_blocks() {
+        let srd = "*Small Fey, Chaotic Neutral*\n\n**AC** 15 (Leather Armor, Shield) · **HP** 10 (3d6) · **Speed** 30 ft.\n\n| STR | DEX | CON |\n|---|---|---|\n| 8 (-1) | 15 (+2) | 10 (+0) |";
+        assert_eq!(
+            parse_monster(srd),
+            MonsterStats {
+                hp: Some(10),
+                ac: Some(15),
+                initiative: Some(2)
+            }
+        );
+        let old = "**Armor Class** 11 (hide armor)  \n**Hit Points** 59 (7d10 + 21)";
+        let m = parse_monster(old);
+        assert_eq!((m.hp, m.ac), (Some(59), Some(11)));
+        assert_eq!(parse_monster("Nothing here"), MonsterStats::default());
     }
 
     #[test]
