@@ -384,15 +384,8 @@ impl Campaign {
                 x,
                 y,
             } => {
-                if let Some(s) = self
-                    .encounters
-                    .iter_mut()
-                    .filter(|e| e.id == *encounter)
-                    .flat_map(|e| e.shapes.iter_mut())
-                    .find(|s| s.id == *shape)
-                {
-                    s.x = *x;
-                    s.y = *y;
+                if let Some(e) = self.encounters.iter_mut().find(|e| e.id == *encounter) {
+                    e.move_shape(*shape, *x, *y);
                 }
             }
             CampaignEvent::PartyMemberSaved { summary } => {

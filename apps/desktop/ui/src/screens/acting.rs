@@ -1,13 +1,14 @@
 use beholder_core::actions::{Damage, Details, MonsterAction};
 use beholder_core::combat::{Combatant, Source};
 use beholder_core::dice::Expr;
-use beholder_core::{CampaignId, CharacterId};
+use beholder_core::{CampaignId, CharacterId, CombatantId};
 use beholder_ipc::EntryView;
 use leptos::prelude::*;
 use leptos::task::spawn_local_scoped;
 
 use crate::app::use_app;
 use crate::i18n::use_i18n;
+use crate::screens::combat::{Economy, TargetPicker, mark_combatant};
 use crate::screens::dice_view::{RollOptions, RollToast, Roller};
 use crate::screens::sheet::{ABILITY_KEYS, signed};
 use crate::screens::sheet_view::Sheet;
@@ -122,6 +123,7 @@ fn MonsterActor(
             .set(combatant.with(|c| c.as_ref().map(|c| c.name.clone())));
     });
     let actions = RwSignal::new(None::<Vec<MonsterAction>>);
+    let targets = RwSignal::new(Vec::<CombatantId>::new());
     let entry = RwSignal::new(None::<Option<EntryView>>);
     let sources = ctx.view.with_untracked(|v| {
         v.campaigns
@@ -169,12 +171,26 @@ fn MonsterActor(
                     let name = a.name.clone();
                     let to_hit = a.to_hit.map(|bonus| {
                         let crit = damage.clone().map(|e| {
-                            (e.critical(), i18n.tr("dice-ctx-damage", &[("what", name.clone().into())]))
+                            (e, i18n.tr("dice-ctx-damage", &[("what", name.clone().into())]))
                         });
                         let context = i18n.tr("dice-ctx-attack", &[("what", name.clone().into())]);
+                        let attack = move |_| {
+                            let chosen = targets.get_untracked();
+                            let each: Vec<Vec<CombatantId>> = if chosen.is_empty() {
+                                vec![Vec::new()]
+                            } else {
+                                chosen.into_iter().map(|t| vec![t]).collect()
+                            };
+                            for t in each {
+                                let follow = crit.clone().map(|(e, c)| (e, c, t.clone()));
+                                roller.test_at(i32::from(bonus), context.clone(), follow, t);
+                            }
+                            if let Some(cid) = combatant.with_untracked(|c| c.as_ref().map(|c| c.id)) {
+                                mark_combatant(campaign, cid, Economy::Action);
+                            }
+                        };
                         view! {
-                            <button type="button" class="primary"
-                                on:click=move |_| roller.test(i32::from(bonus), context.clone(), crit.clone())>
+                            <button type="button" class="primary" on:click=attack>
                                 {format!("{} {}", signed(bonus), i18n.t("dice-to-hit"))}
                             </button>
                         }
@@ -190,7 +206,7 @@ fn MonsterActor(
                     let roll_damage = damage.map(|e| {
                         let context = i18n.tr("dice-ctx-damage", &[("what", name.clone().into())]);
                         view! {
-                            <button type="button" on:click=move |_| roller.roll(e.clone(), context.clone(), None)>
+                            <button type="button" on:click=move |_| roller.roll_at(e.clone(), context.clone(), None, targets.get_untracked())>
                                 {label.clone()}
                             </button>
                         }
@@ -230,6 +246,7 @@ fn MonsterActor(
         {vitals(combatant)}
         <RollOptions roller=roller/>
         <RollToast roller=roller/>
+        <TargetPicker campaign=campaign targets=targets/>
         <ul class="list plain">{rows}</ul>
         {block}
     }

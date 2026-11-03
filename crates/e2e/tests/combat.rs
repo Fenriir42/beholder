@@ -120,6 +120,8 @@ async fn encounters_are_filtered_and_tokens_move() {
         concentration: false,
         hidden,
         health: None,
+        speed: None,
+        used: beholder_core::combat::TurnUse::default(),
     };
     let bran_id = campaign_of(&dm)
         .unwrap()

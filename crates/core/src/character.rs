@@ -34,6 +34,23 @@ pub struct HitPoints {
     pub temp: i16,
 }
 
+impl HitPoints {
+    pub fn apply(self, amount: i16) -> Self {
+        let mut hp = self;
+        if amount >= 0 {
+            let from_temp = amount.min(hp.temp);
+            hp.temp -= from_temp;
+            hp.current = (hp.current - (amount - from_temp)).max(0);
+        } else {
+            hp.current = hp
+                .current
+                .saturating_sub(amount)
+                .min(hp.max.max(hp.current));
+        }
+        hp
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Counter {
     pub name: String,

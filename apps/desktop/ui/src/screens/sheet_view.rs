@@ -8,13 +8,14 @@ use beholder_core::character::{
 use beholder_core::compendium::{Facets, Hit, Kind, SearchQuery};
 use beholder_core::dice::Expr;
 use beholder_core::rules::{Ability, Proficiency, Skill};
-use beholder_core::{CampaignId, CharacterId};
+use beholder_core::{CampaignId, CharacterId, CombatantId};
 use beholder_ipc::{EntryView, ResolveItem};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 use crate::app::use_app;
 use crate::i18n::{I18n, use_i18n};
+use crate::screens::combat::{Economy, TargetPicker};
 use crate::screens::compendium::{kind_label, meta};
 use crate::screens::dice_view::{RollOptions, RollToast, Roller};
 use crate::screens::sheet::{ABILITY_KEYS, EditSheet, class_line, send, signed, skill_key};
@@ -299,10 +300,9 @@ fn option_label(i18n: I18n, (level, pact): (u8, bool)) -> String {
     }
 }
 
-fn fx_buttons(roller: Roller, name: String, fx: &Fx, penalty: i8) -> impl IntoView + use<> {
-    let i18n = use_i18n();
+fn damage_of(fx: &Fx) -> Option<Expr> {
     let times = i32::from(fx.times.max(1));
-    let bundle = |r: beholder_core::actions::Roll| {
+    fx.damage.map(|r| {
         let mut e = Expr::from(r);
         if fx.resolution == Resolution::Automatic && times > 1 {
             for t in &mut e.terms {
@@ -311,21 +311,28 @@ fn fx_buttons(roller: Roller, name: String, fx: &Fx, penalty: i8) -> impl IntoVi
             e.modifier *= times;
         }
         e
-    };
-    let damage = fx.damage.map(bundle);
+    })
+}
+
+fn fx_buttons(roller: Roller, name: String, fx: &Fx, penalty: i8) -> impl IntoView + use<> {
+    let i18n = use_i18n();
+    let damage = damage_of(fx);
     let healing = fx.healing.map(Expr::from);
     let n = name.clone();
     let damage_ctx = move || i18n.tr("dice-ctx-damage", &[("what", n.clone().into())]);
     let attack = match fx.resolution {
         Resolution::Attack { bonus } => {
-            let crit = damage.clone().map(|d| (d.critical(), damage_ctx()));
+            let crit = damage.clone().map(|d| (d, damage_ctx(), Vec::new()));
             let n = name.clone();
             Some(view! {
-                <button type="button" on:click=move |_| roller.test(
-                    i32::from(bonus + penalty),
-                    i18n.tr("dice-ctx-attack", &[("what", n.clone().into())]),
-                    crit.clone(),
-                )>{move || i18n.t("dice-to-hit")}</button>
+                <button type="button" on:click=move |_| {
+                    roller.test(
+                        i32::from(bonus + penalty),
+                        i18n.tr("dice-ctx-attack", &[("what", n.clone().into())]),
+                        crit.clone(),
+                    );
+                    roller.mark(Economy::Action);
+                }>{move || i18n.t("dice-to-hit")}</button>
             })
         }
         _ => None,
@@ -451,6 +458,9 @@ pub fn Sheet(id: CampaignId, selected: RwSignal<Option<CharacterId>>) -> impl In
         roller
             .character
             .set(character.with(|c| c.as_ref().map(|c| c.name.clone())));
+        roller
+            .character_id
+            .set(character.with(|c| c.as_ref().map(|c| c.id)));
     });
     move || match character.get() {
         Some(ch) if editing.get() => view! {
@@ -1486,7 +1496,7 @@ fn EntryDetail(
                 <div class="computed">
                     <p class="small">{facts}</p>
                     <ul class="plain-list">{rows}</ul>
-                    <CastControls campaign=campaign ch=ch.clone() known=known.clone() conc=conc/>
+                    <CastControls campaign=campaign ch=ch.clone() known=known.clone() conc=conc look=look roller=roller/>
                 </div>
             }
             .into_any())
@@ -1600,20 +1610,39 @@ fn CastControls(
     ch: Character,
     known: KnownSpell,
     conc: bool,
+    look: Lookups,
+    roller: Roller,
 ) -> impl IntoView {
     let i18n = use_i18n();
     let id = ch.id;
     let options = cast_options(&ch, known.level);
     let choice = RwSignal::new(0usize);
+    let targets = RwSignal::new(Vec::<CombatantId>::new());
     let other = ch
         .concentration
         .clone()
         .filter(|c| conc && *c != known.spell.name);
     let name = known.spell.name.clone();
     let stored = StoredValue::new(options.clone());
+    let sheet = StoredValue::new((ch.clone(), known.clone()));
     let go = move |_| {
-        if let Some(o) = stored.with_value(|o| o.get(choice.get_untracked()).copied()) {
-            cast(campaign, id, name.clone(), o, conc);
+        let Some(o) = stored.with_value(|o| o.get(choice.get_untracked()).copied()) else {
+            return;
+        };
+        cast(campaign, id, name.clone(), o, conc);
+        let (fx, time) = sheet.with_value(|(ch, known)| {
+            let time = look
+                .details(&known.spell)
+                .and_then(|d| d.spell)
+                .and_then(|s| s.casting_time);
+            (spell_fx(ch, look, known, o.0), (time, ch.d20_penalty()))
+        });
+        let (time, penalty) = time;
+        if let Some(which) = time.as_deref().and_then(Economy::of_casting_time) {
+            roller.mark(which);
+        }
+        if let Some(fx) = fx {
+            roll_spell(roller, name.clone(), &fx, penalty, targets.get_untracked());
         }
     };
     let label = other.clone().map_or_else(
@@ -1621,6 +1650,7 @@ fn CastControls(
         |o| i18n.tr("sheet-cast-ending", &[("spell", o.into())]),
     );
     view! {
+        <TargetPicker campaign=campaign targets=targets/>
         <div class="field-row">
             {(options.len() > 1).then(|| view! {
                 <select aria-label=move || i18n.t("sheet-slot-choice")
@@ -1634,6 +1664,57 @@ fn CastControls(
         </div>
         {options.is_empty().then(|| view! { <p class="muted small">{move || i18n.t("sheet-no-slots")}</p> })}
         {conc.then(|| view! { <p class="muted small">{move || i18n.t("sheet-needs-concentration")}</p> })}
+    }
+}
+
+fn roll_spell(roller: Roller, name: String, fx: &Fx, penalty: i8, targets: Vec<CombatantId>) {
+    let i18n = use_i18n();
+    let damage = damage_of(fx);
+    let damage_ctx = i18n.tr("dice-ctx-damage", &[("what", name.clone().into())]);
+    match fx.resolution {
+        Resolution::Attack { bonus } => {
+            let each: Vec<Vec<CombatantId>> = if targets.is_empty() {
+                vec![Vec::new()]
+            } else {
+                targets.into_iter().map(|t| vec![t]).collect()
+            };
+            for t in each {
+                let follow = damage.clone().map(|d| (d, damage_ctx.clone(), t.clone()));
+                roller.test_at(
+                    i32::from(bonus + penalty),
+                    i18n.tr("dice-ctx-attack", &[("what", name.clone().into())]),
+                    follow,
+                    t,
+                );
+            }
+        }
+        Resolution::Save { ability, dc, half } => {
+            if let Some(d) = damage {
+                let mut context = format!(
+                    "{damage_ctx} · {}",
+                    i18n.tr(
+                        "fx-save",
+                        &[
+                            ("ability", i18n.t(ABILITY_KEYS[ability.index()]).into()),
+                            ("dc", dc.into()),
+                        ],
+                    )
+                );
+                if half {
+                    context = format!("{context} · {}", i18n.t("fx-half"));
+                }
+                roller.roll_at(d, context, None, targets);
+            }
+        }
+        Resolution::Automatic => {
+            if let Some(d) = damage {
+                roller.roll_at(d, damage_ctx, None, targets.clone());
+            }
+            if let Some(h) = fx.healing {
+                let ctx = i18n.tr("dice-ctx-heal", &[("what", name.into())]);
+                roller.roll_at(Expr::from(h), ctx, None, targets);
+            }
+        }
     }
 }
 

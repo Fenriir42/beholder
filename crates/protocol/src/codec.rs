@@ -167,6 +167,8 @@ mod tests {
             concentration: false,
             hidden: false,
             health: Some(Health::Healthy),
+            speed: None,
+            used: beholder_core::combat::TurnUse::default(),
         });
         e.shapes.push(Shape {
             id: beholder_core::ShapeId(Uuid::from_bytes([4; 16])),
@@ -234,6 +236,7 @@ mod tests {
             outcome,
             visibility: Visibility::ToDm,
             physical: false,
+            targets: Vec::new(),
         }
     }
 
@@ -521,6 +524,16 @@ mod tests {
                 live_drag: true,
             },
             beholder_core::combat::EncounterOp::NextTurn { id: encounter().id },
+            beholder_core::combat::EncounterOp::UseTurn {
+                id: encounter().id,
+                combatant: encounter().combatants[0].id,
+                used: beholder_core::combat::TurnUse {
+                    action: true,
+                    bonus: false,
+                    reaction: true,
+                    moved: 25,
+                },
+            },
         ];
         msgs.extend(encounter_ops.into_iter().map(|op| {
             ClientMsg::Command(Command {
@@ -537,6 +550,7 @@ mod tests {
                 context: "Initiative".into(),
                 character: Some("Ilsa".into()),
                 visibility: beholder_core::dice::Visibility::Public,
+                targets: Vec::new(),
             },
             beholder_core::dice::DiceOp::Physical {
                 expr: beholder_core::dice::Expr::parse("2d6").unwrap(),
@@ -544,6 +558,7 @@ mod tests {
                 context: String::new(),
                 character: None,
                 visibility: beholder_core::dice::Visibility::ToDm,
+                targets: Vec::new(),
             },
         ];
         msgs.extend(dice_ops.into_iter().map(|op| {

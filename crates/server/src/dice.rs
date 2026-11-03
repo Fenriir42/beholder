@@ -31,12 +31,13 @@ pub(crate) fn decide(
             DiceError::TooBig => ValidationError::Length,
         })));
     }
-    let (expr, context, character, visibility, physical, results) = match op {
+    let (expr, context, character, visibility, physical, results, targets) = match op {
         DiceOp::Roll {
             expr,
             context,
             character,
             visibility,
+            targets,
         } => {
             let mut results = Vec::with_capacity(expr.dice_count());
             for t in &expr.terms {
@@ -44,7 +45,9 @@ pub(crate) fn decide(
                     results.push(die(t.sides)?);
                 }
             }
-            (expr, context, character, visibility, false, results)
+            (
+                expr, context, character, visibility, false, results, targets,
+            )
         }
         DiceOp::Physical {
             expr,
@@ -52,7 +55,16 @@ pub(crate) fn decide(
             context,
             character,
             visibility,
-        } => (expr, context, character, visibility, true, results.clone()),
+            targets,
+        } => (
+            expr,
+            context,
+            character,
+            visibility,
+            true,
+            results.clone(),
+            targets,
+        ),
     };
     let mut next = results.into_iter();
     let outcome = roll(expr, |_| next.next().unwrap_or(1));
@@ -67,6 +79,7 @@ pub(crate) fn decide(
             outcome,
             visibility: *visibility,
             physical,
+            targets: targets.clone(),
         }),
     }))
 }
@@ -96,7 +109,10 @@ pub fn campaign_rolls(
     let mut stmt =
         conn.prepare_cached("SELECT body FROM rolls WHERE campaign_id = ?1 ORDER BY seq")?;
     stmt.query_map([campaign_id.as_bytes()], |r| r.get::<_, Vec<u8>>(0))?
-        .map(|row| Ok(postcard::from_bytes(&row?)?))
+        .filter_map(|row| match row {
+            Ok(body) => postcard::from_bytes(&body).ok().map(Ok),
+            Err(e) => Some(Err(e.into())),
+        })
         .collect()
 }
 

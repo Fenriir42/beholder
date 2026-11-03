@@ -96,6 +96,7 @@ async fn rolls_reach_who_may_see_them() {
                 context: context.into(),
                 character: None,
                 visibility,
+                targets: vec![beholder_core::CombatantId(uuid::Uuid::from_bytes([9; 16]))],
             },
         })
         .unwrap()
@@ -128,6 +129,16 @@ async fn rolls_reach_who_may_see_them() {
         .map(|r| r.outcome.total)
         .unwrap();
     assert!((4..=23).contains(&total));
+    assert_eq!(
+        campaign_of(&bran)
+            .unwrap()
+            .rolls
+            .iter()
+            .find(|r| r.id == public)
+            .map(|r| r.targets.len()),
+        Some(1),
+        "targets travel with the roll"
+    );
     for c in [&dm, &ilsa, &bran] {
         c.shutdown();
     }

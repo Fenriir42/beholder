@@ -69,6 +69,24 @@ pub fn can_move_shape(viewer: Viewer, e: &Encounter, shape: ShapeId) -> bool {
                 .any(|s| s.id == shape && s.owner == Some(viewer.user)))
 }
 
+pub fn acts_for(
+    viewer: Viewer,
+    e: &Encounter,
+    combatant: beholder_core::CombatantId,
+    characters: &[Character],
+) -> bool {
+    viewer.role == Role::Dm
+        || e.combatants
+            .iter()
+            .find(|c| c.id == combatant)
+            .is_some_and(|c| match c.source {
+                Source::Character(id) => characters
+                    .iter()
+                    .any(|ch| ch.id == id && ch.owner == viewer.user),
+                _ => false,
+            })
+}
+
 pub fn can_preview_as(viewer: Viewer) -> bool {
     viewer.role == Role::Dm
 }
@@ -511,6 +529,8 @@ mod tests {
             concentration: false,
             hidden,
             health: None,
+            speed: None,
+            used: beholder_core::combat::TurnUse::default(),
         };
         let shape = |n: u8, hidden: bool, owner: Option<UserId>| Shape {
             id: sid(n),
@@ -655,6 +675,25 @@ mod tests {
             !can_put_shape(v(P2), &crowded, &template(40, Some(uid(P2)))),
             "a cap per player"
         );
+        let hero = Character::new(
+            beholder_core::CharacterId(Uuid::from_bytes([7; 16])),
+            uid(P1),
+            "Hero".into(),
+            beholder_core::compendium::RulesVersion::R2024,
+        );
+        // (viewer, may act for the PC combatant, may act for a monster)
+        for (who, pc, monster) in [(DM, true, true), (P1, true, false), (P2, false, false)] {
+            assert_eq!(
+                acts_for(v(who), &e, cid(1), std::slice::from_ref(&hero)),
+                pc,
+                "{who}"
+            );
+            assert_eq!(
+                acts_for(v(who), &e, cid(2), std::slice::from_ref(&hero)),
+                monster,
+                "{who}"
+            );
+        }
         assert!(
             can_preview_as(v(DM)) && !can_preview_as(v(P1)),
             "only the DM previews a player's view"
@@ -708,6 +747,7 @@ mod tests {
                 expr,
                 visibility,
                 physical: false,
+                targets: Vec::new(),
             }
         };
         // (roller, visibility, [DM sees, P1 sees, P2 sees])

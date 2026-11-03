@@ -1,6 +1,9 @@
 use std::collections::HashMap;
 
-use beholder_core::combat::{Colour, Combatant, Encounter, EncounterOp, Shape, ShapeKind, Source};
+use beholder_core::character::HitPoints;
+use beholder_core::combat::{
+    Colour, Combatant, Condition, Encounter, EncounterOp, Health, Shape, ShapeKind, Source, TurnUse,
+};
 use beholder_core::{CampaignEvent, CampaignId, EncounterId, Role};
 use beholder_core::{CombatantId, ShapeId, UserId};
 use beholder_protocol::RejectReason;
@@ -26,17 +29,10 @@ pub(crate) fn decide(
             EncounterOp::RemoveShape { shape, .. } => {
                 permissions::can_remove_shape(viewer, e, *shape)
             }
-            EncounterOp::SetInitiative { combatant, .. } => {
+            EncounterOp::SetInitiative { combatant, .. }
+            | EncounterOp::UseTurn { combatant, .. } => {
                 let characters = crate::characters::campaign_characters(tx, campaign_id)?;
-                e.combatants
-                    .iter()
-                    .find(|c| c.id == *combatant)
-                    .is_some_and(|c| match c.source {
-                        Source::Character(id) => characters
-                            .iter()
-                            .any(|ch| ch.id == id && ch.owner == viewer.user),
-                        _ => false,
-                    })
+                permissions::acts_for(viewer, e, *combatant, &characters)
             }
             _ => false,
         };
@@ -62,61 +58,100 @@ struct LegacyShape {
     owner: Option<UserId>,
 }
 
+impl From<LegacyShape> for Shape {
+    fn from(s: LegacyShape) -> Self {
+        Self {
+            id: s.id,
+            kind: s.kind,
+            x: s.x,
+            y: s.y,
+            w: s.w,
+            h: s.h,
+            label: s.label,
+            colour: s.colour,
+            hidden: s.hidden,
+            combatant: s.combatant,
+            owner: s.owner,
+            note: String::new(),
+        }
+    }
+}
+
 #[derive(serde::Deserialize)]
-struct Legacy {
+struct LegacyCombatant {
+    id: CombatantId,
+    name: String,
+    source: Source,
+    initiative: Option<i16>,
+    hp: HitPoints,
+    ac: Option<i16>,
+    conditions: Vec<Condition>,
+    concentration: bool,
+    hidden: bool,
+    health: Option<Health>,
+}
+
+impl From<LegacyCombatant> for Combatant {
+    fn from(c: LegacyCombatant) -> Self {
+        Self {
+            id: c.id,
+            name: c.name,
+            source: c.source,
+            initiative: c.initiative,
+            hp: c.hp,
+            ac: c.ac,
+            conditions: c.conditions,
+            concentration: c.concentration,
+            hidden: c.hidden,
+            health: c.health,
+            speed: None,
+            used: TurnUse::default(),
+        }
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct Legacy<S> {
     id: EncounterId,
     name: String,
     active: bool,
     round: u16,
     turn: Option<CombatantId>,
-    combatants: Vec<Combatant>,
+    combatants: Vec<LegacyCombatant>,
     width: u16,
     height: u16,
-    shapes: Vec<LegacyShape>,
+    shapes: Vec<S>,
     locked: bool,
     live_drag: bool,
 }
 
-impl From<Legacy> for Encounter {
-    fn from(l: Legacy) -> Self {
+impl<S: Into<Shape>> From<Legacy<S>> for Encounter {
+    fn from(l: Legacy<S>) -> Self {
         Self {
             id: l.id,
             name: l.name,
             active: l.active,
             round: l.round,
             turn: l.turn,
-            combatants: l.combatants,
+            combatants: l.combatants.into_iter().map(Into::into).collect(),
             width: l.width,
             height: l.height,
-            shapes: l
-                .shapes
-                .into_iter()
-                .map(|s| Shape {
-                    id: s.id,
-                    kind: s.kind,
-                    x: s.x,
-                    y: s.y,
-                    w: s.w,
-                    h: s.h,
-                    label: s.label,
-                    colour: s.colour,
-                    hidden: s.hidden,
-                    combatant: s.combatant,
-                    owner: s.owner,
-                    note: String::new(),
-                })
-                .collect(),
+            shapes: l.shapes.into_iter().map(Into::into).collect(),
             locked: l.locked,
             live_drag: l.live_drag,
         }
     }
 }
 
+// Encounters stored by older servers: protocol 8 (no shape notes) and 9 (no turn use or speed).
 fn decode(body: &[u8]) -> Result<Encounter, DbError> {
-    match postcard::from_bytes::<Encounter>(body) {
-        Ok(e) => Ok(e),
-        Err(_) => Ok(postcard::from_bytes::<Legacy>(body)?.into()),
+    if let Ok(e) = postcard::from_bytes::<Encounter>(body) {
+        return Ok(e);
     }
+    if let Ok(e) = postcard::from_bytes::<Legacy<Shape>>(body) {
+        return Ok(e.into());
+    }
+    Ok(postcard::from_bytes::<Legacy<LegacyShape>>(body)?.into())
 }
 
 fn load(conn: &Connection, id: EncounterId) -> Result<Option<Encounter>, DbError> {
@@ -160,10 +195,7 @@ pub(crate) fn project(
             y,
         } => {
             if let Some(mut e) = load(tx, *encounter)? {
-                if let Some(s) = e.shapes.iter_mut().find(|s| s.id == *shape) {
-                    s.x = *x;
-                    s.y = *y;
-                }
+                e.move_shape(*shape, *x, *y);
                 save(tx, campaign_id, &e)?;
             }
         }
@@ -251,6 +283,71 @@ pub fn touched_encounters<'a>(
 mod tests {
     use super::*;
     use uuid::Uuid;
+
+    #[test]
+    fn encounters_saved_before_turn_use_still_load() {
+        #[derive(serde::Serialize)]
+        struct OldCombatant {
+            id: CombatantId,
+            name: String,
+            source: Source,
+            initiative: Option<i16>,
+            hp: HitPoints,
+            ac: Option<i16>,
+            conditions: Vec<Condition>,
+            concentration: bool,
+            hidden: bool,
+            health: Option<Health>,
+        }
+        #[derive(serde::Serialize)]
+        struct Old {
+            id: EncounterId,
+            name: String,
+            active: bool,
+            round: u16,
+            turn: Option<CombatantId>,
+            combatants: Vec<OldCombatant>,
+            width: u16,
+            height: u16,
+            shapes: Vec<Shape>,
+            locked: bool,
+            live_drag: bool,
+        }
+        let old = Old {
+            id: EncounterId(Uuid::from_bytes([1; 16])),
+            name: "Nine".into(),
+            active: false,
+            round: 2,
+            turn: None,
+            combatants: vec![OldCombatant {
+                id: CombatantId(Uuid::from_bytes([3; 16])),
+                name: "Goblin".into(),
+                source: Source::Custom,
+                initiative: Some(12),
+                hp: HitPoints {
+                    current: 7,
+                    max: 7,
+                    temp: 0,
+                },
+                ac: Some(15),
+                conditions: Vec::new(),
+                concentration: false,
+                hidden: false,
+                health: None,
+            }],
+            width: 30,
+            height: 20,
+            shapes: Vec::new(),
+            locked: false,
+            live_drag: false,
+        };
+        let e = decode(&postcard::to_stdvec(&old).unwrap()).unwrap();
+        assert_eq!((e.round, e.combatants[0].name.as_str()), (2, "Goblin"));
+        assert_eq!(
+            (e.combatants[0].speed, e.combatants[0].used),
+            (None, TurnUse::default())
+        );
+    }
 
     #[test]
     fn encounters_saved_before_notes_still_load() {

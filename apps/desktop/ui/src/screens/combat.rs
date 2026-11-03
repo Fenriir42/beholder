@@ -1,10 +1,13 @@
 use beholder_core::actions::{Details, MonsterStats};
 use beholder_core::character::HitPoints;
-use beholder_core::combat::{Combatant, Condition, Encounter, EncounterOp, Health, Source};
+use beholder_core::character::{CharacterChange, CharacterOp};
+use beholder_core::combat::{
+    Combatant, Condition, Encounter, EncounterOp, Health, Source, TurnUse,
+};
 use beholder_core::compendium::{Hit, Kind, SearchQuery};
 use beholder_core::dice::{DiceOp, Expr, Visibility};
 use beholder_core::{
-    CampaignId, CombatVisibility, CombatantId, CommandId, EncounterId, Role, UserId,
+    CampaignId, CharacterId, CombatVisibility, CombatantId, CommandId, EncounterId, Role, UserId,
 };
 use leptos::prelude::*;
 use leptos::task::spawn_local_scoped;
@@ -187,6 +190,7 @@ impl Tracker {
                 context: i18n.tr("combat-initiative-of", &[("name", c.name.clone().into())]),
                 character: Some(c.name.clone()),
                 visibility,
+                targets: Vec::new(),
             };
             let args = RollArgs {
                 campaign_id: t.campaign.to_string(),
@@ -649,14 +653,61 @@ fn CombatantRow(
         }
     };
     let hit = move |sign: i16| {
-        if let Ok(n) = amount.get_untracked().trim().parse::<i16>() {
+        if !t.interactive {
+            return;
+        }
+        if let (Ok(n), Some(c)) = (
+            amount.get_untracked().trim().parse::<i16>(),
+            combatant.get_untracked(),
+        ) {
             amount.set(String::new());
-            t.send(EncounterOp::Damage {
+            apply_amount(t.campaign, eid, &c, n.abs() * sign);
+        }
+    };
+    let turn_use = move || {
+        let c = combatant.get()?;
+        let editable = t.interactive && (t.is_dm.get() || t.own(ctx, &c));
+        let used = c.used;
+        let set = move |next: TurnUse| {
+            t.send(EncounterOp::UseTurn {
                 id: eid,
                 combatant: cid,
-                amount: n.abs() * sign,
-            });
-        }
+                used: next,
+            })
+        };
+        let flag = move |on: bool, key: &'static str, next: TurnUse| {
+            let text = move || format!("{}{}", if on { "✓ " } else { "" }, i18n.t(key));
+            if editable {
+                view! {
+                    <button type="button" class="level-filter" class:active=on aria-pressed=on.to_string()
+                        on:click=move |_| set(next)>{text}</button>
+                }
+                .into_any()
+            } else {
+                view! { <span class="chip private" class:used=on>{text}</span> }.into_any()
+            }
+        };
+        let moved = match c.speed {
+            Some(s) => i18n.tr(
+                "turn-moved-of",
+                &[("moved", used.moved.into()), ("speed", s.into())],
+            ),
+            None => i18n.tr("turn-moved", &[("moved", used.moved.into())]),
+        };
+        Some(view! {
+            <span class="turn-use" role="group" aria-label=move || i18n.t("turn-label")>
+                {flag(used.action, "turn-action", TurnUse { action: !used.action, ..used })}
+                {flag(used.bonus, "turn-bonus", TurnUse { bonus: !used.bonus, ..used })}
+                {flag(used.reaction, "turn-reaction", TurnUse { reaction: !used.reaction, ..used })}
+                <span class="small">{moved}</span>
+                {editable.then(|| view! {
+                    <button type="button" class="icon-button" aria-label=move || i18n.t("turn-less")
+                        on:click=move |_| set(TurnUse { moved: used.moved.saturating_sub(5), ..used })>"−5"</button>
+                    <button type="button" class="icon-button" aria-label=move || i18n.t("turn-more")
+                        on:click=move |_| set(TurnUse { moved: used.moved.saturating_add(5).min(10_000), ..used })>"+5"</button>
+                })}
+            </span>
+        })
     };
 
     let initiative = move || {
@@ -731,7 +782,10 @@ fn CombatantRow(
                 view! { <span class="health">{move || i18n.t(health_key(h))}</span> }.into_any(),
             );
         }
-        let HitPoints { current, max, temp } = c.hp;
+        let HitPoints { current, max, temp } = match c.source {
+            Source::Character(ch) => character_hp(ctx, t.campaign, ch).unwrap_or(c.hp),
+            _ => c.hp,
+        };
         let down = current <= 0;
         let text = if temp > 0 {
             format!("{current}/{max} (+{temp})")
@@ -847,6 +901,7 @@ fn CombatantRow(
             })}
             {hp}
             {dm_controls}
+            {turn_use}
         </li>
     }
 }
@@ -879,6 +934,8 @@ fn AddCombatants(t: Tracker, combatants: Memo<Vec<Combatant>>) -> impl IntoView 
             concentration: false,
             hidden: false,
             health: None,
+            speed: None,
+            used: beholder_core::combat::TurnUse::default(),
         };
 
     let add_party = move |_| {
@@ -900,8 +957,12 @@ fn AddCombatants(t: Tracker, combatants: Memo<Vec<Combatant>>) -> impl IntoView 
                         .iter()
                         .filter(|k| k.active && !present.contains(&k.id))
                         .map(|k| {
-                            let (name, ch, hp, ac) = (k.name.clone(), k.id, k.hp, k.armor_class());
-                            Box::new(move |id| blank(id, name, Source::Character(ch), hp, Some(ac)))
+                            let (name, ch, hp, ac, speed) =
+                                (k.name.clone(), k.id, k.hp, k.armor_class(), k.speed);
+                            Box::new(move |id| Combatant {
+                                speed: Some(speed),
+                                ..blank(id, name, Source::Character(ch), hp, Some(ac))
+                            })
                                 as Box<dyn FnOnce(CombatantId) -> Combatant>
                         })
                         .collect()
@@ -966,8 +1027,9 @@ fn AddCombatants(t: Tracker, combatants: Memo<Vec<Combatant>>) -> impl IntoView 
                 max,
                 temp: 0,
             };
-            add(vec![Box::new(move |id| {
-                blank(id, name, source, hp, stats.ac)
+            add(vec![Box::new(move |id| Combatant {
+                speed: stats.speed,
+                ..blank(id, name, source, hp, stats.ac)
             })]);
         });
     };
@@ -1038,5 +1100,324 @@ fn AddCombatants(t: Tracker, combatants: Memo<Vec<Combatant>>) -> impl IntoView 
                 <button type="submit">{icons::plus()}{move || i18n.t("combat-quick-add")}</button>
             </form>
         </details>
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Economy {
+    Action,
+    Bonus,
+    Reaction,
+}
+
+impl Economy {
+    pub fn of_casting_time(text: &str) -> Option<Self> {
+        let t = text.to_lowercase();
+        if t.contains("bonus") {
+            Some(Self::Bonus)
+        } else if t.contains("reaction") {
+            Some(Self::Reaction)
+        } else if t.contains("action") {
+            Some(Self::Action)
+        } else {
+            None
+        }
+    }
+
+    fn set(self, used: &mut TurnUse) {
+        match self {
+            Self::Action => used.action = true,
+            Self::Bonus => used.bonus = true,
+            Self::Reaction => used.reaction = true,
+        }
+    }
+}
+
+fn running(campaign: CampaignId) -> Option<Encounter> {
+    use_app().view.with_untracked(|v| {
+        v.campaigns
+            .iter()
+            .find(|c| c.campaign.id == campaign)?
+            .campaign
+            .encounters
+            .iter()
+            .find(|e| e.active)
+            .cloned()
+    })
+}
+
+pub(crate) fn target_names(campaign: CampaignId, targets: &[CombatantId]) -> String {
+    if targets.is_empty() {
+        return String::new();
+    }
+    running(campaign)
+        .map(|e| {
+            e.combatants
+                .iter()
+                .filter(|c| targets.contains(&c.id))
+                .map(|c| c.name.clone())
+                .collect::<Vec<_>>()
+                .join(", ")
+        })
+        .unwrap_or_default()
+}
+
+pub(crate) fn mark_combatant(campaign: CampaignId, combatant: CombatantId, which: Economy) {
+    let Some(e) = running(campaign) else {
+        return;
+    };
+    let Some(c) = e.combatants.iter().find(|c| c.id == combatant) else {
+        return;
+    };
+    let mut used = c.used;
+    which.set(&mut used);
+    if used != c.used {
+        send(
+            campaign,
+            EncounterOp::UseTurn {
+                id: e.id,
+                combatant,
+                used,
+            },
+        );
+    }
+}
+
+pub(crate) fn mark_character(campaign: CampaignId, ch: CharacterId, which: Economy) {
+    let found = running(campaign).and_then(|e| {
+        e.combatants
+            .iter()
+            .find(|c| c.source == Source::Character(ch))
+            .map(|c| c.id)
+    });
+    if let Some(cid) = found {
+        mark_combatant(campaign, cid, which);
+    }
+}
+
+fn character_hp(ctx: AppCtx, campaign: CampaignId, ch: CharacterId) -> Option<HitPoints> {
+    ctx.view.with(|v| {
+        let c = v.campaigns.iter().find(|c| c.campaign.id == campaign)?;
+        c.campaign
+            .characters
+            .iter()
+            .find(|k| k.id == ch)
+            .map(|k| k.hp)
+            .or_else(|| c.campaign.party.iter().find(|k| k.id == ch).map(|k| k.hp))
+    })
+}
+
+pub(crate) fn apply_amount(
+    campaign: CampaignId,
+    encounter: EncounterId,
+    c: &Combatant,
+    amount: i16,
+) {
+    let ctx = use_app();
+    if let Source::Character(ch) = c.source
+        && let Some(hp) = ctx.view.with_untracked(|v| {
+            v.campaigns
+                .iter()
+                .find(|x| x.campaign.id == campaign)?
+                .campaign
+                .characters
+                .iter()
+                .find(|k| k.id == ch)
+                .map(|k| k.hp)
+        })
+    {
+        crate::screens::sheet::send(
+            campaign,
+            CharacterOp::Change {
+                id: ch,
+                change: CharacterChange::Hp(hp.apply(amount)),
+            },
+        );
+        return;
+    }
+    send(
+        campaign,
+        EncounterOp::Damage {
+            id: encounter,
+            combatant: c.id,
+            amount,
+        },
+    );
+}
+
+#[component]
+pub fn TargetPicker(campaign: CampaignId, targets: RwSignal<Vec<CombatantId>>) -> impl IntoView {
+    let ctx = use_app();
+    let i18n = use_i18n();
+    let list = Memo::new(move |_| {
+        ctx.view.with(|v| {
+            v.campaigns
+                .iter()
+                .find(|c| c.campaign.id == campaign)
+                .and_then(|c| c.campaign.encounters.iter().find(|e| e.active))
+                .map(|e| {
+                    e.combatants
+                        .iter()
+                        .map(|c| (c.id, c.name.clone()))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
+        })
+    });
+    move || {
+        let items = list.get();
+        (!items.is_empty()).then(|| {
+            let chips = items
+                .into_iter()
+                .map(|(id, name)| {
+                    let on = move || targets.with(|t| t.contains(&id));
+                    view! {
+                        <button type="button" class="level-filter" class:active=on
+                            aria-pressed=move || on().to_string()
+                            on:click=move |_| targets.update(|t| {
+                                if let Some(i) = t.iter().position(|x| *x == id) {
+                                    t.remove(i);
+                                } else if t.len() < beholder_core::dice::MAX_TARGETS {
+                                    t.push(id);
+                                }
+                            })>
+                            {move || if on() { "✓ " } else { "" }}{name.clone()}
+                        </button>
+                    }
+                })
+                .collect_view();
+            view! {
+                <div class="toolbar targets" role="group" aria-label=move || i18n.t("target-label")>
+                    <span class="muted small">{move || i18n.t("target-label")}</span>
+                    {chips}
+                </div>
+            }
+        })
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Factor {
+    Normal,
+    Half,
+    Double,
+}
+
+#[component]
+pub fn ApplyRoll(campaign: CampaignId, roll: beholder_core::dice::RollRecord) -> impl IntoView {
+    let ctx = use_app();
+    let i18n = use_i18n();
+    let is_dm = Memo::new(move |_| {
+        ctx.view.with(|v| {
+            let me = v.user.as_ref()?.id;
+            v.campaigns
+                .iter()
+                .find(|c| c.campaign.id == campaign)?
+                .campaign
+                .role_of(me)
+        }) == Some(Role::Dm)
+    });
+    let test = roll.expr.terms.iter().any(|t| t.sides == 20);
+    let total = i16::try_from(roll.outcome.total.max(0)).unwrap_or(i16::MAX);
+    let open = RwSignal::new(false);
+    let applied = RwSignal::new(false);
+    let chosen = RwSignal::new(
+        roll.targets
+            .iter()
+            .map(|t| (*t, Factor::Normal))
+            .collect::<Vec<_>>(),
+    );
+    let running_now = Memo::new(move |_| {
+        ctx.view.with(|v| {
+            v.campaigns
+                .iter()
+                .find(|c| c.campaign.id == campaign)
+                .is_some_and(|c| c.campaign.encounters.iter().any(|e| e.active))
+        })
+    });
+    let apply = move |sign: i16| {
+        let Some(e) = running(campaign) else {
+            return;
+        };
+        for (cid, factor) in chosen.get_untracked() {
+            let amount = match factor {
+                Factor::Normal => total,
+                Factor::Half => total / 2,
+                Factor::Double => total.saturating_mul(2),
+            };
+            if let Some(c) = e.combatants.iter().find(|c| c.id == cid) {
+                apply_amount(campaign, e.id, c, amount.saturating_mul(sign));
+            }
+        }
+        open.set(false);
+        applied.set(true);
+    };
+    move || {
+        if test || !is_dm.get() || !running_now.get() {
+            return None;
+        }
+        if applied.get() {
+            return Some(
+                view! { <span class="muted small">{move || i18n.t("apply-done")}</span> }
+                    .into_any(),
+            );
+        }
+        if !open.get() {
+            return Some(
+                view! { <button type="button" on:click=move |_| open.set(true)>{move || i18n.t("apply-open")}</button> }
+                    .into_any(),
+            );
+        }
+        let rows = running(campaign)
+            .map(|e| e.combatants)
+            .unwrap_or_default()
+            .into_iter()
+            .map(|c| {
+                let id = c.id;
+                let current = move || chosen.with(|l| l.iter().find(|x| x.0 == id).map(|x| x.1));
+                let set = move |f: Option<Factor>| {
+                    chosen.update(|l| {
+                        l.retain(|x| x.0 != id);
+                        if let Some(f) = f {
+                            l.push((id, f));
+                        }
+                    })
+                };
+                let factor = |f: Factor, key: &'static str| {
+                    view! {
+                        <button type="button" class="level-filter" class:active=move || current() == Some(f)
+                            aria-pressed=move || (current() == Some(f)).to_string()
+                            on:click=move |_| set(if current() == Some(f) { None } else { Some(f) })>
+                            {move || i18n.t(key)}
+                        </button>
+                    }
+                };
+                view! {
+                    <li class="toolbar">
+                        <span class="grow">{move || if current().is_some() { "✓ " } else { "" }}{c.name.clone()}</span>
+                        {factor(Factor::Normal, "apply-full")}
+                        {factor(Factor::Half, "apply-half")}
+                        {factor(Factor::Double, "apply-double")}
+                    </li>
+                }
+            })
+            .collect_view();
+        Some(
+            view! {
+                <div class="apply-roll">
+                    <ul class="list plain">{rows}</ul>
+                    <div class="toolbar">
+                        <button type="button" class="primary" on:click=move |_| apply(1)>
+                            {move || i18n.tr("apply-damage", &[("n", total.into())])}
+                        </button>
+                        <button type="button" on:click=move |_| apply(-1)>
+                            {move || i18n.tr("apply-heal", &[("n", total.into())])}
+                        </button>
+                        <button type="button" class="ghost" on:click=move |_| open.set(false)>{move || i18n.t("cancel")}</button>
+                    </div>
+                </div>
+            }
+            .into_any(),
+        )
     }
 }

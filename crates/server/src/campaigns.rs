@@ -1294,6 +1294,8 @@ mod tests {
                     concentration: false,
                     hidden: false,
                     health: None,
+                    speed: None,
+                    used: beholder_core::combat::TurnUse::default(),
                 },
             })
         )
@@ -1377,6 +1379,22 @@ mod tests {
             Reply::Reject(RejectReason::Forbidden),
             "locked"
         );
+        assert!(
+            ok(run(
+                &mut c,
+                &player,
+                enc(EncounterOp::UseTurn {
+                    id: fight,
+                    combatant: pc,
+                    used: beholder_core::combat::TurnUse {
+                        action: true,
+                        ..Default::default()
+                    },
+                })
+            )
+            .reply),
+            "players mark their own turn"
+        );
         use crate::combat::{AsPlayer, encounter_as};
         assert!(
             matches!(
@@ -1418,6 +1436,7 @@ mod tests {
                 context: "Stealth".into(),
                 character: None,
                 visibility: Visibility::Public,
+                targets: Vec::new(),
             })
         };
         assert_eq!(
@@ -1437,6 +1456,7 @@ mod tests {
             context: "Damage".into(),
             character: Some("Ilsa".into()),
             visibility: Visibility::ToDm,
+            targets: Vec::new(),
         });
         assert!(matches!(
             run(&mut c, &dm, physical).reply,
@@ -1448,6 +1468,7 @@ mod tests {
             context: String::new(),
             character: None,
             visibility: Visibility::Public,
+            targets: Vec::new(),
         });
         assert!(matches!(
             run(&mut c, &dm, bad).reply,

@@ -1,11 +1,12 @@
 use beholder_core::dice::{Advantage, DiceOp, Expr, Keep, RollRecord, Visibility};
-use beholder_core::{CampaignId, CommandId, UserId};
+use beholder_core::{CampaignId, CharacterId, CombatantId, CommandId, UserId};
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 
 use crate::app::{error_key, use_app};
 use crate::i18n::{I18n, use_i18n};
 use crate::ipc;
+use crate::screens::combat::{ApplyRoll, Economy, mark_character, target_names};
 
 #[derive(serde::Serialize)]
 struct RollArgs {
@@ -13,12 +14,13 @@ struct RollArgs {
     op: DiceOp,
 }
 
-pub type FollowUp = (Expr, String);
+pub type FollowUp = (Expr, String, Vec<CombatantId>);
 
 #[derive(Clone, Copy)]
 pub struct Roller {
     pub campaign: CampaignId,
     pub character: RwSignal<Option<String>>,
+    pub character_id: RwSignal<Option<CharacterId>>,
     pub advantage: RwSignal<Advantage>,
     pub visibility: RwSignal<Visibility>,
     pub last: RwSignal<Option<(String, Option<FollowUp>)>>,
@@ -29,6 +31,7 @@ impl Roller {
         Self {
             campaign,
             character: RwSignal::new(None),
+            character_id: RwSignal::new(None),
             advantage: RwSignal::new(Advantage::Normal),
             visibility: RwSignal::new(Visibility::Public),
             last: RwSignal::new(None),
@@ -36,13 +39,30 @@ impl Roller {
     }
 
     pub fn roll(&self, expr: Expr, context: String, crit: Option<FollowUp>) {
+        self.roll_at(expr, context, crit, Vec::new());
+    }
+
+    pub fn roll_at(
+        &self,
+        expr: Expr,
+        context: String,
+        crit: Option<FollowUp>,
+        targets: Vec<CombatantId>,
+    ) {
         let ctx = use_app();
         let this = *self;
+        let names = target_names(self.campaign, &targets);
+        let context = if names.is_empty() {
+            context
+        } else {
+            format!("{context} → {names}").chars().take(120).collect()
+        };
         let op = DiceOp::Roll {
             expr,
             context,
             character: self.character.get_untracked(),
             visibility: self.visibility.get_untracked(),
+            targets,
         };
         spawn_local(async move {
             let args = RollArgs {
@@ -57,8 +77,29 @@ impl Roller {
     }
 
     pub fn test(&self, modifier: i32, context: String, crit: Option<FollowUp>) {
+        self.test_at(modifier, context, crit, Vec::new());
+    }
+
+    pub fn test_at(
+        &self,
+        modifier: i32,
+        context: String,
+        crit: Option<FollowUp>,
+        targets: Vec<CombatantId>,
+    ) {
         let advantage = self.advantage.get_untracked();
-        self.roll(Expr::d20(modifier).with_advantage(advantage), context, crit);
+        self.roll_at(
+            Expr::d20(modifier).with_advantage(advantage),
+            context,
+            crit,
+            targets,
+        );
+    }
+
+    pub fn mark(&self, which: Economy) {
+        if let Some(ch) = self.character_id.get_untracked() {
+            mark_character(self.campaign, ch, which);
+        }
     }
 }
 
@@ -155,11 +196,13 @@ pub fn RollToast(roller: Roller) -> impl IntoView {
             .into_any(),
             Some(r) => {
                 let natural = r.outcome.natural();
-                let crit_button = crit.filter(|_| natural == Some(20)).map(|(expr, context)| {
+                let crit_button = crit.filter(|_| natural != Some(1)).map(|(expr, context, targets)| {
+                    let critical = natural == Some(20);
+                    let expr = if critical { expr.critical() } else { expr };
                     view! {
                         <button type="button" class="primary"
-                            on:click=move |_| roller.roll(expr.clone(), context.clone(), None)>
-                            {move || i18n.t("dice-roll-critical")}
+                            on:click=move |_| roller.roll_at(expr.clone(), context.clone(), None, targets.clone())>
+                            {move || if critical { i18n.t("dice-roll-critical") } else { i18n.t("dice-roll-damage") }}
                         </button>
                     }
                 });
@@ -175,6 +218,7 @@ pub fn RollToast(roller: Roller) -> impl IntoView {
                             {(!extra.is_empty()).then(|| view! { <span class="small">" · "{extra.clone()}</span> })}
                         </span>
                         {crit_button}
+                        <ApplyRoll campaign=roller.campaign roll=r.clone()/>
                         <button type="button" class="ghost" on:click=close>{move || i18n.t("sheet-close")}</button>
                     </div>
                 }
@@ -246,6 +290,7 @@ pub fn DiceLog(id: CampaignId) -> impl IntoView {
             context: context.get_untracked(),
             character: None,
             visibility: roller.visibility.get_untracked(),
+            targets: Vec::new(),
         };
         if op.check().is_err() {
             error.set(Some("dice-bad-results"));
@@ -286,6 +331,7 @@ pub fn DiceLog(id: CampaignId) -> impl IntoView {
                             {(!extra.is_empty()).then(|| view! { <span class="small">" · "{extra.clone()}</span> })}
                         </span>
                         <strong class="roll-total">{r.outcome.total}</strong>
+                        <ApplyRoll campaign=id roll=r.clone()/>
                     </li>
                 }
             })

@@ -64,6 +64,8 @@ pub struct MonsterStats {
     pub hp: Option<i16>,
     pub ac: Option<i16>,
     pub initiative: Option<i16>,
+    #[serde(default)]
+    pub speed: Option<u16>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -539,10 +541,16 @@ pub fn parse_monster(text: &str) -> MonsterStats {
         .and_then(|i| w.get(i + 1))
         .and_then(|x| x.parse::<i16>().ok());
     let dex = dex_modifier(text);
+    let speed = w
+        .iter()
+        .position(|x| x == "speed")
+        .and_then(|i| w.get(i + 1))
+        .and_then(|x| x.parse::<u16>().ok());
     MonsterStats {
         hp,
         ac,
         initiative: initiative.or(dex),
+        speed,
     }
 }
 
@@ -789,7 +797,8 @@ mod tests {
             MonsterStats {
                 hp: Some(10),
                 ac: Some(15),
-                initiative: Some(2)
+                initiative: Some(2),
+                speed: Some(30),
             }
         );
         let old = "**Armor Class** 11 (hide armor)  \n**Hit Points** 59 (7d10 + 21)";

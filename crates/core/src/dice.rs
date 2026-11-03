@@ -3,13 +3,14 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::actions::Roll;
-use crate::ids::{CommandId, UnixMillis, UserId};
+use crate::ids::{CombatantId, CommandId, UnixMillis, UserId};
 
 pub const MAX_DICE: u8 = 100;
 pub const MAX_SIDES: u16 = 1000;
 pub const MAX_TERMS: usize = 10;
 pub const LOG_SIZE: usize = 50;
 const MAX_CONTEXT: usize = 120;
+pub const MAX_TARGETS: usize = 20;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Visibility {
@@ -29,6 +30,7 @@ pub struct RollRecord {
     pub outcome: Outcome,
     pub visibility: Visibility,
     pub physical: bool,
+    pub targets: Vec<CombatantId>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,6 +40,7 @@ pub enum DiceOp {
         context: String,
         character: Option<String>,
         visibility: Visibility,
+        targets: Vec<CombatantId>,
     },
     Physical {
         expr: Expr,
@@ -45,6 +48,7 @@ pub enum DiceOp {
         context: String,
         character: Option<String>,
         visibility: Visibility,
+        targets: Vec<CombatantId>,
     },
 }
 
@@ -357,20 +361,25 @@ pub fn roll(expr: &Expr, mut die: impl FnMut(u16) -> u16) -> Outcome {
 
 impl DiceOp {
     pub fn check(&self) -> Result<(), DiceError> {
-        let (expr, context, character) = match self {
+        let (expr, context, character, targets) = match self {
             Self::Roll {
                 expr,
                 context,
                 character,
+                targets,
                 ..
             }
             | Self::Physical {
                 expr,
                 context,
                 character,
+                targets,
                 ..
-            } => (expr, context, character),
+            } => (expr, context, character, targets),
         };
+        if targets.len() > MAX_TARGETS {
+            return Err(DiceError::TooBig);
+        }
         expr.validate()?;
         let short = |s: &str| s.chars().count() <= MAX_CONTEXT;
         if !short(context) || !character.as_deref().is_none_or(short) {
@@ -467,6 +476,7 @@ mod tests {
             context: "Stealth".into(),
             character: None,
             visibility: Visibility::Public,
+            targets: Vec::new(),
         };
         assert!(op("2d6+1", vec![3, 6]).check().is_ok());
         assert!(op("2d6+1", vec![3]).check().is_err(), "one result per die");
@@ -481,6 +491,7 @@ mod tests {
             context: String::new(),
             character: None,
             visibility: Visibility::ToDm,
+            targets: Vec::new(),
         };
         assert_eq!(roll.check(), Err(DiceError::TooBig));
     }

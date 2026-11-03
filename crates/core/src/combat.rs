@@ -34,6 +34,14 @@ pub enum Health {
     Down,
 }
 
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct TurnUse {
+    pub action: bool,
+    pub bonus: bool,
+    pub reaction: bool,
+    pub moved: u16,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Combatant {
     pub id: CombatantId,
@@ -46,6 +54,8 @@ pub struct Combatant {
     pub concentration: bool,
     pub hidden: bool,
     pub health: Option<Health>,
+    pub speed: Option<u16>,
+    pub used: TurnUse,
 }
 
 // Only append variants: these enums are postcard-encoded on the wire and in storage.
@@ -207,6 +217,11 @@ pub enum EncounterOp {
         locked: bool,
         live_drag: bool,
     },
+    UseTurn {
+        id: EncounterId,
+        combatant: CombatantId,
+        used: TurnUse,
+    },
 }
 
 pub fn health(hp: HitPoints) -> Health {
@@ -239,6 +254,8 @@ impl Combatant {
             && (-10_000..=10_000).contains(&self.hp.max)
             && (-10_000..=10_000).contains(&self.hp.current)
             && (0..=10_000).contains(&self.hp.temp)
+            && self.used.moved <= 10_000
+            && self.speed.is_none_or(|s| s <= 10_000)
     }
 }
 
@@ -345,6 +362,28 @@ impl Encounter {
         }
     }
 
+    // Every copy (server, each client) applies moves through here, so the distance stays in sync.
+    pub fn move_shape(&mut self, shape: ShapeId, x: i16, y: i16) {
+        let Some(s) = self.shapes.iter_mut().find(|s| s.id == shape) else {
+            return;
+        };
+        let squares = (x - s.x).unsigned_abs().max((y - s.y).unsigned_abs());
+        s.x = x;
+        s.y = y;
+        let linked = s.combatant;
+        if self.round > 0
+            && linked.is_some()
+            && linked == self.turn
+            && let Some(c) = self.combatants.iter_mut().find(|c| Some(c.id) == linked)
+        {
+            c.used.moved = c
+                .used
+                .moved
+                .saturating_add(squares.saturating_mul(5))
+                .min(10_000);
+        }
+    }
+
     pub fn order(&mut self) {
         self.combatants
             .sort_by_key(|c| (std::cmp::Reverse(c.initiative.unwrap_or(i16::MIN)), c.id));
@@ -378,13 +417,15 @@ impl Encounter {
             });
         }
         let next = current.and_then(|i| acting.iter().copied().find(|&k| k > i));
-        match next {
-            Some(k) => self.turn = Some(self.combatants[k].id),
+        let k = match next {
+            Some(k) => k,
             None => {
                 self.round = self.round.saturating_add(1).max(1);
-                self.turn = Some(self.combatants[first].id);
+                first
             }
-        }
+        };
+        self.turn = Some(self.combatants[k].id);
+        self.combatants[k].used = TurnUse::default();
     }
 
     pub fn previous_turn(&mut self) {
@@ -434,7 +475,8 @@ impl EncounterOp {
             | Self::PutShape { id, .. }
             | Self::RemoveShape { id, .. }
             | Self::MoveShape { id, .. }
-            | Self::Settings { id, .. } => *id,
+            | Self::Settings { id, .. }
+            | Self::UseTurn { id, .. } => *id,
         }
     }
 
@@ -545,16 +587,17 @@ impl EncounterOp {
                     .iter_mut()
                     .find(|c| c.id == *combatant)
                     .ok_or(ValidationError::Length)?;
-                if *amount >= 0 {
-                    let from_temp = (*amount).min(c.hp.temp);
-                    c.hp.temp -= from_temp;
-                    c.hp.current = (c.hp.current - (*amount - from_temp)).max(0);
-                } else {
-                    c.hp.current =
-                        c.hp.current
-                            .saturating_sub(*amount)
-                            .min(c.hp.max.max(c.hp.current));
-                }
+                c.hp = c.hp.apply(*amount);
+            }
+            Self::UseTurn {
+                combatant, used, ..
+            } => {
+                let c = e
+                    .combatants
+                    .iter_mut()
+                    .find(|c| c.id == *combatant)
+                    .ok_or(ValidationError::Length)?;
+                c.used = *used;
             }
             Self::NextTurn { .. } => e.next_turn(),
             Self::PreviousTurn { .. } => e.previous_turn(),
@@ -624,6 +667,8 @@ mod tests {
             concentration: false,
             hidden: false,
             health: None,
+            speed: Some(30),
+            used: TurnUse::default(),
         }
     }
 
@@ -637,19 +682,108 @@ mod tests {
                     }
                 }
                 CampaignEvent::EncounterDeleted { id } => list.retain(|e| e.id != id),
-                CampaignEvent::ShapeMoved { shape, x, y, .. } => {
-                    for e in list.iter_mut() {
-                        for s in &mut e.shapes {
-                            if s.id == shape {
-                                s.x = x;
-                                s.y = y;
-                            }
-                        }
+                CampaignEvent::ShapeMoved {
+                    encounter,
+                    shape,
+                    x,
+                    y,
+                } => {
+                    for e in list.iter_mut().filter(|e| e.id == encounter) {
+                        e.move_shape(shape, x, y);
                     }
                 }
                 _ => {}
             }
         }
+    }
+
+    #[test]
+    fn turn_use_resets_and_tracks_movement() {
+        let id = EncounterId(Uuid::from_bytes([1; 16]));
+        let mut list = Vec::new();
+        apply(
+            &mut list,
+            EncounterOp::Create {
+                id,
+                name: "Moves".into(),
+            },
+        );
+        for (n, init) in [(1, Some(15)), (2, Some(10))] {
+            apply(
+                &mut list,
+                EncounterOp::PutCombatant {
+                    id,
+                    combatant: combatant(n, init),
+                },
+            );
+        }
+        let token = |n: u8| Shape {
+            id: ShapeId(Uuid::from_bytes([n + 20; 16])),
+            kind: ShapeKind::Token,
+            x: 0,
+            y: 0,
+            w: 1,
+            h: 1,
+            label: String::new(),
+            colour: Colour::Palette(0),
+            hidden: false,
+            combatant: Some(combatant(n, None).id),
+            owner: None,
+            note: String::new(),
+        };
+        for n in [1, 2] {
+            apply(
+                &mut list,
+                EncounterOp::PutShape {
+                    id,
+                    shape: token(n),
+                },
+            );
+        }
+        let mv = |n: u8, x, y| EncounterOp::MoveShape {
+            id,
+            shape: token(n).id,
+            x,
+            y,
+        };
+        apply(&mut list, mv(1, 2, 0));
+        assert_eq!(
+            list[0].combatants[0].used.moved, 0,
+            "no tracking before round 1"
+        );
+        apply(&mut list, EncounterOp::NextTurn { id });
+        apply(&mut list, mv(1, 5, 2));
+        apply(&mut list, mv(2, 3, 3));
+        assert_eq!(list[0].combatants[0].used.moved, 15, "diagonals count 5 ft");
+        assert_eq!(
+            list[0].combatants[1].used.moved, 0,
+            "only the acting creature's token counts"
+        );
+        let c1 = combatant(1, None).id;
+        apply(
+            &mut list,
+            EncounterOp::UseTurn {
+                id,
+                combatant: c1,
+                used: TurnUse {
+                    action: true,
+                    reaction: true,
+                    moved: 15,
+                    bonus: false,
+                },
+            },
+        );
+        apply(&mut list, EncounterOp::NextTurn { id });
+        assert!(
+            list[0].combatants[0].used.reaction,
+            "reactions last until their next turn"
+        );
+        apply(&mut list, EncounterOp::NextTurn { id });
+        assert_eq!(
+            list[0].combatants[0].used,
+            TurnUse::default(),
+            "reset at the start of the turn"
+        );
     }
 
     #[test]

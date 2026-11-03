@@ -416,3 +416,7 @@ button.ability-chip, button.stat { height: auto; padding: var(--space-2); flex-d
   .play-panel { position: static; max-height: none; }
 }
 .preview-banner { margin: 0; padding: var(--space-2) var(--space-3); border: 1px dashed var(--accent); border-radius: var(--radius-card); color: var(--text); }
+.turn-use { flex-basis: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); }
+.chip.used { text-decoration: line-through; }
+.apply-roll { flex-basis: 100%; display: flex; flex-direction: column; gap: var(--space-2); }
+.targets { gap: var(--space-1); }
