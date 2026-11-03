@@ -112,6 +112,7 @@ pub enum ClientEvent {
     SessionRotated(SessionToken),
     SessionInvalid,
     UpdateRequired { server_version: u16 },
+    Preview(beholder_protocol::Preview),
 }
 
 pub(crate) struct Shared {
@@ -202,6 +203,10 @@ impl Shared {
             ServerMsg::LibraryChanged { .. } => {
                 self.library_dirty
                     .store(true, std::sync::atomic::Ordering::Release);
+                return Ok(());
+            }
+            ServerMsg::Preview(p) => {
+                self.emit(ClientEvent::Preview(p));
                 return Ok(());
             }
             ServerMsg::Pong { .. } | ServerMsg::HelloOk(_) | ServerMsg::HelloErr(_) => {
@@ -617,6 +622,10 @@ impl Client {
             op: LibraryOp::ImportMany { import, items },
         })
         .map(|_| ())
+    }
+
+    pub fn preview(&self, p: beholder_protocol::Preview) {
+        let _ = self.wake.send(Wake::Preview(p));
     }
 
     pub fn state(&self) -> ConnectionState {

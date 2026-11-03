@@ -237,6 +237,29 @@ fn execute(
                 joined: None,
             }))
         }
+        CommandKind::Encounter { campaign_id, op } => {
+            let Some(role) = role_of(tx, *campaign_id, actor.id)? else {
+                return Ok(Err(RejectReason::NotFound));
+            };
+            let viewer = Viewer {
+                user: actor.id,
+                role,
+            };
+            let decided = match crate::combat::decide(tx, viewer, *campaign_id, op)? {
+                Ok(events) => events,
+                Err(reason) => return Ok(Err(reason)),
+            };
+            let events = decided
+                .into_iter()
+                .map(|e| log.emit(*campaign_id, e))
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(Ok(Executed {
+                campaign_id: Some(*campaign_id),
+                events,
+                library_seq: None,
+                joined: None,
+            }))
+        }
         CommandKind::Dice { campaign_id, op } => {
             if role_of(tx, *campaign_id, actor.id)?.is_none() {
                 return Ok(Err(RejectReason::NotFound));
@@ -398,6 +421,9 @@ fn project(
         }
         CampaignEvent::PartyMemberSaved { .. } => {}
         CampaignEvent::Rolled { roll } => crate::dice::project(tx, campaign_id, seq, roll)?,
+        CampaignEvent::EncounterSaved { .. }
+        | CampaignEvent::EncounterDeleted { .. }
+        | CampaignEvent::ShapeMoved { .. } => crate::combat::project(tx, campaign_id, event)?,
         CampaignEvent::SourcesChanged { sources } => {
             tx.execute(
                 "UPDATE campaigns SET sources = ?2 WHERE id = ?1",
@@ -500,6 +526,7 @@ pub fn load_campaign(
         characters: crate::characters::campaign_characters(conn, id)?,
         party: Vec::new(),
         rolls: crate::dice::campaign_rolls(conn, id)?,
+        encounters: crate::combat::campaign_encounters(conn, id)?,
     };
     Ok(Some((Seq(head), campaign)))
 }
@@ -1180,6 +1207,159 @@ mod tests {
             .map(|e| e.name)
             .collect();
         assert!(names.contains(&"Replaced".to_owned()) && names.contains(&"Added".to_owned()));
+    }
+
+    #[test]
+    fn players_only_touch_their_own_token_and_initiative() {
+        use beholder_core::character::{CharacterOp, HitPoints};
+        use beholder_core::combat::{Colour, Combatant, EncounterOp, Shape, ShapeKind, Source};
+        use beholder_core::{CharacterId, CombatantId, EncounterId, ShapeId};
+        let (mut c, dm, player) = setup();
+        let campaign = create(&mut c, &dm);
+        let code: String = c
+            .query_row(
+                "SELECT invite_code FROM campaigns WHERE id = ?1",
+                [campaign.as_bytes()],
+                |r| r.get(0),
+            )
+            .unwrap();
+        run(
+            &mut c,
+            &player,
+            CommandKind::JoinCampaign {
+                code: beholder_core::InviteCode::parse(&code).unwrap(),
+            },
+        );
+        let hero = CharacterId(Uuid::now_v7());
+        run(
+            &mut c,
+            &player,
+            CommandKind::Character {
+                campaign_id: campaign,
+                op: CharacterOp::Create {
+                    id: hero,
+                    name: "Ilsa".into(),
+                    rules: beholder_core::compendium::RulesVersion::R2024,
+                },
+            },
+        );
+        let fight = EncounterId(Uuid::now_v7());
+        let enc = |op| CommandKind::Encounter {
+            campaign_id: campaign,
+            op,
+        };
+        let ok = |r: Reply| matches!(r, Reply::Ack(Some(_)));
+        assert!(ok(run(
+            &mut c,
+            &dm,
+            enc(EncounterOp::Create {
+                id: fight,
+                name: "Bridge".into()
+            })
+        )
+        .reply));
+        let pc = CombatantId(Uuid::now_v7());
+        assert!(ok(run(
+            &mut c,
+            &dm,
+            enc(EncounterOp::PutCombatant {
+                id: fight,
+                combatant: Combatant {
+                    id: pc,
+                    name: "Ilsa".into(),
+                    source: Source::Character(hero),
+                    initiative: None,
+                    hp: HitPoints::default(),
+                    ac: None,
+                    conditions: Vec::new(),
+                    concentration: false,
+                    hidden: false,
+                    health: None,
+                },
+            })
+        )
+        .reply));
+        let token = ShapeId(Uuid::now_v7());
+        assert!(ok(run(
+            &mut c,
+            &dm,
+            enc(EncounterOp::PutShape {
+                id: fight,
+                shape: Shape {
+                    id: token,
+                    kind: ShapeKind::Token,
+                    x: 0,
+                    y: 0,
+                    w: 1,
+                    h: 1,
+                    label: "I".into(),
+                    colour: Colour::Player(0),
+                    hidden: false,
+                    combatant: Some(pc),
+                    owner: Some(player.id),
+                },
+            })
+        )
+        .reply));
+        let mv = |x| {
+            enc(EncounterOp::MoveShape {
+                id: fight,
+                shape: token,
+                x,
+                y: 1,
+            })
+        };
+        assert_eq!(
+            run(&mut c, &player, mv(3)).reply,
+            Reply::Reject(RejectReason::NotFound),
+            "prepared encounters are the DM's"
+        );
+        assert!(ok(run(
+            &mut c,
+            &dm,
+            enc(EncounterOp::Activate {
+                id: fight,
+                active: true
+            })
+        )
+        .reply));
+        assert!(
+            ok(run(&mut c, &player, mv(3)).reply),
+            "players move their own token"
+        );
+        assert!(ok(run(
+            &mut c,
+            &player,
+            enc(EncounterOp::SetInitiative {
+                id: fight,
+                combatant: pc,
+                initiative: Some(17)
+            })
+        )
+        .reply));
+        assert_eq!(
+            run(&mut c, &player, enc(EncounterOp::NextTurn { id: fight })).reply,
+            Reply::Reject(RejectReason::Forbidden),
+            "running the fight is the DM's job"
+        );
+        assert!(ok(run(
+            &mut c,
+            &dm,
+            enc(EncounterOp::Settings {
+                id: fight,
+                locked: true,
+                live_drag: false
+            })
+        )
+        .reply));
+        assert_eq!(
+            run(&mut c, &player, mv(4)).reply,
+            Reply::Reject(RejectReason::Forbidden),
+            "locked"
+        );
+        let (_, loaded) = load_campaign(&c, campaign).unwrap().unwrap();
+        let e = &loaded.encounters[0];
+        assert_eq!((e.shapes[0].x, e.combatants[0].initiative), (3, Some(17)));
     }
 
     #[test]

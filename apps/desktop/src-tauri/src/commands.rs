@@ -1002,3 +1002,34 @@ pub fn roll_dice(
         .map(|id| id.to_string())
         .map_err(|_| IpcError::Storage)
 }
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn encounter_command(
+    shell: State<'_, Shell>,
+    campaign_id: String,
+    op: beholder_core::combat::EncounterOp,
+) -> Result<(), IpcError> {
+    let campaign_id = self::campaign_id(&campaign_id)?;
+    shell
+        .session()?
+        .client
+        .submit(CommandKind::Encounter { campaign_id, op })
+        .map(|_| ())
+        .map_err(|_| IpcError::Storage)
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn new_ids(count: usize) -> Vec<String> {
+    (0..count.min(100))
+        .map(|_| uuid::Uuid::now_v7().to_string())
+        .collect()
+}
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn token_preview(
+    shell: State<'_, Shell>,
+    preview: beholder_protocol::Preview,
+) -> Result<(), IpcError> {
+    shell.session()?.client.preview(preview);
+    Ok(())
+}

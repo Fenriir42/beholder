@@ -3,9 +3,12 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::character::{Character, CharacterSummary};
+use crate::combat::Encounter;
 use crate::compendium::{LIBRARY, SRD};
 use crate::dice::{LOG_SIZE, RollRecord};
-use crate::ids::{CampaignId, CharacterId, ImageHash, LibraryId, NoteId, UserId};
+use crate::ids::{
+    CampaignId, CharacterId, EncounterId, ImageHash, LibraryId, NoteId, ShapeId, UserId,
+};
 use crate::note::{Audience, Note, NoteBody, NoteTitle};
 use crate::user::{DisplayName, ValidationError, clean_text};
 
@@ -245,6 +248,18 @@ pub enum CampaignEvent {
     Rolled {
         roll: Box<RollRecord>,
     },
+    EncounterSaved {
+        encounter: Box<Encounter>,
+    },
+    EncounterDeleted {
+        id: EncounterId,
+    },
+    ShapeMoved {
+        encounter: EncounterId,
+        shape: ShapeId,
+        x: i16,
+        y: i16,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -261,6 +276,7 @@ pub struct Campaign {
     pub characters: Vec<Character>,
     pub party: Vec<CharacterSummary>,
     pub rolls: Vec<RollRecord>,
+    pub encounters: Vec<Encounter>,
 }
 
 impl Campaign {
@@ -278,6 +294,7 @@ impl Campaign {
             characters: Vec::new(),
             party: Vec::new(),
             rolls: Vec::new(),
+            encounters: Vec::new(),
         }
     }
 
@@ -350,6 +367,33 @@ impl Campaign {
                 }
                 let extra = self.rolls.len().saturating_sub(LOG_SIZE);
                 self.rolls.drain(..extra);
+            }
+            CampaignEvent::EncounterSaved { encounter } => {
+                match self
+                    .encounters
+                    .binary_search_by_key(&encounter.id, |e| e.id)
+                {
+                    Ok(i) => self.encounters[i] = (**encounter).clone(),
+                    Err(i) => self.encounters.insert(i, (**encounter).clone()),
+                }
+            }
+            CampaignEvent::EncounterDeleted { id } => self.encounters.retain(|e| e.id != *id),
+            CampaignEvent::ShapeMoved {
+                encounter,
+                shape,
+                x,
+                y,
+            } => {
+                if let Some(s) = self
+                    .encounters
+                    .iter_mut()
+                    .filter(|e| e.id == *encounter)
+                    .flat_map(|e| e.shapes.iter_mut())
+                    .find(|s| s.id == *shape)
+                {
+                    s.x = *x;
+                    s.y = *y;
+                }
             }
             CampaignEvent::PartyMemberSaved { summary } => {
                 self.characters.retain(|c| c.id != summary.id);

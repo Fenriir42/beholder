@@ -2,8 +2,9 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Mutex;
 
 use axum::body::Bytes;
+use beholder_core::combat::Encounter;
 use beholder_core::{Campaign, CampaignId, Role, Seq, UserId};
-use beholder_protocol::{EventEnvelope, codec};
+use beholder_protocol::{EventEnvelope, Preview, codec};
 use tokio::sync::mpsc;
 
 use crate::permissions::{Outgoing, Scope, Viewer};
@@ -123,6 +124,18 @@ impl Hub {
         let targets: Vec<ConnId> = inner.conns.keys().copied().collect();
         for id in targets {
             push(&mut inner, id, frame.clone());
+        }
+    }
+
+    pub fn publish_preview(&self, sender: UserId, e: &Encounter, preview: Preview) {
+        let mut inner = self.lock();
+        let targets: Vec<(ConnId, Viewer)> = subscribers(&inner, preview.campaign_id)
+            .filter(|(_, v)| v.user != sender)
+            .collect();
+        for (id, viewer) in targets {
+            if let Some(frame) = Outgoing::preview(viewer, e, preview).and_then(|o| encode(&o)) {
+                push(&mut inner, id, frame);
+            }
         }
     }
 

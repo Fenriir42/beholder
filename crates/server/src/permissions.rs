@@ -1,10 +1,11 @@
 use std::collections::HashMap;
 
-use beholder_core::character::Character;
+use beholder_core::character::{Character, HitPoints};
+use beholder_core::combat::{Encounter, Source, health};
 use beholder_core::dice::{RollRecord, Visibility};
 use beholder_core::{
-    Audience, Campaign, CampaignEvent, CampaignId, CampaignOp, CampaignSettings, Note, NoteId,
-    Role, Seq, UserId,
+    Audience, Campaign, CampaignEvent, CampaignId, CampaignOp, CampaignSettings, CombatVisibility,
+    EncounterId, Note, NoteId, Role, Seq, ShapeId, UserId,
 };
 use beholder_protocol::{EventEnvelope, ServerMsg};
 
@@ -56,6 +57,64 @@ pub fn can_see_roll(viewer: Viewer, roll: &RollRecord) -> bool {
 pub struct Scope<'a> {
     pub settings: CampaignSettings,
     pub notes: &'a HashMap<NoteId, Note>,
+    pub encounters: &'a HashMap<EncounterId, Encounter>,
+}
+
+pub fn can_move_shape(viewer: Viewer, e: &Encounter, shape: ShapeId) -> bool {
+    viewer.role == Role::Dm
+        || (e.active
+            && !e.locked
+            && e.shapes
+                .iter()
+                .any(|s| s.id == shape && s.owner == Some(viewer.user)))
+}
+
+pub fn can_preview(viewer: Viewer, e: &Encounter, shape: ShapeId) -> bool {
+    e.live_drag && can_move_shape(viewer, e, shape)
+}
+
+pub fn sees_shape(viewer: Viewer, e: &Encounter, shape: ShapeId) -> bool {
+    viewer.role == Role::Dm || (e.active && e.shapes.iter().any(|s| s.id == shape && !s.hidden))
+}
+
+pub fn encounter_for(
+    viewer: Viewer,
+    settings: &CampaignSettings,
+    e: &Encounter,
+) -> Option<Encounter> {
+    if viewer.role == Role::Dm {
+        return Some(e.clone());
+    }
+    if !e.active {
+        return None;
+    }
+    let mut out = e.clone();
+    out.shapes.retain(|s| !s.hidden);
+    out.combatants.retain(|c| !c.hidden);
+    if out
+        .turn
+        .is_some_and(|t| !out.combatants.iter().any(|c| c.id == t))
+    {
+        out.turn = None;
+    }
+    match settings.combat_visibility {
+        CombatVisibility::Exact => {}
+        CombatVisibility::Vague => {
+            for c in &mut out.combatants {
+                if !matches!(c.source, Source::Character(_)) {
+                    c.health = Some(health(c.hp));
+                    c.hp = HitPoints::default();
+                    c.ac = None;
+                }
+            }
+        }
+        CombatVisibility::Hidden => {
+            out.combatants.clear();
+            out.round = 0;
+            out.turn = None;
+        }
+    }
+    Some(out)
 }
 
 pub fn event_for(
@@ -76,6 +135,21 @@ pub fn event_for(
         | CampaignEvent::CharacterDeleted { .. }
         | CampaignEvent::PartyMemberSaved { .. } => Some(event.clone()),
         CampaignEvent::Rolled { roll } => can_see_roll(viewer, roll).then(|| event.clone()),
+        CampaignEvent::EncounterSaved { encounter } => {
+            Some(match encounter_for(viewer, settings, encounter) {
+                Some(e) => CampaignEvent::EncounterSaved {
+                    encounter: Box::new(e),
+                },
+                None => CampaignEvent::EncounterDeleted { id: encounter.id },
+            })
+        }
+        CampaignEvent::EncounterDeleted { .. } => Some(event.clone()),
+        CampaignEvent::ShapeMoved {
+            encounter, shape, ..
+        } => {
+            let e = scope.encounters.get(encounter)?;
+            sees_shape(viewer, e, *shape).then(|| event.clone())
+        }
         CampaignEvent::CharacterSaved { character } => {
             if can_edit_character(viewer, character) {
                 Some(event.clone())
@@ -149,6 +223,11 @@ pub fn campaign_for(viewer: Viewer, campaign: &Campaign) -> Campaign {
             .filter(|r| can_see_roll(viewer, r))
             .cloned()
             .collect(),
+        encounters: campaign
+            .encounters
+            .iter()
+            .filter_map(|e| encounter_for(viewer, &campaign.settings, e))
+            .collect(),
     }
 }
 
@@ -194,9 +273,17 @@ impl Outgoing {
         })
     }
 
+    pub fn preview(
+        viewer: Viewer,
+        e: &Encounter,
+        preview: beholder_protocol::Preview,
+    ) -> Option<Self> {
+        sees_shape(viewer, e, preview.shape).then_some(Self(ServerMsg::Preview(preview)))
+    }
+
     pub fn control(msg: ServerMsg) -> Option<Self> {
         match msg {
-            ServerMsg::Events { .. } | ServerMsg::Snapshot { .. } => None,
+            ServerMsg::Events { .. } | ServerMsg::Snapshot { .. } | ServerMsg::Preview(_) => None,
             ServerMsg::HelloOk(_)
             | ServerMsg::HelloErr(_)
             | ServerMsg::Ack { .. }
@@ -261,6 +348,7 @@ mod tests {
                 combat_visibility: CombatVisibility::Exact,
             },
             notes,
+            encounters: Box::leak(Box::new(HashMap::new())),
         }
     }
 
@@ -363,6 +451,138 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn combat_matrix() {
+        use beholder_core::character::HitPoints;
+        use beholder_core::combat::{Colour, Combatant, Health, Shape, ShapeKind, Source};
+        let cid = |n: u8| beholder_core::CombatantId(Uuid::from_bytes([n; 16]));
+        let sid = |n: u8| ShapeId(Uuid::from_bytes([n; 16]));
+        let fighter = |n: u8, source: Source, hidden: bool| Combatant {
+            id: cid(n),
+            name: format!("C{n}"),
+            source,
+            initiative: Some(10),
+            hp: HitPoints {
+                current: 4,
+                max: 20,
+                temp: 0,
+            },
+            ac: Some(13),
+            conditions: Vec::new(),
+            concentration: false,
+            hidden,
+            health: None,
+        };
+        let shape = |n: u8, hidden: bool, owner: Option<UserId>| Shape {
+            id: sid(n),
+            kind: ShapeKind::Token,
+            x: 1,
+            y: 1,
+            w: 1,
+            h: 1,
+            label: String::new(),
+            colour: Colour::Palette(0),
+            hidden,
+            combatant: None,
+            owner,
+        };
+        let mut e = Encounter::new(EncounterId(Uuid::from_bytes([1; 16])), "Fight".into());
+        e.active = true;
+        e.combatants = vec![
+            fighter(
+                1,
+                Source::Character(beholder_core::CharacterId(Uuid::from_bytes([7; 16]))),
+                false,
+            ),
+            fighter(2, Source::Custom, false),
+            fighter(3, Source::Custom, true),
+        ];
+        e.shapes = vec![shape(1, false, Some(uid(P1))), shape(2, true, None)];
+        let settings = |v| CampaignSettings {
+            dm_can_read_private_notes: false,
+            combat_visibility: v,
+        };
+        let dm_view = encounter_for(v(DM), &settings(CombatVisibility::Vague), &e).unwrap();
+        assert_eq!(
+            (dm_view.combatants.len(), dm_view.shapes.len()),
+            (3, 2),
+            "the DM sees everything"
+        );
+        let exact = encounter_for(v(P2), &settings(CombatVisibility::Exact), &e).unwrap();
+        assert_eq!(
+            (exact.combatants.len(), exact.shapes.len()),
+            (2, 1),
+            "hidden things never reach players"
+        );
+        assert_eq!(exact.combatants[1].hp.current, 4);
+        let vague = encounter_for(v(P2), &settings(CombatVisibility::Vague), &e).unwrap();
+        assert_eq!(vague.combatants[0].hp.current, 4, "PC HP is always exact");
+        assert_eq!(
+            (
+                vague.combatants[1].hp,
+                vague.combatants[1].ac,
+                vague.combatants[1].health
+            ),
+            (HitPoints::default(), None, Some(Health::NearDeath)),
+            "monster HP becomes a band"
+        );
+        let hidden = encounter_for(v(P2), &settings(CombatVisibility::Hidden), &e).unwrap();
+        assert!(
+            hidden.combatants.is_empty() && hidden.shapes.len() == 1,
+            "map only"
+        );
+        let mut idle = e.clone();
+        idle.active = false;
+        assert!(
+            encounter_for(v(P1), &settings(CombatVisibility::Exact), &idle).is_none(),
+            "prepared encounters stay with the DM"
+        );
+        // (viewer, may move the P1 token, may move the hidden token)
+        for (who, own, other) in [(DM, true, true), (P1, true, false), (P2, false, false)] {
+            assert_eq!(can_move_shape(v(who), &e, sid(1)), own, "{who}");
+            assert_eq!(can_move_shape(v(who), &e, sid(2)), other, "{who}");
+        }
+        let mut locked = e.clone();
+        locked.locked = true;
+        assert!(
+            !can_move_shape(v(P1), &locked, sid(1)),
+            "the DM can lock movement"
+        );
+        assert!(
+            !can_preview(v(P1), &e, sid(1)),
+            "previews only when live dragging is on"
+        );
+        locked.live_drag = true;
+        locked.locked = false;
+        assert!(can_preview(v(P1), &locked, sid(1)));
+        let mut map = HashMap::new();
+        map.insert(e.id, e.clone());
+        let scope = Scope {
+            settings: settings(CombatVisibility::Exact),
+            notes: &no_notes(),
+            encounters: &map,
+        };
+        let moved = |n| CampaignEvent::ShapeMoved {
+            encounter: e.id,
+            shape: sid(n),
+            x: 2,
+            y: 2,
+        };
+        assert!(event_for(v(P2), &scope, &moved(1)).is_some());
+        assert!(
+            event_for(v(P2), &scope, &moved(2)).is_none(),
+            "moves of hidden shapes stay with the DM"
+        );
+        assert!(event_for(v(DM), &scope, &moved(2)).is_some());
+        let saved = CampaignEvent::EncounterSaved {
+            encounter: Box::new(idle),
+        };
+        assert!(matches!(
+            event_for(v(P1), &scope, &saved),
+            Some(CampaignEvent::EncounterDeleted { .. })
+        ));
+    }
+
     #[test]
     fn roll_matrix() {
         use beholder_core::dice::{Expr, roll};

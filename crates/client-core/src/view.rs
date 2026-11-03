@@ -105,6 +105,18 @@ pub fn compute(
                     view.pending_notes.push(id);
                 }
             }
+            CommandKind::Encounter { campaign_id, op } => {
+                let Some(view) = campaigns.iter_mut().find(|c| c.campaign.id == *campaign_id)
+                else {
+                    continue;
+                };
+                if let Ok(events) = op.events(&view.campaign.encounters) {
+                    for e in &events {
+                        view.campaign.apply(e);
+                    }
+                }
+                view.pending = true;
+            }
             CommandKind::Dice { campaign_id, .. } => {
                 if let Some(view) = campaigns.iter_mut().find(|c| c.campaign.id == *campaign_id) {
                     view.pending_rolls.push(cmd.id);

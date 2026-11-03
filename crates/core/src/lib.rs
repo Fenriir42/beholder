@@ -1,6 +1,7 @@
 pub mod actions;
 pub mod campaign;
 pub mod character;
+pub mod combat;
 pub mod compendium;
 pub mod dice;
 pub mod ids;
@@ -16,8 +17,8 @@ pub use campaign::{
     InviteCode, Member, Role,
 };
 pub use ids::{
-    CampaignId, CharacterId, CommandId, ImageHash, ImportId, LibraryId, NoteId, Seq, UnixMillis,
-    UserId,
+    CampaignId, CharacterId, CombatantId, CommandId, EncounterId, ImageHash, ImportId, LibraryId,
+    NoteId, Seq, ShapeId, UnixMillis, UserId,
 };
 pub use note::{Audience, Note, NoteBody, NoteOp, NoteTitle};
 pub use user::{DisplayName, Password, User, Username, ValidationError};

@@ -15,6 +15,7 @@ pub mod events {
     pub const SIGNED_OUT: &str = "beholder://signed-out";
     pub const UPDATE_REQUIRED: &str = "beholder://update-required";
     pub const COMPENDIUM: &str = "beholder://compendium";
+    pub const PREVIEW: &str = "beholder://preview";
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]

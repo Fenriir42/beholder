@@ -114,6 +114,9 @@ mod tests {
         c.apply(&CampaignEvent::Rolled {
             roll: Box::new(roll_record()),
         });
+        c.apply(&CampaignEvent::EncounterSaved {
+            encounter: Box::new(encounter()),
+        });
         c.apply(&CampaignEvent::PartyMemberSaved {
             summary: beholder_core::character::Character {
                 id: beholder_core::CharacterId(Uuid::from_bytes([8; 16])),
@@ -122,6 +125,66 @@ mod tests {
             .summary(),
         });
         c
+    }
+
+    fn preview() -> crate::Preview {
+        crate::Preview {
+            campaign_id: cid(2),
+            encounter: beholder_core::EncounterId(Uuid::from_bytes([3; 16])),
+            shape: beholder_core::ShapeId(Uuid::from_bytes([4; 16])),
+            x: 7,
+            y: -1,
+        }
+    }
+
+    fn encounter() -> beholder_core::combat::Encounter {
+        use beholder_core::combat::{
+            Colour, Combatant, Condition, Encounter, Health, Shape, ShapeKind, Source,
+        };
+        let mut e = Encounter::new(
+            beholder_core::EncounterId(Uuid::from_bytes([3; 16])),
+            "Ambush".into(),
+        );
+        let goblin = beholder_core::CombatantId(Uuid::from_bytes([5; 16]));
+        e.combatants.push(Combatant {
+            id: goblin,
+            name: "Goblin".into(),
+            source: Source::Monster {
+                source: "srd-5.2".into(),
+                key: "monster/goblin-warrior".into(),
+            },
+            initiative: Some(14),
+            hp: beholder_core::character::HitPoints {
+                current: 7,
+                max: 10,
+                temp: 0,
+            },
+            ac: Some(15),
+            conditions: vec![Condition {
+                name: "Prone".into(),
+                rounds: Some(1),
+            }],
+            concentration: false,
+            hidden: false,
+            health: Some(Health::Healthy),
+        });
+        e.shapes.push(Shape {
+            id: beholder_core::ShapeId(Uuid::from_bytes([4; 16])),
+            kind: ShapeKind::Token,
+            x: 3,
+            y: 4,
+            w: 1,
+            h: 1,
+            label: "G".into(),
+            colour: Colour::Palette(2),
+            hidden: true,
+            combatant: Some(goblin),
+            owner: Some(uid(2)),
+        });
+        e.turn = Some(goblin);
+        e.round = 2;
+        e.active = true;
+        e
     }
 
     fn roll_record() -> beholder_core::dice::RollRecord {
@@ -269,6 +332,16 @@ mod tests {
             CampaignEvent::Rolled {
                 roll: Box::new(roll_record()),
             },
+            CampaignEvent::EncounterSaved {
+                encounter: Box::new(encounter()),
+            },
+            CampaignEvent::EncounterDeleted { id: encounter().id },
+            CampaignEvent::ShapeMoved {
+                encounter: encounter().id,
+                shape: preview().shape,
+                x: 1,
+                y: 2,
+            },
         ]
     }
 
@@ -297,6 +370,7 @@ mod tests {
                 known: vec![(cid(2), Seq(41)), (cid(3), Seq(0))],
             }),
             ClientMsg::Ping { t: u64::MAX },
+            ClientMsg::Preview(preview()),
             ClientMsg::Command(Command {
                 id: cmd_id(5),
                 kind: CommandKind::CreateCampaign {
@@ -388,6 +462,46 @@ mod tests {
             beholder_core::character::CharacterOp::SetActive { id: character().id },
             beholder_core::character::CharacterOp::Delete { id: character().id },
         ];
+        let encounter_ops = vec![
+            beholder_core::combat::EncounterOp::Create {
+                id: encounter().id,
+                name: "Ambush".into(),
+            },
+            beholder_core::combat::EncounterOp::PutCombatant {
+                id: encounter().id,
+                combatant: encounter().combatants[0].clone(),
+            },
+            beholder_core::combat::EncounterOp::PutShape {
+                id: encounter().id,
+                shape: encounter().shapes[0].clone(),
+            },
+            beholder_core::combat::EncounterOp::MoveShape {
+                id: encounter().id,
+                shape: preview().shape,
+                x: 9,
+                y: 9,
+            },
+            beholder_core::combat::EncounterOp::Damage {
+                id: encounter().id,
+                combatant: encounter().combatants[0].id,
+                amount: -4,
+            },
+            beholder_core::combat::EncounterOp::Settings {
+                id: encounter().id,
+                locked: true,
+                live_drag: true,
+            },
+            beholder_core::combat::EncounterOp::NextTurn { id: encounter().id },
+        ];
+        msgs.extend(encounter_ops.into_iter().map(|op| {
+            ClientMsg::Command(Command {
+                id: cmd_id(13),
+                kind: CommandKind::Encounter {
+                    campaign_id: cid(2),
+                    op,
+                },
+            })
+        }));
         let dice_ops = vec![
             beholder_core::dice::DiceOp::Roll {
                 expr: beholder_core::dice::Expr::parse("1d20+4").unwrap(),
@@ -489,6 +603,7 @@ mod tests {
             },
             ServerMsg::Pong { t: 0 },
             ServerMsg::LibraryChanged { seq: 41 },
+            ServerMsg::Preview(preview()),
         ];
         msgs.extend(reasons.map(|reason| ServerMsg::Reject {
             id: cmd_id(2),
@@ -500,7 +615,10 @@ mod tests {
     #[allow(dead_code)]
     fn exhaustive(c: &ClientMsg, s: &ServerMsg, k: &CommandKind, e: &CampaignEvent, n: &NoteOp) {
         match c {
-            ClientMsg::Hello(_) | ClientMsg::Command(_) | ClientMsg::Ping { .. } => {}
+            ClientMsg::Hello(_)
+            | ClientMsg::Command(_)
+            | ClientMsg::Ping { .. }
+            | ClientMsg::Preview(_) => {}
         }
         match k {
             CommandKind::CreateCampaign { .. }
@@ -509,7 +627,8 @@ mod tests {
             | CommandKind::Note { .. }
             | CommandKind::Library { .. }
             | CommandKind::Character { .. }
-            | CommandKind::Dice { .. } => {}
+            | CommandKind::Dice { .. }
+            | CommandKind::Encounter { .. } => {}
         }
         match e {
             CampaignEvent::Created { .. }
@@ -527,7 +646,10 @@ mod tests {
             | CampaignEvent::CharacterSaved { .. }
             | CampaignEvent::CharacterDeleted { .. }
             | CampaignEvent::PartyMemberSaved { .. }
-            | CampaignEvent::Rolled { .. } => {}
+            | CampaignEvent::Rolled { .. }
+            | CampaignEvent::EncounterSaved { .. }
+            | CampaignEvent::EncounterDeleted { .. }
+            | CampaignEvent::ShapeMoved { .. } => {}
         }
         match n {
             NoteOp::Create { .. }
@@ -546,7 +668,8 @@ mod tests {
             | ServerMsg::Presence { .. }
             | ServerMsg::PresenceChanged { .. }
             | ServerMsg::Pong { .. }
-            | ServerMsg::LibraryChanged { .. } => {}
+            | ServerMsg::LibraryChanged { .. }
+            | ServerMsg::Preview(_) => {}
         }
     }
 

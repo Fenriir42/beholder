@@ -7,15 +7,16 @@ pub mod http;
 use core::fmt;
 
 use beholder_core::character::CharacterOp;
+use beholder_core::combat::EncounterOp;
 use beholder_core::dice::DiceOp;
 use beholder_core::library::LibraryOp;
 use beholder_core::{
-    Campaign, CampaignEvent, CampaignId, CampaignOp, CampaignTitle, CommandId, InviteCode, NoteOp,
-    Seq, UnixMillis, User, UserId, ValidationError,
+    Campaign, CampaignEvent, CampaignId, CampaignOp, CampaignTitle, CommandId, EncounterId,
+    InviteCode, NoteOp, Seq, ShapeId, UnixMillis, User, UserId, ValidationError,
 };
 use serde::{Deserialize, Serialize};
 
-pub const PROTOCOL_VERSION: u16 = 7;
+pub const PROTOCOL_VERSION: u16 = 8;
 
 pub const PROTOCOL_HEADER: &str = "x-beholder-protocol";
 
@@ -44,6 +45,16 @@ pub enum ClientMsg {
     Hello(Hello),
     Command(Command),
     Ping { t: u64 },
+    Preview(Preview),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Preview {
+    pub campaign_id: CampaignId,
+    pub encounter: EncounterId,
+    pub shape: ShapeId,
+    pub x: i16,
+    pub y: i16,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -87,6 +98,10 @@ pub enum CommandKind {
         campaign_id: CampaignId,
         op: DiceOp,
     },
+    Encounter {
+        campaign_id: CampaignId,
+        op: EncounterOp,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -127,6 +142,7 @@ pub enum ServerMsg {
     LibraryChanged {
         seq: u64,
     },
+    Preview(Preview),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]

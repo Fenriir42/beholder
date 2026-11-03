@@ -133,9 +133,12 @@ fn open_session(
         match catch_up {
             CatchUp::Events(events) => {
                 let touched = notes::touched_notes(conn, events.iter().map(|e| &e.event))?;
+                let fights =
+                    crate::combat::touched_encounters(conn, events.iter().map(|e| &e.event))?;
                 let scope = Scope {
                     settings: campaign.settings,
                     notes: &touched,
+                    encounters: &fights,
                 };
                 if let Some(out) = Outgoing::events(viewer, &scope, campaign_id, &events) {
                     hub.send(conn_id, &out);
@@ -198,8 +201,31 @@ async fn read_loop(
                     return;
                 }
             }
+            Ok(ClientMsg::Preview(p)) => relay_preview(state, user_id, p).await,
             Ok(ClientMsg::Hello(_)) | Err(_) => return,
         }
+    }
+}
+
+async fn relay_preview(state: &AppState, user_id: UserId, p: beholder_protocol::Preview) {
+    let found = state
+        .db
+        .call(move |c| {
+            let tx = c.transaction()?;
+            let role = campaigns::role_of(&tx, p.campaign_id, user_id)?;
+            let encounter = crate::combat::encounter(&tx, p.encounter)?;
+            Ok::<_, DbError>(role.zip(encounter))
+        })
+        .await;
+    let Ok(Some((role, encounter))) = found else {
+        return;
+    };
+    let viewer = Viewer {
+        user: user_id,
+        role,
+    };
+    if crate::permissions::can_preview(viewer, &encounter, p.shape) {
+        state.hub.publish_preview(user_id, &encounter, p);
     }
 }
 
@@ -265,9 +291,11 @@ fn publish(
         return Ok(());
     };
     let touched = notes::touched_notes(conn, handled.events.iter().map(|e| &e.event))?;
+    let fights = crate::combat::touched_encounters(conn, handled.events.iter().map(|e| &e.event))?;
     let scope = Scope {
         settings: campaigns::load_settings(conn, campaign_id)?,
         notes: &touched,
+        encounters: &fights,
     };
     // Events go to existing subscribers first, so the new member's snapshot already includes them.
     state

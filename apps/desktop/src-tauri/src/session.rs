@@ -160,6 +160,7 @@ async fn forward(app: AppHandle, mut rx: UnboundedReceiver<ClientEvent>, session
             ClientEvent::UpdateRequired { server_version } => {
                 app.emit(events::UPDATE_REQUIRED, server_version)
             }
+            ClientEvent::Preview(p) => app.emit(events::PREVIEW, p),
             ClientEvent::Compendium(s) => app.emit(
                 events::COMPENDIUM,
                 match s {

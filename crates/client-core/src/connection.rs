@@ -26,6 +26,7 @@ const HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub(crate) enum Wake {
     Send(Command),
+    Preview(beholder_protocol::Preview),
     NetworkChanged,
     Shutdown,
 }
@@ -88,6 +89,7 @@ pub(crate) async fn run(
                 w = rx.recv() => match w {
                     None | Some(Wake::Shutdown) => return,
                     Some(Wake::NetworkChanged) => break,
+                    Some(Wake::Preview(_)) => {}
                     Some(Wake::Send(_)) => {
                         let queued = shared.queued();
                         shared.set_state(if failures >= OFFLINE_AFTER {
@@ -222,6 +224,11 @@ async fn session(
             w = rx.recv() => match w {
                 Some(Wake::Send(cmd)) => {
                     if send(&mut ws, &ClientMsg::Command(cmd)).await.is_err() {
+                        return online;
+                    }
+                }
+                Some(Wake::Preview(p)) => {
+                    if send(&mut ws, &ClientMsg::Preview(p)).await.is_err() {
                         return online;
                     }
                 }

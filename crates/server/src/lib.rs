@@ -1,6 +1,7 @@
 pub mod auth;
 pub mod campaigns;
 pub mod characters;
+pub mod combat;
 pub mod compendium;
 pub mod db;
 pub mod dice;

@@ -162,7 +162,10 @@ pub(crate) fn project(
         | CampaignEvent::CharacterSaved { .. }
         | CampaignEvent::CharacterDeleted { .. }
         | CampaignEvent::PartyMemberSaved { .. }
-        | CampaignEvent::Rolled { .. } => {}
+        | CampaignEvent::Rolled { .. }
+        | CampaignEvent::EncounterSaved { .. }
+        | CampaignEvent::EncounterDeleted { .. }
+        | CampaignEvent::ShapeMoved { .. } => {}
     }
     Ok(())
 }
