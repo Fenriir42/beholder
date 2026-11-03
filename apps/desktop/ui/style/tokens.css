@@ -88,4 +88,24 @@
   --text-xl: 24px;
   --text-2xl: 30px;
   --icon-stroke: 1.8;
+  --map-bg: #1f2420;
+  --map-grid: #343a35;
+  --map-wall: #6b6f78;
+  --map-outline: #0d0e12;
+  --player-0: #4f8fe3;
+  --player-1: #4cc3a5;
+  --player-2: #c97be3;
+  --player-3: #e3c34f;
+  --player-4: #e3854f;
+  --player-5: #7be36b;
+  --player-6: #e36ba8;
+  --player-7: #6be3e0;
+  --palette-0: #6b6f78;
+  --palette-1: #e06c6c;
+  --palette-2: #e3a94f;
+  --palette-3: #4f8fe3;
+  --palette-4: #4cc3a5;
+  --palette-5: #a77be3;
+  --palette-6: #8a6b4f;
+  --palette-7: #ecebe6;
 }

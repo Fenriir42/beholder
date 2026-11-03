@@ -20,7 +20,7 @@ serde-wasm-bindgen = "0.6.5"
 unic-langid = { version = "0.9.6", default-features = false }
 wasm-bindgen = "0.2.129"
 wasm-bindgen-futures = "0.4.79"
-web-sys = { version = "0.3.106", features = ["Blob", "Event", "EventTarget", "File", "FileList", "HtmlInputElement", "HtmlTextAreaElement", "Navigator", "Window"] }
+web-sys = { version = "0.3.106", features = ["Blob", "DomRect", "Element", "Event", "EventTarget", "File", "FileList", "HtmlInputElement", "HtmlTextAreaElement", "MouseEvent", "Navigator", "PointerEvent", "Window"] }
 
 [lints]
 workspace = true

@@ -30,6 +30,7 @@ pub struct AppCtx {
     pub toast: RwSignal<Option<&'static str>>,
     pub compendium: RwSignal<Option<CompendiumStatus>>,
     pub available_sources: RwSignal<Option<Vec<beholder_protocol::http::SourceInfo>>>,
+    pub preview: RwSignal<Option<beholder_protocol::Preview>>,
     refresh: StoredValue<Rc<Refresher>, LocalStorage>,
 }
 
@@ -127,6 +128,7 @@ pub fn App() -> impl IntoView {
         toast: RwSignal::new(None),
         compendium: RwSignal::new(None),
         available_sources: RwSignal::new(None),
+        preview: RwSignal::new(None),
         refresh: StoredValue::new_local(Rc::new(Refresher::default())),
     };
     provide_context(ctx);
@@ -143,6 +145,9 @@ pub fn App() -> impl IntoView {
     });
     ipc::listen(events::COMPENDIUM, move |s: CompendiumStatus| {
         ctx.compendium.set(Some(s))
+    });
+    ipc::listen(events::PREVIEW, move |p: beholder_protocol::Preview| {
+        ctx.preview.set(Some(p))
     });
     ipc::listen(events::UPDATE_REQUIRED, move |_: u16| {
         ctx.notify("err-update")

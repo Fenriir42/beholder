@@ -1,4 +1,5 @@
 mod auth;
+mod battle_map;
 mod bulk;
 mod campaign;
 mod combat;

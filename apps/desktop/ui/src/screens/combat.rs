@@ -10,6 +10,7 @@ use serde::de::DeserializeOwned;
 
 use crate::app::{AppCtx, error_key, use_app};
 use crate::i18n::use_i18n;
+use crate::screens::battle_map::BattleMap;
 use crate::{icons, ipc};
 
 #[derive(serde::Serialize)]
@@ -301,7 +302,12 @@ pub fn Combat(id: CampaignId) -> impl IntoView {
             {move || match current.get() {
                 Some(eid) => {
                     let t = Tracker { campaign: id, encounter: eid, is_dm, pending };
-                    view! { <TrackerView t=t/> }.into_any()
+                    view! {
+                        <div class="combat-layout">
+                            <div class="tracker-col"><TrackerView t=t/></div>
+                            <BattleMap campaign=id encounter=eid is_dm=is_dm/>
+                        </div>
+                    }.into_any()
                 }
                 None => view! {
                     <p class="empty">{move || if is_dm.get() { i18n.t("combat-none-dm") } else { i18n.t("combat-none") }}</p>

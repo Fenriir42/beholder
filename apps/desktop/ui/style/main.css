@@ -359,3 +359,24 @@ button.ability-chip, button.stat { height: auto; padding: var(--space-2); flex-d
 .combatant-edit summary, .add-combatants summary { min-height: var(--touch); display: flex; align-items: center; gap: var(--space-2); cursor: pointer; }
 .add-combatants summary h2 { margin: 0; font-size: var(--text-lg); }
 .add-combatants { display: flex; flex-direction: column; gap: var(--space-2); }
+.combat-layout { display: grid; grid-template-columns: minmax(340px, 2fr) minmax(0, 3fr); gap: var(--space-4); align-items: start; }
+.tracker-col, .map-pane { min-width: 0; display: flex; flex-direction: column; gap: var(--space-3); }
+.map-scroll { overflow: auto; max-height: 75vh; border: 1px solid var(--border); border-radius: var(--radius-card); background: var(--bg); }
+.battle-map { display: block; touch-action: none; user-select: none; }
+.battle-map.placing { cursor: crosshair; }
+.map-bg { fill: var(--map-bg); }
+.map-grid { stroke: var(--map-grid); stroke-width: 1; fill: none; }
+.battle-map .zone rect { fill-opacity: 0.3; stroke: currentColor; }
+.battle-map .wall rect { fill: var(--map-wall); }
+.battle-map .token circle { stroke: var(--map-outline); stroke-width: 2; cursor: grab; }
+.battle-map .token.mine circle { stroke: var(--text); stroke-width: 4; }
+.battle-map .selected rect, .battle-map .selected circle { stroke: var(--accent); stroke-width: 4; }
+.battle-map .hidden-shape { opacity: 0.5; }
+.battle-map .hidden-shape rect, .battle-map .hidden-shape circle { stroke-dasharray: 6 4; }
+.token-label { fill: var(--map-outline); font: 700 var(--text-md) var(--font-body); text-anchor: middle; dominant-baseline: central; pointer-events: none; }
+.zone-label { fill: var(--text); font-size: var(--text-sm); pointer-events: none; }
+.swatch { min-width: var(--touch); min-height: var(--touch); padding: 0; border-radius: 999px; color: var(--map-outline); font-weight: 700; }
+.shape-editor { border: 1px solid var(--border); border-radius: var(--radius-card); padding: var(--space-3); display: flex; flex-direction: column; gap: var(--space-2); margin: 0; }
+@media (max-width: 1100px) {
+  .combat-layout { grid-template-columns: minmax(0, 1fr); }
+}
