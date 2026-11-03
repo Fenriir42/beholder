@@ -380,3 +380,29 @@ button.ability-chip, button.stat { height: auto; padding: var(--space-2); flex-d
 @media (max-width: 1100px) {
   .combat-layout { grid-template-columns: minmax(0, 1fr); }
 }
+.battle-map .pat-bg { fill-opacity: 0.35; }
+.battle-map .pat-bg.terrain-difficult { fill: var(--terrain-difficult); }
+.battle-map .pat-bg.terrain-water { fill: var(--terrain-water); }
+.battle-map .pat-bg.terrain-cover { fill: var(--terrain-cover); }
+.battle-map .pat-bg.terrain-obscured { fill: var(--terrain-obscured); }
+.battle-map .pat-bg.terrain-obscured-heavy { fill: var(--terrain-obscured); fill-opacity: 0.7; }
+.battle-map .pat-bg.hazard-bg { fill: var(--hazard-bg); fill-opacity: 0.6; }
+.battle-map .pat-line { stroke: var(--text-2); stroke-width: 1.5; fill: none; }
+.battle-map .pat-dot { fill: var(--text-2); }
+.battle-map .hazard-stripe { fill: var(--hazard); fill-opacity: 0.5; }
+.battle-map .terrain-rect, .battle-map .hazard-rect { stroke: var(--text-2); stroke-width: 1; }
+.battle-map .hazard-sign { fill: var(--hazard); stroke: var(--map-outline); stroke-width: 1.5; }
+.battle-map .hazard-mark { fill: var(--map-outline); font: 700 var(--text-sm) var(--font-body); text-anchor: middle; pointer-events: none; }
+.battle-map .object-hit { fill: transparent; }
+.battle-map .object-body, .battle-map .door { fill: var(--object); stroke: var(--map-outline); stroke-width: 2; }
+.battle-map .object-line { stroke: var(--object); stroke-width: 3; }
+.battle-map .door.open { fill: none; stroke: var(--object); stroke-dasharray: 5 3; }
+.battle-map .door.locked { stroke-width: 3; }
+.battle-map .keyhole { fill: var(--map-outline); }
+.battle-map .light-glow { fill: var(--light); fill-opacity: 0.12; pointer-events: none; }
+.battle-map .light-core { fill: var(--light); stroke: var(--map-outline); stroke-width: 2; }
+.battle-map .template-cell { fill-opacity: 0.3; pointer-events: none; }
+.battle-map .template-axis { stroke: var(--text); stroke-width: 2; stroke-dasharray: 6 4; pointer-events: none; }
+.battle-map .template-origin { stroke: var(--text); stroke-width: 2; }
+.battle-map .selected .template-origin, .battle-map .selected .object-body, .battle-map .selected .door { stroke: var(--accent); stroke-width: 4; }
+.shape-editor textarea { width: 100%; }

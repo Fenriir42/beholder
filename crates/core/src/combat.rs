@@ -10,6 +10,8 @@ pub const MAX_SHAPES: usize = 500;
 pub const MAX_ENCOUNTERS: usize = 50;
 pub const MAX_MAP: u16 = 200;
 const MAX_TEXT: usize = 80;
+pub const MAX_NOTE: usize = 300;
+pub const MAX_TEMPLATE_FEET: u16 = 1000;
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Source {
@@ -46,11 +48,58 @@ pub struct Combatant {
     pub health: Option<Health>,
 }
 
+// Only append variants: these enums are postcard-encoded on the wire and in storage.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum ShapeKind {
     Token,
     Wall,
     Zone,
+    Terrain(Terrain),
+    Hazard,
+    Object(Object),
+    Template(Template),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Terrain {
+    Difficult,
+    Water,
+    HalfCover,
+    ThreeQuartersCover,
+    TotalCover,
+    LightlyObscured,
+    HeavilyObscured,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Object {
+    Door(Door),
+    Chest,
+    Lever,
+    Statue,
+    Light,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Door {
+    Open,
+    Closed,
+    Locked,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Template {
+    pub area: Area,
+    pub feet: u16,
+    pub angle: u16,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Area {
+    Circle,
+    Cone,
+    Line,
+    Cube,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -72,6 +121,7 @@ pub struct Shape {
     pub hidden: bool,
     pub combatant: Option<CombatantId>,
     pub owner: Option<UserId>,
+    pub note: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -194,13 +244,87 @@ impl Combatant {
 
 impl Shape {
     fn valid(&self, width: u16, height: u16) -> bool {
+        let template_ok = match self.kind {
+            ShapeKind::Template(t) => {
+                (5..=MAX_TEMPLATE_FEET).contains(&t.feet) && t.feet % 5 == 0 && t.angle < 360
+            }
+            _ => true,
+        };
         text_ok(&self.label)
+            && self.note.chars().count() <= MAX_NOTE
+            && template_ok
             && self.w > 0
             && self.h > 0
             && self.x >= 0
             && self.y >= 0
             && (self.x as u16) < width
             && (self.y as u16) < height
+    }
+}
+
+impl Shape {
+    pub fn cells(&self, width: u16, height: u16) -> Vec<(i16, i16)> {
+        let (w, h) = (
+            i16::try_from(width).unwrap_or(i16::MAX),
+            i16::try_from(height).unwrap_or(i16::MAX),
+        );
+        let ShapeKind::Template(t) = self.kind else {
+            let (x1, y1) = (
+                (self.x + i16::from(self.w)).min(w),
+                (self.y + i16::from(self.h)).min(h),
+            );
+            return (self.y..y1)
+                .flat_map(|y| (self.x..x1).map(move |x| (x, y)))
+                .collect();
+        };
+        let n = f64::from(t.feet / 5);
+        if t.area == Area::Cube {
+            let side = i16::try_from(t.feet / 5).unwrap_or(i16::MAX);
+            let (x1, y1) = ((self.x + side).min(w), (self.y + side).min(h));
+            return (self.y..y1)
+                .flat_map(|y| (self.x..x1).map(move |x| (x, y)))
+                .collect();
+        }
+        let (dx, dy) = {
+            let a = f64::from(t.angle).to_radians();
+            (a.cos(), a.sin())
+        };
+        let eps = 1e-6;
+        let half_cone = 0.5_f64.atan();
+        let reach = i16::try_from(t.feet / 5)
+            .unwrap_or(i16::MAX)
+            .saturating_add(1);
+        let (x0, x1) = (
+            self.x.saturating_sub(reach).max(0),
+            self.x.saturating_add(reach).min(w - 1),
+        );
+        let (y0, y1) = (
+            self.y.saturating_sub(reach).max(0),
+            self.y.saturating_add(reach).min(h - 1),
+        );
+        let mut out = Vec::new();
+        for y in y0..=y1 {
+            for x in x0..=x1 {
+                let (px, py) = (f64::from(x - self.x), f64::from(y - self.y));
+                let dist = px.hypot(py);
+                let along = px * dx + py * dy;
+                let across = (py * dx - px * dy).abs();
+                let inside = match t.area {
+                    Area::Circle => dist <= n + eps,
+                    Area::Cone => {
+                        dist > eps
+                            && along <= n + eps
+                            && across.atan2(along).abs() <= half_cone + eps
+                    }
+                    Area::Line => along > eps && along <= n + eps && across <= 0.5 + eps,
+                    Area::Cube => false,
+                };
+                if inside {
+                    out.push((x, y));
+                }
+            }
+        }
+        out
     }
 }
 
@@ -529,6 +653,48 @@ mod tests {
     }
 
     #[test]
+    fn template_cells() {
+        let shape = |area, feet, angle| Shape {
+            id: ShapeId(Uuid::from_bytes([3; 16])),
+            kind: ShapeKind::Template(Template { area, feet, angle }),
+            x: 10,
+            y: 10,
+            w: 1,
+            h: 1,
+            label: String::new(),
+            colour: Colour::Palette(2),
+            hidden: false,
+            combatant: None,
+            owner: None,
+            note: String::new(),
+        };
+        let circle = shape(Area::Circle, 10, 0).cells(30, 30);
+        assert_eq!(circle.len(), 13);
+        assert!(circle.contains(&(10, 10)) && circle.contains(&(12, 10)));
+        assert!(!circle.contains(&(12, 12)));
+        let cone = shape(Area::Cone, 15, 0).cells(30, 30);
+        assert!(!cone.contains(&(10, 10)), "the caster's cell is outside");
+        assert!(cone.contains(&(11, 10)) && cone.contains(&(13, 11)) && cone.contains(&(13, 9)));
+        assert!(!cone.contains(&(11, 11)) && !cone.contains(&(9, 10)));
+        let line = shape(Area::Line, 30, 90).cells(30, 30);
+        assert_eq!(line, (11..=16).map(|y| (10, y)).collect::<Vec<_>>());
+        assert_eq!(shape(Area::Cube, 10, 0).cells(30, 30).len(), 4);
+        assert_eq!(
+            shape(Area::Cube, 20, 0).cells(12, 12).len(),
+            4,
+            "clipped to the map"
+        );
+        let mut bad = shape(Area::Circle, 12, 0);
+        assert!(!bad.valid(30, 30), "sizes go by 5 ft");
+        bad.kind = ShapeKind::Template(Template {
+            area: Area::Line,
+            feet: 30,
+            angle: 360,
+        });
+        assert!(!bad.valid(30, 30));
+    }
+
+    #[test]
     fn health_bands() {
         let hp = |current, max| HitPoints {
             current,
@@ -664,6 +830,7 @@ mod tests {
             hidden: true,
             combatant: Some(goblin.id),
             owner: None,
+            note: String::new(),
         };
         apply(
             &mut list,

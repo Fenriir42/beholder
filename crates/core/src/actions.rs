@@ -66,6 +66,27 @@ pub struct MonsterStats {
     pub initiative: Option<i16>,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Damage {
+    pub roll: Roll,
+    pub kind: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct NoteRolls {
+    pub save: Option<(Ability, u8)>,
+    pub damage: Vec<Damage>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MonsterAction {
+    pub name: String,
+    pub to_hit: Option<i16>,
+    pub save: Option<(Ability, u8)>,
+    pub half_on_save: bool,
+    pub damage: Vec<Damage>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Details {
     pub spell: Option<SpellInfo>,
@@ -373,6 +394,98 @@ pub fn parse_weapon(text: &str) -> Option<Weapon> {
     })
 }
 
+fn ability_word(w: &str) -> Option<Ability> {
+    ABILITY_NAMES
+        .iter()
+        .find(|(n, _)| w == *n || (w.len() == 3 && n.starts_with(w)))
+        .map(|(_, a)| *a)
+}
+
+fn rolls_in(w: &[String], need_kind: bool) -> Vec<Damage> {
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < w.len() {
+        let Some(mut roll) = dice(&w[i]) else {
+            i += 1;
+            continue;
+        };
+        let mut j = i + 1;
+        if let (Some(sign @ ("+" | "-" | "−")), Some(b)) = (
+            w.get(j).map(String::as_str),
+            w.get(j + 1).and_then(|b| b.parse::<i16>().ok()),
+        ) {
+            roll.bonus = if sign == "+" { b } else { -b };
+            j += 2;
+        }
+        let window = &w[j..w.len().min(j + 3)];
+        let kind = window
+            .iter()
+            .find(|x| DAMAGE_TYPES.contains(&x.as_str()))
+            .cloned();
+        if !need_kind || kind.is_some() || window.iter().any(|x| x == "damage") {
+            out.push(Damage { roll, kind });
+        }
+        i = j;
+    }
+    out
+}
+
+fn save_in(w: &[String]) -> Option<(Ability, u8)> {
+    let dc_at = w.iter().position(|x| x == "dc")?;
+    let dc = w.get(dc_at + 1)?.parse().ok()?;
+    let near = w[dc_at.saturating_sub(4)..w.len().min(dc_at + 4)]
+        .iter()
+        .find_map(|x| ability_word(x));
+    Some((near?, dc))
+}
+
+pub fn parse_note(text: &str) -> NoteRolls {
+    let w = words(text);
+    NoteRolls {
+        save: save_in(&w),
+        damage: rolls_in(&w, false),
+    }
+}
+
+pub fn parse_monster_actions(text: &str) -> Vec<MonsterAction> {
+    text.lines()
+        .filter_map(|line| {
+            let line = line.trim().trim_start_matches('*');
+            let (name, body) = line.split_once("**")?;
+            let name = name
+                .trim()
+                .trim_end_matches('.')
+                .trim_end_matches('*')
+                .trim();
+            let body = body.trim_start_matches('*');
+            if name.is_empty() || name.chars().count() > 60 {
+                return None;
+            }
+            let w = words(body);
+            let to_hit = w
+                .windows(2)
+                .position(|p| {
+                    (p[0] == "attack" && (p[1] == "roll" || p[1] == "rolls"))
+                        || ((p[0] == "weapon" || p[0] == "spell") && p[1] == "attack")
+                })
+                .and_then(|i| w.get(i + 2..w.len().min(i + 5)))
+                .and_then(|r| r.iter().find(|x| x.starts_with('+') || x.starts_with('-')))
+                .and_then(|x| x.parse::<i16>().ok());
+            let save = save_in(&w);
+            let half_on_save = find_seq(&w, &["half", "damage"]).is_some()
+                || find_seq(&w, &["half", "as", "much"]).is_some();
+            let damage = rolls_in(&w, true);
+            (to_hit.is_some() || save.is_some() || !damage.is_empty()).then(|| MonsterAction {
+                name: name.to_owned(),
+                to_hit,
+                save,
+                half_on_save,
+                damage,
+            })
+        })
+        .collect()
+}
+
 pub fn parse_monster(text: &str) -> MonsterStats {
     let w = words(text);
     let number_after = |at: usize| {
@@ -552,6 +665,68 @@ mod tests {
             spell_ability: Some(Ability::Cha),
         }];
         c
+    }
+
+    #[test]
+    fn monster_actions_and_notes() {
+        let srd = "## Actions\n\n**Multiattack.** The dragon makes three Rend attacks.\n\n**Rend.** Melee Attack Roll: +14, reach 10 ft. Hit: 13 (1d10 + 8) Slashing damage plus 5 (2d4) Fire damage.\n\n**Fire Breath (Recharge 5–6).** Dexterity Saving Throw: DC 21, each creature in a 60-foot Cone. Failure: 59 (17d6) Fire damage. Success: Half damage.";
+        let a = parse_monster_actions(srd);
+        assert_eq!(a.len(), 2, "Multiattack has nothing to roll");
+        assert_eq!((a[0].name.as_str(), a[0].to_hit), ("Rend", Some(14)));
+        assert_eq!(
+            a[0].damage,
+            vec![
+                Damage {
+                    roll: Roll {
+                        count: 1,
+                        sides: 10,
+                        bonus: 8
+                    },
+                    kind: Some("slashing".into())
+                },
+                Damage {
+                    roll: Roll {
+                        count: 2,
+                        sides: 4,
+                        bonus: 0
+                    },
+                    kind: Some("fire".into())
+                },
+            ]
+        );
+        assert_eq!(a[1].name, "Fire Breath (Recharge 5–6)");
+        assert_eq!(
+            (a[1].save, a[1].half_on_save),
+            (Some((Ability::Dex, 21)), true)
+        );
+        assert_eq!(
+            a[1].damage[0].roll,
+            Roll {
+                count: 17,
+                sides: 6,
+                bonus: 0
+            }
+        );
+        let old = "***Scimitar.*** *Melee Weapon Attack:* +4 to hit, reach 5 ft., one target. *Hit:* 5 (1d6 + 2) slashing damage.\n***Poison Spray.*** The creature exhales. Each creature must make a DC 11 Constitution saving throw, taking 7 (2d6) poison damage on a failed save, or half as much damage on a successful one.";
+        let b = parse_monster_actions(old);
+        assert_eq!((b[0].name.as_str(), b[0].to_hit), ("Scimitar", Some(4)));
+        assert_eq!(
+            b[0].damage[0].roll,
+            Roll {
+                count: 1,
+                sides: 6,
+                bonus: 2
+            }
+        );
+        assert_eq!(
+            (b[1].save, b[1].half_on_save),
+            (Some((Ability::Con, 11)), true)
+        );
+        let n = parse_note("Burning floor: DC 13 Dex, 2d6 fire, then 1d4");
+        assert_eq!(n.save, Some((Ability::Dex, 13)));
+        assert_eq!(n.damage.len(), 2);
+        assert_eq!(n.damage[0].kind.as_deref(), Some("fire"));
+        assert_eq!(parse_note("Just slippery"), NoteRolls::default());
     }
 
     #[test]

@@ -166,6 +166,7 @@ async fn encounters_are_filtered_and_tokens_move() {
                 hidden: false,
                 combatant: None,
                 owner: Some(bran_id),
+                note: String::new(),
             },
         },
     );

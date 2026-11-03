@@ -1,7 +1,8 @@
 use std::collections::HashMap;
 
-use beholder_core::combat::{Encounter, EncounterOp, Source};
+use beholder_core::combat::{Colour, Combatant, Encounter, EncounterOp, Shape, ShapeKind, Source};
 use beholder_core::{CampaignEvent, CampaignId, EncounterId, Role};
+use beholder_core::{CombatantId, ShapeId, UserId};
 use beholder_protocol::RejectReason;
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 
@@ -21,6 +22,10 @@ pub(crate) fn decide(
         };
         let allowed = match op {
             EncounterOp::MoveShape { shape, .. } => permissions::can_move_shape(viewer, e, *shape),
+            EncounterOp::PutShape { shape, .. } => permissions::can_put_shape(viewer, e, shape),
+            EncounterOp::RemoveShape { shape, .. } => {
+                permissions::can_remove_shape(viewer, e, *shape)
+            }
             EncounterOp::SetInitiative { combatant, .. } => {
                 let characters = crate::characters::campaign_characters(tx, campaign_id)?;
                 e.combatants
@@ -42,6 +47,78 @@ pub(crate) fn decide(
     Ok(op.events(&encounters).map_err(RejectReason::Invalid))
 }
 
+#[derive(serde::Deserialize)]
+struct LegacyShape {
+    id: ShapeId,
+    kind: ShapeKind,
+    x: i16,
+    y: i16,
+    w: u8,
+    h: u8,
+    label: String,
+    colour: Colour,
+    hidden: bool,
+    combatant: Option<CombatantId>,
+    owner: Option<UserId>,
+}
+
+#[derive(serde::Deserialize)]
+struct Legacy {
+    id: EncounterId,
+    name: String,
+    active: bool,
+    round: u16,
+    turn: Option<CombatantId>,
+    combatants: Vec<Combatant>,
+    width: u16,
+    height: u16,
+    shapes: Vec<LegacyShape>,
+    locked: bool,
+    live_drag: bool,
+}
+
+impl From<Legacy> for Encounter {
+    fn from(l: Legacy) -> Self {
+        Self {
+            id: l.id,
+            name: l.name,
+            active: l.active,
+            round: l.round,
+            turn: l.turn,
+            combatants: l.combatants,
+            width: l.width,
+            height: l.height,
+            shapes: l
+                .shapes
+                .into_iter()
+                .map(|s| Shape {
+                    id: s.id,
+                    kind: s.kind,
+                    x: s.x,
+                    y: s.y,
+                    w: s.w,
+                    h: s.h,
+                    label: s.label,
+                    colour: s.colour,
+                    hidden: s.hidden,
+                    combatant: s.combatant,
+                    owner: s.owner,
+                    note: String::new(),
+                })
+                .collect(),
+            locked: l.locked,
+            live_drag: l.live_drag,
+        }
+    }
+}
+
+fn decode(body: &[u8]) -> Result<Encounter, DbError> {
+    match postcard::from_bytes::<Encounter>(body) {
+        Ok(e) => Ok(e),
+        Err(_) => Ok(postcard::from_bytes::<Legacy>(body)?.into()),
+    }
+}
+
 fn load(conn: &Connection, id: EncounterId) -> Result<Option<Encounter>, DbError> {
     conn.query_row(
         "SELECT body FROM encounters WHERE id = ?1",
@@ -49,7 +126,7 @@ fn load(conn: &Connection, id: EncounterId) -> Result<Option<Encounter>, DbError
         |r| r.get::<_, Vec<u8>>(0),
     )
     .optional()?
-    .map(|b| Ok(postcard::from_bytes(&b)?))
+    .map(|b| decode(&b))
     .transpose()
 }
 
@@ -102,7 +179,7 @@ pub fn campaign_encounters(
     let mut stmt =
         conn.prepare_cached("SELECT body FROM encounters WHERE campaign_id = ?1 ORDER BY id")?;
     stmt.query_map([campaign_id.as_bytes()], |r| r.get::<_, Vec<u8>>(0))?
-        .map(|row| Ok(postcard::from_bytes(&row?)?))
+        .map(|row| decode(&row?))
         .collect()
 }
 
@@ -124,4 +201,76 @@ pub fn touched_encounters<'a>(
         }
     }
     Ok(out)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use uuid::Uuid;
+
+    #[test]
+    fn encounters_saved_before_notes_still_load() {
+        #[derive(serde::Serialize)]
+        struct OldShape {
+            id: ShapeId,
+            kind: ShapeKind,
+            x: i16,
+            y: i16,
+            w: u8,
+            h: u8,
+            label: String,
+            colour: Colour,
+            hidden: bool,
+            combatant: Option<CombatantId>,
+            owner: Option<UserId>,
+        }
+        #[derive(serde::Serialize)]
+        struct Old {
+            id: EncounterId,
+            name: String,
+            active: bool,
+            round: u16,
+            turn: Option<CombatantId>,
+            combatants: Vec<Combatant>,
+            width: u16,
+            height: u16,
+            shapes: Vec<OldShape>,
+            locked: bool,
+            live_drag: bool,
+        }
+        let old = Old {
+            id: EncounterId(Uuid::from_bytes([1; 16])),
+            name: "Old".into(),
+            active: true,
+            round: 0,
+            turn: None,
+            combatants: Vec::new(),
+            width: 30,
+            height: 20,
+            shapes: vec![OldShape {
+                id: ShapeId(Uuid::from_bytes([2; 16])),
+                kind: ShapeKind::Wall,
+                x: 1,
+                y: 2,
+                w: 3,
+                h: 1,
+                label: "Wall".into(),
+                colour: Colour::Palette(0),
+                hidden: false,
+                combatant: None,
+                owner: None,
+            }],
+            locked: false,
+            live_drag: true,
+        };
+        let e = decode(&postcard::to_stdvec(&old).unwrap()).unwrap();
+        assert_eq!(
+            (e.name.as_str(), e.shapes.len(), e.live_drag),
+            ("Old", 1, true)
+        );
+        assert_eq!(
+            (e.shapes[0].label.as_str(), e.shapes[0].note.as_str()),
+            ("Wall", "")
+        );
+    }
 }

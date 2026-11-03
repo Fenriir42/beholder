@@ -180,6 +180,35 @@ mod tests {
             hidden: true,
             combatant: Some(goblin),
             owner: Some(uid(2)),
+            note: String::new(),
+        });
+        e.shapes.push(Shape {
+            id: beholder_core::ShapeId(Uuid::from_bytes([5; 16])),
+            kind: ShapeKind::Template(beholder_core::combat::Template {
+                area: beholder_core::combat::Area::Cone,
+                feet: 15,
+                angle: 45,
+            }),
+            x: 3,
+            y: 4,
+            w: 1,
+            h: 1,
+            label: "Burning Hands".into(),
+            colour: Colour::Player(1),
+            hidden: false,
+            combatant: None,
+            owner: Some(uid(2)),
+            note: "DC 13 Dex, 3d6 fire".into(),
+        });
+        e.shapes.push(Shape {
+            id: beholder_core::ShapeId(Uuid::from_bytes([6; 16])),
+            kind: ShapeKind::Object(beholder_core::combat::Object::Door(
+                beholder_core::combat::Door::Locked,
+            )),
+            note: String::new(),
+            owner: None,
+            label: String::new(),
+            ..e.shapes[0].clone()
         });
         e.turn = Some(goblin);
         e.round = 2;

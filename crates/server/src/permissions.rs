@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 
 use beholder_core::character::{Character, HitPoints};
-use beholder_core::combat::{Encounter, Source, health};
+use beholder_core::combat::{Encounter, Shape, ShapeKind, Source, health};
 use beholder_core::dice::{RollRecord, Visibility};
 use beholder_core::{
     Audience, Campaign, CampaignEvent, CampaignId, CampaignOp, CampaignSettings, CombatVisibility,
@@ -67,6 +67,41 @@ pub fn can_move_shape(viewer: Viewer, e: &Encounter, shape: ShapeId) -> bool {
             && e.shapes
                 .iter()
                 .any(|s| s.id == shape && s.owner == Some(viewer.user)))
+}
+
+pub const MAX_PLAYER_TEMPLATES: usize = 10;
+
+fn player_template(viewer: Viewer, s: &Shape) -> bool {
+    matches!(s.kind, ShapeKind::Template(_)) && s.owner == Some(viewer.user)
+}
+
+pub fn can_put_shape(viewer: Viewer, e: &Encounter, shape: &Shape) -> bool {
+    if viewer.role == Role::Dm {
+        return true;
+    }
+    let existing = e.shapes.iter().find(|s| s.id == shape.id);
+    let room = existing.is_some()
+        || e.shapes
+            .iter()
+            .filter(|s| player_template(viewer, s))
+            .count()
+            < MAX_PLAYER_TEMPLATES;
+    e.active
+        && !e.locked
+        && player_template(viewer, shape)
+        && !shape.hidden
+        && shape.combatant.is_none()
+        && existing.is_none_or(|s| player_template(viewer, s))
+        && room
+}
+
+pub fn can_remove_shape(viewer: Viewer, e: &Encounter, shape: ShapeId) -> bool {
+    viewer.role == Role::Dm
+        || (e.active
+            && !e.locked
+            && e.shapes
+                .iter()
+                .any(|s| s.id == shape && player_template(viewer, s)))
 }
 
 pub fn can_preview(viewer: Viewer, e: &Encounter, shape: ShapeId) -> bool {
@@ -485,6 +520,7 @@ mod tests {
             hidden,
             combatant: None,
             owner,
+            note: String::new(),
         };
         let mut e = Encounter::new(EncounterId(Uuid::from_bytes([1; 16])), "Fight".into());
         e.active = true;
@@ -555,6 +591,72 @@ mod tests {
         locked.live_drag = true;
         locked.locked = false;
         assert!(can_preview(v(P1), &locked, sid(1)));
+        let template = |n: u8, owner: Option<UserId>| Shape {
+            kind: ShapeKind::Template(beholder_core::combat::Template {
+                area: beholder_core::combat::Area::Circle,
+                feet: 20,
+                angle: 0,
+            }),
+            ..shape(n, false, owner)
+        };
+        // (viewer, may place their own template, may change P1's template, may remove the token)
+        let mut with_template = e.clone();
+        with_template.shapes.push(template(5, Some(uid(P1))));
+        for (who, own, others, token) in [
+            (DM, true, true, true),
+            (P1, true, true, false),
+            (P2, true, false, false),
+        ] {
+            assert_eq!(
+                can_put_shape(v(who), &with_template, &template(6, Some(uid(who)))),
+                own,
+                "{who}"
+            );
+            assert_eq!(
+                can_put_shape(v(who), &with_template, &template(5, Some(uid(who)))),
+                others,
+                "{who}"
+            );
+            assert_eq!(
+                can_remove_shape(v(who), &with_template, sid(5)),
+                others,
+                "{who}"
+            );
+            assert_eq!(
+                can_remove_shape(v(who), &with_template, sid(1)),
+                token,
+                "{who}"
+            );
+        }
+        assert!(
+            !can_put_shape(v(P1), &with_template, &shape(6, false, Some(uid(P1)))),
+            "players place templates, not tokens or terrain"
+        );
+        assert!(
+            !can_put_shape(
+                v(P1),
+                &with_template,
+                &Shape {
+                    hidden: true,
+                    ..template(6, Some(uid(P1)))
+                }
+            ),
+            "players can't hide their templates"
+        );
+        let mut crowded = with_template.clone();
+        crowded
+            .shapes
+            .extend((10..10 + MAX_PLAYER_TEMPLATES as u8).map(|n| template(n, Some(uid(P2)))));
+        assert!(
+            !can_put_shape(v(P2), &crowded, &template(40, Some(uid(P2)))),
+            "a cap per player"
+        );
+        let mut shut = with_template.clone();
+        shut.locked = true;
+        assert!(
+            !can_put_shape(v(P1), &shut, &template(6, Some(uid(P1)))),
+            "locking stops templates too"
+        );
         let mut map = HashMap::new();
         map.insert(e.id, e.clone());
         let scope = Scope {

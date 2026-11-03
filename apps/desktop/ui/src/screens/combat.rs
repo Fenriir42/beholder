@@ -10,7 +10,8 @@ use serde::de::DeserializeOwned;
 
 use crate::app::{AppCtx, error_key, use_app};
 use crate::i18n::use_i18n;
-use crate::screens::battle_map::BattleMap;
+use crate::screens::battle_map::{BattleMap, MapCtx};
+use crate::screens::dice_view::{RollToast, Roller};
 use crate::{icons, ipc};
 
 #[derive(serde::Serialize)]
@@ -208,6 +209,13 @@ pub fn Combat(id: CampaignId) -> impl IntoView {
                 .unwrap_or_default()
         })
     });
+    let me = Memo::new(move |_| ctx.view.with(|v| v.user.as_ref().map(|u| u.id)));
+    let roller = Roller::new(id);
+    Effect::new(move |_| {
+        if is_dm.get() {
+            roller.visibility.set(Visibility::ToDm);
+        }
+    });
     let selected = RwSignal::new(None::<EncounterId>);
     let current = Memo::new(move |_| {
         encounters.with(|list| {
@@ -302,10 +310,26 @@ pub fn Combat(id: CampaignId) -> impl IntoView {
             {move || match current.get() {
                 Some(eid) => {
                     let t = Tracker { campaign: id, encounter: eid, is_dm, pending };
+                    let encounter = Memo::new(move |_| ctx.view.with(|v| {
+                        v.campaigns
+                            .iter()
+                            .find(|c| c.campaign.id == id)
+                            .and_then(|c| c.campaign.encounters.iter().find(|e| e.id == eid))
+                            .cloned()
+                    }));
+                    let m = MapCtx {
+                        campaign: id,
+                        encounter: encounter.into(),
+                        is_dm: is_dm.into(),
+                        me: me.into(),
+                        interactive: true,
+                        roller,
+                    };
                     view! {
+                        <RollToast roller=roller/>
                         <div class="combat-layout">
                             <div class="tracker-col"><TrackerView t=t/></div>
-                            <BattleMap campaign=id encounter=eid is_dm=is_dm/>
+                            <BattleMap m=m/>
                         </div>
                     }.into_any()
                 }

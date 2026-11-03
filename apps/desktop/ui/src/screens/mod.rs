@@ -7,6 +7,7 @@ mod compendium;
 mod dice_view;
 mod entry_editor;
 mod library;
+mod map_edit;
 mod notes;
 mod paste;
 mod server;

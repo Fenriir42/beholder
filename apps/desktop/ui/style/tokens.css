@@ -108,4 +108,12 @@
   --palette-5: #a77be3;
   --palette-6: #8a6b4f;
   --palette-7: #ecebe6;
+  --terrain-difficult: #8a6b4f;
+  --terrain-water: #3f6fa8;
+  --terrain-cover: #8b8f99;
+  --terrain-obscured: #4a4f5c;
+  --hazard: #e06c6c;
+  --hazard-bg: #3a1f1f;
+  --object: #c9a46b;
+  --light: #f3d27a;
 }

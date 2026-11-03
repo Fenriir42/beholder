@@ -1297,6 +1297,7 @@ mod tests {
                     hidden: false,
                     combatant: Some(pc),
                     owner: Some(player.id),
+                    note: String::new(),
                 },
             })
         )
