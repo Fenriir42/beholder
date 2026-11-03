@@ -7,6 +7,7 @@ mod combat;
 mod compendium;
 mod dice_view;
 mod entry_editor;
+mod level_up;
 mod library;
 mod map_edit;
 mod notes;

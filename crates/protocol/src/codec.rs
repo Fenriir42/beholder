@@ -491,6 +491,23 @@ mod tests {
                     beholder_core::rules::Proficiency::Expertise,
                 ),
             },
+            beholder_core::character::CharacterOp::Change {
+                id: character().id,
+                change: beholder_core::character::CharacterChange::LevelUp(Box::new(
+                    beholder_core::character::LevelUp {
+                        class: character().classes[0].clone(),
+                        subclass: Some(beholder_core::character::Link {
+                            name: "Evoker".into(),
+                            source: Some("srd".into()),
+                            key: Some("subclass/evoker".into()),
+                        }),
+                        hit_roll: 4,
+                        features: Vec::new(),
+                        increase: [0, 0, 1, 0, 1, 0],
+                        feat: None,
+                    },
+                )),
+            },
             beholder_core::character::CharacterOp::SetActive { id: character().id },
             beholder_core::character::CharacterOp::Delete { id: character().id },
         ];

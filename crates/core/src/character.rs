@@ -145,6 +145,16 @@ pub struct CharacterSummary {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LevelUp {
+    pub class: ClassLevel,
+    pub subclass: Option<Link>,
+    pub hit_roll: u8,
+    pub features: Vec<Link>,
+    pub increase: [u8; 6],
+    pub feat: Option<Link>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub enum CharacterChange {
     Name(String),
     Rules(RulesVersion),
@@ -184,6 +194,7 @@ pub enum CharacterChange {
         concentration: bool,
     },
     Concentration(Option<String>),
+    LevelUp(Box<LevelUp>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -402,6 +413,64 @@ impl Character {
                 }
             }
             CharacterChange::Concentration(c) => self.concentration = c,
+            CharacterChange::LevelUp(up) => self.level_up(*up),
+        }
+    }
+
+    fn level_up(&mut self, up: LevelUp) {
+        let before = self.level();
+        if before >= 20 {
+            return;
+        }
+        let same = |c: &ClassLevel| {
+            c.class
+                .name
+                .trim()
+                .eq_ignore_ascii_case(up.class.class.name.trim())
+        };
+        let index = match self.classes.iter().position(same) {
+            Some(i) => {
+                self.classes[i].level += 1;
+                i
+            }
+            None => {
+                self.classes.push(ClassLevel {
+                    level: 1,
+                    ..up.class
+                });
+                self.classes.len() - 1
+            }
+        };
+        if let Some(sub) = up.subclass {
+            self.classes[index].subclass = Some(sub);
+        }
+        let old_con = modifier(self.abilities[Ability::Con.index()]);
+        let total: u16 = up.increase.iter().map(|n| u16::from(*n)).sum();
+        if total <= 2 && up.increase.iter().all(|n| *n <= 2) {
+            for (score, add) in self.abilities.iter_mut().zip(up.increase) {
+                *score = (*score + add).min(20.max(*score));
+            }
+        }
+        let new_con = modifier(self.abilities[Ability::Con.index()]);
+        let die = self.classes[index].hit_die;
+        let roll = if before == 0 {
+            die
+        } else {
+            up.hit_roll.clamp(1, die)
+        };
+        let gain = (i16::from(roll) + i16::from(new_con)).max(1)
+            + (i16::from(new_con) - i16::from(old_con)) * i16::from(before);
+        self.hp.max = self.hp.max.saturating_add(gain).max(1);
+        self.hp.current = self.hp.current.saturating_add(gain).max(0);
+        for f in up.features {
+            if !self.features.iter().any(|x| x.name == f.name) {
+                self.features.push(f);
+            }
+        }
+        if let Some(feat) = up.feat
+            && !self.feats.iter().any(|x| x.name == feat.name)
+        {
+            self.feats.push(feat);
         }
     }
 
@@ -642,6 +711,59 @@ mod tests {
         c.skills[Skill::Persuasion.index()] = Proficiency::Expertise;
         c.skills[Skill::Stealth.index()] = Proficiency::Proficient;
         c
+    }
+
+    #[test]
+    fn level_up_adds_a_level_hp_features_and_choices() {
+        let mut c = hero();
+        c.hp = HitPoints {
+            current: 30,
+            max: 35,
+            temp: 0,
+        };
+        let link = |n: &str| Link {
+            name: n.into(),
+            ..Link::default()
+        };
+        c.apply(CharacterChange::LevelUp(Box::new(LevelUp {
+            class: class("Sorcerer", 3, 6, Caster::Full),
+            subclass: None,
+            hit_roll: 4,
+            features: vec![link("Ability Score Improvement")],
+            increase: [0, 0, 2, 0, 0, 0],
+            feat: None,
+        })));
+        assert_eq!(c.classes[1].level, 4);
+        assert_eq!(c.abilities[Ability::Con.index()], 16);
+        assert_eq!(
+            (c.hp.max, c.hp.current),
+            (35 + 4 + 3 + 5, 30 + 4 + 3 + 5),
+            "the roll plus the new CON modifier, plus one per earlier level for the raised modifier"
+        );
+        c.apply(CharacterChange::LevelUp(Box::new(LevelUp {
+            class: class("Wizard", 0, 6, Caster::Full),
+            subclass: Some(link("Evoker")),
+            hit_roll: 9,
+            features: vec![link("Spellcasting"), link("Ability Score Improvement")],
+            increase: [3, 0, 0, 0, 0, 0],
+            feat: Some(link("Alert")),
+        })));
+        let wizard = c.classes.last().unwrap();
+        assert_eq!((wizard.class.name.as_str(), wizard.level), ("Wizard", 1));
+        assert_eq!(
+            wizard.subclass.as_ref().map(|s| s.name.as_str()),
+            Some("Evoker")
+        );
+        assert_eq!(
+            c.abilities[Ability::Str.index()],
+            8,
+            "an increase above +2 is ignored"
+        );
+        assert_eq!(c.hp.max, 47 + 6 + 3, "the roll is capped at the die");
+        assert_eq!(c.features.len(), 2, "no duplicate features");
+        assert_eq!(c.feats.len(), 1);
+        assert_eq!(c.level(), 7);
+        assert!(c.validate().is_ok());
     }
 
     fn one_saved(events: Vec<CampaignEvent>) -> Character {

@@ -97,6 +97,8 @@ pub struct Details {
     pub monster: Option<MonsterStats>,
     #[serde(default)]
     pub actions: Vec<MonsterAction>,
+    #[serde(default)]
+    pub progression: Option<crate::progression::Progression>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]

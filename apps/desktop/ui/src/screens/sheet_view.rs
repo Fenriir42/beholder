@@ -18,6 +18,7 @@ use crate::i18n::{I18n, use_i18n};
 use crate::screens::combat::{Economy, TargetPicker};
 use crate::screens::compendium::{kind_label, meta};
 use crate::screens::dice_view::{RollOptions, RollToast, Roller};
+use crate::screens::level_up::LevelUpWizard;
 use crate::screens::sheet::{ABILITY_KEYS, EditSheet, class_line, send, signed, skill_key};
 use crate::{ipc, markdown};
 
@@ -95,7 +96,7 @@ fn norm(name: &str) -> String {
     name.trim().to_lowercase()
 }
 
-fn sources_of(campaign: CampaignId) -> (Vec<String>, Vec<String>) {
+pub(crate) fn sources_of(campaign: CampaignId) -> (Vec<String>, Vec<String>) {
     let ctx = use_app();
     ctx.view.with_untracked(|v| {
         v.campaigns
@@ -462,7 +463,16 @@ pub fn Sheet(id: CampaignId, selected: RwSignal<Option<CharacterId>>) -> impl In
             .character_id
             .set(character.with(|c| c.as_ref().map(|c| c.id)));
     });
-    move || match character.get() {
+    let leveling = RwSignal::new(false);
+    let done = Callback::new(move |()| leveling.set(false));
+    move || {
+        if leveling.get()
+            && let Some(ch) = character.get_untracked()
+        {
+            return view! { <LevelUpWizard campaign=id ch=ch roller=roller on_done=done/> }
+                .into_any();
+        }
+        match character.get() {
         Some(ch) if editing.get() => view! {
             <section class="home sheet">
                 <div class="toolbar">
@@ -476,7 +486,7 @@ pub fn Sheet(id: CampaignId, selected: RwSignal<Option<CharacterId>>) -> impl In
         }
         .into_any(),
         Some(ch) => view! {
-            <Play campaign=id ch=ch tab=tab editing=editing panel=panel look=look roller=roller/>
+            <Play campaign=id ch=ch tab=tab editing=editing leveling=leveling panel=panel look=look roller=roller/>
         }
         .into_any(),
         None => view! {
@@ -486,6 +496,7 @@ pub fn Sheet(id: CampaignId, selected: RwSignal<Option<CharacterId>>) -> impl In
         }
         .into_any(),
     }
+    }
 }
 
 #[component]
@@ -494,6 +505,7 @@ fn Play(
     ch: Character,
     tab: RwSignal<Tab>,
     editing: RwSignal<bool>,
+    leveling: RwSignal<bool>,
     panel: RwSignal<Panel>,
     look: Lookups,
     roller: Roller,
@@ -556,6 +568,10 @@ fn Play(
                     <h1>{ch.name.clone()}</h1>
                     <p class="muted">{subtitle}</p>
                 </div>
+                <button type="button" class="primary" disabled=ch.level() >= 20
+                    on:click=move |_| { panel.set(Panel::Closed); leveling.set(true); }>
+                    {move || i18n.t("levelup-open")}
+                </button>
                 <button type="button" on:click=move |_| { panel.set(Panel::Closed); editing.set(true); }>
                     {move || i18n.t("sheet-edit")}
                 </button>

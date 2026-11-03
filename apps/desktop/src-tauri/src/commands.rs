@@ -995,6 +995,14 @@ pub fn sheet_details(
                     weapon: parse_weapon(&entry.text),
                     ..Details::default()
                 },
+                Facets::Class => Details {
+                    progression: Some(beholder_core::progression::parse_class(&entry.text)),
+                    ..Details::default()
+                },
+                Facets::Subclass { .. } => Details {
+                    progression: Some(beholder_core::progression::parse_sections(&entry.text)),
+                    ..Details::default()
+                },
                 Facets::Monster { .. } => Details {
                     monster: Some(beholder_core::actions::parse_monster(&entry.text)),
                     actions: beholder_core::actions::parse_monster_actions(&entry.text),
