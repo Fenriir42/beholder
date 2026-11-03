@@ -5,7 +5,7 @@ use beholder_core::compendium::{Hit, Kind, SearchQuery};
 use beholder_core::dice::{DiceOp, Expr, Visibility};
 use beholder_core::{CampaignId, CombatVisibility, CombatantId, CommandId, EncounterId, Role};
 use leptos::prelude::*;
-use leptos::task::spawn_local;
+use leptos::task::spawn_local_scoped;
 use serde::de::DeserializeOwned;
 
 use crate::app::{AppCtx, error_key, use_app};
@@ -60,7 +60,7 @@ const CONDITIONS: [&str; 15] = [
 
 pub(crate) fn send(campaign: CampaignId, op: EncounterOp) {
     let ctx = use_app();
-    spawn_local(async move {
+    spawn_local_scoped(async move {
         let args = OpArgs {
             campaign_id: campaign.to_string(),
             op,
@@ -150,7 +150,7 @@ impl Tracker {
             }),
             _ => None,
         };
-        spawn_local(async move {
+        spawn_local_scoped(async move {
             let bonus = match (&c.source, character_bonus) {
                 (_, Some(b)) => b,
                 (Source::Monster { source, key }, None) => {
@@ -256,7 +256,7 @@ pub fn Combat(id: CampaignId) -> impl IntoView {
     let create = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
         let name = new_name.get_untracked();
-        spawn_local(async move {
+        spawn_local_scoped(async move {
             if let Some(eid) = fresh::<EncounterId>(1).await.into_iter().next() {
                 send(id, EncounterOp::Create { id: eid, name });
                 new_name.set(String::new());
@@ -655,7 +655,7 @@ fn AddCombatants(t: Tracker, combatants: Memo<Vec<Combatant>>) -> impl IntoView 
     let i18n = use_i18n();
     let eid = t.encounter;
     let add = move |make: Vec<Box<dyn FnOnce(CombatantId) -> Combatant>>| {
-        spawn_local(async move {
+        spawn_local_scoped(async move {
             let ids = fresh::<CombatantId>(make.len()).await;
             for (id, f) in ids.into_iter().zip(make) {
                 t.send(EncounterOp::PutCombatant {
@@ -732,7 +732,7 @@ fn AddCombatants(t: Tracker, combatants: Memo<Vec<Combatant>>) -> impl IntoView 
             hidden,
             ..SearchQuery::default()
         };
-        spawn_local(async move {
+        spawn_local_scoped(async move {
             match ipc::call::<Vec<Hit>>("compendium_search", SearchArgs { query }).await {
                 Ok(h) => {
                     hits.try_set(h.into_iter().take(20).collect());
@@ -752,7 +752,7 @@ fn AddCombatants(t: Tracker, combatants: Memo<Vec<Combatant>>) -> impl IntoView 
         } else {
             format!("{} {}", h.name, same + 1)
         };
-        spawn_local(async move {
+        spawn_local_scoped(async move {
             let stats = monster_stats(h.source.clone(), h.key.clone()).await;
             let max = stats.hp.unwrap_or(1).max(1);
             let source = Source::Monster {

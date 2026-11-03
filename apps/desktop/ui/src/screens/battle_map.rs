@@ -4,7 +4,7 @@ use beholder_core::combat::{Colour, EncounterOp, MAX_MAP, Shape, ShapeKind, Sour
 use beholder_core::{CampaignId, CombatantId, EncounterId, Role, ShapeId, UserId};
 use beholder_protocol::Preview;
 use leptos::prelude::*;
-use leptos::task::spawn_local;
+use leptos::task::spawn_local_scoped;
 use wasm_bindgen::JsCast;
 
 use crate::app::use_app;
@@ -156,7 +156,7 @@ pub fn BattleMap(campaign: CampaignId, encounter: EncounterId, is_dm: Memo<bool>
             x,
             y,
         };
-        spawn_local(async move {
+        spawn_local_scoped(async move {
             let _ = ipc::call::<()>("token_preview", PreviewArgs { preview }).await;
         });
     };
@@ -225,7 +225,7 @@ pub fn BattleMap(campaign: CampaignId, encounter: EncounterId, is_dm: Memo<bool>
                 }
             }
         };
-        spawn_local(async move {
+        spawn_local_scoped(async move {
             if let Some(id) = fresh::<ShapeId>(1).await.into_iter().next() {
                 send(
                     campaign,
