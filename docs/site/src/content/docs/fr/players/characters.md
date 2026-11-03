@@ -41,6 +41,18 @@ L'onglet **Actions** regroupe vos armes équipées, sorts mineurs et sorts prép
 - **Concentration :** lancer un sort de concentration affiche « Concentration sur… » en haut, avec **Arrêter la concentration**. Si vous êtes déjà concentré sur un autre sort, **Lancer** ouvre le panneau latéral, où le bouton indique quel sort il interrompra.
 - **Maîtrise des armes :** dans le panneau latéral d'une arme, décochez **Maîtrise de cette arme** et son bonus d'attaque n'inclut plus votre bonus de maîtrise.
 
+## Monter de niveau
+
+**Monter de niveau**, en haut de la fiche, vous guide pour un nouveau niveau :
+
+1. **Classe :** la classe où vous avez le plus de niveaux est choisie ; prenez-en une autre, ou **Nouvelle classe (multiclassage)…** et cherchez dans le compendium.
+2. **Aptitudes :** les aptitudes que la table de classe (et votre sous-classe) donnent au nouveau niveau de classe, toutes cochées. Décochez celles que vous ne voulez pas ajouter. Si la table indique des sorts mineurs, préparés ou connus, vous voyez comment ils changent ; les emplacements de sorts se mettent à jour d'eux-mêmes, et vous ajoutez les nouveaux sorts ensuite depuis l'onglet Sorts.
+3. **Sous-classe :** quand la table indique le niveau de sous-classe et que vous n'en avez pas encore, choisissez-en une dans les sources de la campagne.
+4. **Amélioration de caractéristique :** +2 à une caractéristique, +1 à deux, ou un don à la place. Les valeurs ne dépassent pas 20 de cette façon. Au niveau 19, la faveur épique demande un don.
+5. **Points de vie :** prenez la moyenne, **Lancez** le dé de vie (via le journal des dés) ou tapez un jet physique. Le gain ajoute votre modificateur de Constitution, au moins 1. Si vous augmentez la Constitution, les niveaux précédents gagnent aussi le point de vie en plus. Vos PV actuels augmentent d'autant.
+
+**Monter de niveau** applique tout d'un coup. Vous pouvez encore tout changer ensuite dans **Modifier le personnage**.
+
 ## Modifier le personnage
 
 **Modifier le personnage**, en haut, ouvre la vue de construction : nom et version des règles, espèce et historique, classes (niveau, dé de vie, type de lanceur, caractéristique d'incantation), caractéristiques et maîtrise des sauvegardes, maîtrise des compétences, armure et vitesse, PV maximum, ressources, dons et aptitudes, plus **Exporter** et **Supprimer**. Cliquez sur **Terminé** pour revenir à la vue de jeu. Chaque champ s'enregistre dès que vous le quittez, même hors ligne (les modifications partent quand la connexion revient).

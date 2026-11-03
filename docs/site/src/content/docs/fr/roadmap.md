@@ -33,25 +33,23 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 - **Gros imports :** des dizaines de milliers d'entrées par fichier, envoyées par lots, avec l'option de remplacer les entrées déjà présentes, l'annulation d'un import entier en une action (en conservant les entrées modifiées depuis), et les fichiers JSON de toute structure lus via des profils de correspondance enregistrés et exportables, avec un résumé avant l'import. Un convertisseur transforme les fichiers JSON de `dnd-data` en fichiers de bibliothèque, et le format des fichiers de bibliothèque est une norme documentée, avec un schéma JSON.
 - **Import à l'installation :** avec `BEHOLDER_IMPORT_REPO`, le serveur importe une fois un dépôt organisé comme dnd-data, en un seul import annulable.
 
-## En cours
-
-- **Fiches de personnage (phase 4) :** personnages avec une fiche assistée (modificateurs, sauvegardes, compétences, CA et emplacements de sorts calculés, multiclassage et magie de pacte compris), liens vers le compendium, modifications par le propriétaire et le MJ, et résumés pour le reste du groupe. Export et import en fichiers JSON. Reste à venir : une montée de niveau guidée facultative.
-- **Dés (phase 5) :** jets faits par le serveur depuis la fiche (sauvegardes, compétences, tests, initiative, attaques, dégâts et soins à tout niveau d'emplacement, avantage, dégâts critiques) ou tapés à la main, journal partagé des 50 derniers jets, jets pour le MJ et jets secrets du MJ, et saisie de dés physiques.
-- **Suivi de combat et carte de combat (phase 6) :** rencontres préparées à l'avance et jouées une à la fois, combattants issus du groupe, du compendium ou tapés à la main, initiative tapée ou lancée via le journal des dés, tours et rounds, dégâts et soins, états qui se décomptent, concentration, et santé des monstres exacte, vague ou masquée pour les joueurs. Une carte à grille carrée avec murs, zones et pions : le MJ contrôle tout et peut cacher n'importe quelle forme, les joueurs font glisser leur propre pion, et le MJ peut verrouiller la carte ou montrer les déplacements en direct. Terrains (difficile, eau, abri, visibilité), dangers avec des notes lisibles et des jets, portes et objets, et gabarits de zone (cercle, cône, ligne, cube) que les joueurs peuvent aussi poser pour leurs sorts. Un panneau permet au MJ de jouer n'importe quel monstre depuis son bloc de statistiques ou n'importe quel personnage depuis sa fiche, et le MJ peut voir la page de combat comme n'importe quel joueur. Sorts et attaques visent des cibles et ne lancent que le côté du lanceur, le MJ applique dégâts ou soins (entiers, moitié ou double) en un clic, les PV des personnages restent synchronisés avec leur fiche, et l'action, l'action bonus, la réaction et le déplacement de chaque combattant sont suivis, le déplacement étant compté à partir des pions.
-
-## Prévu
-
 ### Phase 4 : fiches de personnage
-- Fiches assistées : l'application calcule modificateurs, maîtrise, sauvegardes, compétences, emplacements de sorts et CA ; vous choisissez espèce, classe, historique et dons dans le compendium.
+- Personnages avec une fiche assistée (modificateurs, sauvegardes, compétences, CA et emplacements de sorts calculés, multiclassage et magie de pacte compris), liens vers le compendium, modifications par le propriétaire et le MJ, et résumés pour le reste du groupe. Export et import en fichiers JSON.
+- **Montée de niveau guidée :** choisissez la classe (ou une nouvelle pour multiclasser), voyez les aptitudes que les tables de classe et de sous-classe donnent à ce niveau, choisissez la sous-classe, +2 / +1 +1 ou un don aux niveaux d'amélioration de caractéristique, et une faveur épique au niveau 19, puis prenez la moyenne des points de vie, lancez-les ou entrez votre propre jet.
 
+### Phase 5 : dés
+- Jets faits par le serveur depuis la fiche (sauvegardes, compétences, tests, initiative, attaques, dégâts et soins à tout niveau d'emplacement, avantage, dégâts critiques) ou tapés à la main, journal partagé des 50 derniers jets, jets pour le MJ et jets secrets du MJ, et saisie de dés physiques.
 
 ### Phase 6 : suivi de combat et carte de combat
-- Plus tard pour la carte : images de fond, brouillard de guerre, mesure, images de pions.
+- Rencontres préparées à l'avance et jouées une à la fois, combattants issus du groupe, du compendium ou tapés à la main, initiative tapée ou lancée via le journal des dés, tours et rounds, dégâts et soins, états qui se décomptent, concentration, et santé des monstres exacte, vague ou masquée pour les joueurs. Une carte à grille carrée avec murs, zones et pions : le MJ contrôle tout et peut cacher n'importe quelle forme, les joueurs font glisser leur propre pion, et le MJ peut verrouiller la carte ou montrer les déplacements en direct. Terrains (difficile, eau, abri, visibilité), dangers avec des notes lisibles et des jets, portes et objets, et gabarits de zone (cercle, cône, ligne, cube) que les joueurs peuvent aussi poser pour leurs sorts. Un panneau permet au MJ de jouer n'importe quel monstre depuis son bloc de statistiques ou n'importe quel personnage depuis sa fiche, et le MJ peut voir la page de combat comme n'importe quel joueur. Sorts et attaques visent des cibles et ne lancent que le côté du lanceur, le MJ applique dégâts ou soins (entiers, moitié ou double) en un clic, les PV des personnages restent synchronisés avec leur fiche, et l'action, l'action bonus, la réaction et le déplacement de chaque combattant sont suivis, le déplacement étant compté à partir des pions.
+
+## Prévu
 
 ### Phase 7 : connexion Discord
 - Se connecter avec Discord et le lier à un compte existant.
 
 ### Plus tard
+- Carte de combat : images de fond, brouillard de guerre, mesure, images de pions.
 - Application Android.
 - Un bot Discord qui lance les dés avec les modificateurs de la fiche, synchronisé avec l'application.
 - D'autres systèmes de jeu (par ex. Imperium Maledictum, L'Appel de Cthulhu) ; chaque source est déjà marquée de son système.

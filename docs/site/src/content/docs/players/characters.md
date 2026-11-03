@@ -41,6 +41,18 @@ The **Actions** tab gathers your equipped weapons, cantrips and prepared spells 
 - **Concentration:** casting a concentration spell shows "Concentrating on…" at the top, with **End concentration**. If you're already concentrating on another spell, **Cast** opens the side panel, where the button says which spell it will end.
 - **Weapon proficiency:** in a weapon's side panel, untick **Proficient with this weapon** and its attack bonus no longer includes your proficiency bonus.
 
+## Levelling up
+
+**Level up** at the top of the sheet walks you through a new level:
+
+1. **Class:** the class you have most levels in is picked; choose another, or **New class (multiclass)…** and search the compendium.
+2. **Features:** the features the class table (and your subclass) give at the new class level, all ticked. Untick any you don't want added. If the table lists cantrips, prepared or known spells, you see how they change; spell slots update by themselves, and you add the new spells from the Spells tab afterwards.
+3. **Subclass:** when the table says this is the subclass level and you have none yet, pick one from the campaign's sources.
+4. **Ability Score Improvement:** +2 to one ability, +1 to two, or a feat instead. Scores don't go above 20 this way. At level 19, the Epic Boon asks for a feat.
+5. **Hit points:** take the average, **Roll** the hit die (through the dice log), or type a physical roll. The gain adds your Constitution modifier, at least 1. If you raise Constitution, earlier levels get the extra hit point too. Your current HP goes up by the same amount.
+
+**Level up** applies everything at once. You can still change anything afterwards in **Edit character**.
+
 ## Editing the character
 
 **Edit character** at the top opens the build view: name and rules version, species and background, classes (level, hit die, kind of spellcaster, spellcasting ability), ability scores and saving throw proficiencies, skill proficiencies, armor and speed, maximum HP, resources, feats and features, plus **Export** and **Delete**. Click **Done** to go back to the play view. Every field saves as soon as you leave it, even offline (changes are sent when the connection comes back).

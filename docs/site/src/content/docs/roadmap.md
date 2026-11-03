@@ -33,25 +33,23 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 - **Large imports:** tens of thousands of entries per file, sent in batches, with the option to replace entries already in the library, undoing a whole import in one action (keeping entries edited since), and JSON files of any shape read through saved, exportable mapping profiles with a summary review before importing. A converter turns the `dnd-data` JSON files into library files, and the library file format is a documented standard with a JSON Schema.
 - **Setup import:** set `BEHOLDER_IMPORT_REPO` and the server imports a dnd-data style repository once, as one undoable import.
 
-## In progress
-
-- **Character sheets (Phase 4):** characters with an assisted sheet (computed modifiers, saves, skills, AC, spell slots including multiclass and pact magic), compendium links, edits by the owner and the DM, and summaries for the rest of the party. Export and import as JSON files. Still to come: an optional guided level-up.
-- **Dice (Phase 5):** rolls made on the server from the sheet (saves, skills, checks, initiative, attacks, damage and healing at any slot level, advantage, critical damage) or typed by hand, a shared log of the last 50 rolls, rolls to the DM and secret DM rolls, and physical dice entry.
-- **Combat tracker and battle map (Phase 6):** encounters prepared ahead and run one at a time, combatants from the party, the compendium or typed in, initiative typed or rolled through the dice log, turns and rounds, damage and healing, conditions that count down, concentration, and exact, vague or hidden monster health for players. A square-grid map with walls, zones and tokens: the DM controls everything and can hide any shape, players drag their own token, and the DM can lock the map or show moves live while dragging. Terrain (difficult, water, cover, obscured), hazards with readable, rollable notes, doors and objects, and area templates (circle, cone, line, cube) that players can also place for their spells. An acting panel lets the DM play any monster from its stat block or any character from its sheet, and the DM can preview the combat page as any player. Spells and attacks are aimed at targets and roll only the caster's side, the DM applies damage or healing (full, half or double) with one click, characters' HP stays in sync with their sheets, and each combatant's action, bonus action, reaction and movement are tracked, with movement counted from token drags.
-
-## Planned
-
 ### Phase 4: Character sheets
-- Assisted sheets: the app computes modifiers, proficiency, saves, skills, spell slots and AC; you choose species, class, background and feats from the compendium.
+- Characters with an assisted sheet (computed modifiers, saves, skills, AC, spell slots including multiclass and pact magic), compendium links, edits by the owner and the DM, and summaries for the rest of the party. Export and import as JSON files.
+- **Guided level-up:** pick the class (or a new one to multiclass), see the features the class and subclass tables give at that level, choose the subclass, +2 / +1 +1 or a feat at Ability Score Improvement levels, and an Epic Boon at 19, then take the average hit points, roll them, or enter your own roll.
 
+### Phase 5: Dice
+- Rolls made on the server from the sheet (saves, skills, checks, initiative, attacks, damage and healing at any slot level, advantage, critical damage) or typed by hand, a shared log of the last 50 rolls, rolls to the DM and secret DM rolls, and physical dice entry.
 
 ### Phase 6: Combat tracker and battle map
-- Later for the map: background images, fog of war, measuring, token images.
+- Encounters prepared ahead and run one at a time, combatants from the party, the compendium or typed in, initiative typed or rolled through the dice log, turns and rounds, damage and healing, conditions that count down, concentration, and exact, vague or hidden monster health for players. A square-grid map with walls, zones and tokens: the DM controls everything and can hide any shape, players drag their own token, and the DM can lock the map or show moves live while dragging. Terrain (difficult, water, cover, obscured), hazards with readable, rollable notes, doors and objects, and area templates (circle, cone, line, cube) that players can also place for their spells. An acting panel lets the DM play any monster from its stat block or any character from its sheet, and the DM can preview the combat page as any player. Spells and attacks are aimed at targets and roll only the caster's side, the DM applies damage or healing (full, half or double) with one click, characters' HP stays in sync with their sheets, and each combatant's action, bonus action, reaction and movement are tracked, with movement counted from token drags.
+
+## Planned
 
 ### Phase 7: Discord login
 - Log in with Discord and link it to an existing account.
 
 ### Later
+- Battle map: background images, fog of war, measuring, token images.
 - Android app.
 - A Discord bot that rolls with sheet modifiers, mirrored with the app.
 - Other game systems (e.g. Imperium Maledictum, Call of Cthulhu); every source is already tagged with its system.
