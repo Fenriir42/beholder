@@ -53,12 +53,23 @@ fn main() -> anyhow::Result<()> {
 async fn admin(data_dir: &std::path::Path, args: &[String]) -> anyhow::Result<()> {
     use beholder_server::{auth, db::Db, now};
     let db = Db::open(&data_dir.join("beholder.db")).context("opening the database")?;
-    match args.iter().map(String::as_str).collect::<Vec<_>>().as_slice() {
+    match args
+        .iter()
+        .map(String::as_str)
+        .collect::<Vec<_>>()
+        .as_slice()
+    {
         ["users"] => {
             let list = db.call(|c| auth::accounts(c)).await?;
-            println!("{:<24} {:<24} {:>8}", "username", "display name", "sessions");
+            println!(
+                "{:<24} {:<24} {:>8}",
+                "username", "display name", "sessions"
+            );
             for a in list {
-                println!("{:<24} {:<24} {:>8}", a.username, a.display_name, a.sessions);
+                println!(
+                    "{:<24} {:<24} {:>8}",
+                    a.username, a.display_name, a.sessions
+                );
             }
             Ok(())
         }

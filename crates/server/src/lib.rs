@@ -3,6 +3,7 @@ pub mod campaigns;
 pub mod characters;
 pub mod compendium;
 pub mod db;
+pub mod dice;
 pub mod http;
 pub mod hub;
 pub mod images;

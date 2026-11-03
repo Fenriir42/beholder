@@ -3,10 +3,50 @@ use core::fmt;
 use serde::{Deserialize, Serialize};
 
 use crate::actions::Roll;
+use crate::ids::{CommandId, UnixMillis, UserId};
 
 pub const MAX_DICE: u8 = 100;
 pub const MAX_SIDES: u16 = 1000;
 pub const MAX_TERMS: usize = 10;
+pub const LOG_SIZE: usize = 50;
+const MAX_CONTEXT: usize = 120;
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Visibility {
+    #[default]
+    Public,
+    ToDm,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RollRecord {
+    pub id: CommandId,
+    pub roller: UserId,
+    pub at: UnixMillis,
+    pub character: Option<String>,
+    pub context: String,
+    pub expr: Expr,
+    pub outcome: Outcome,
+    pub visibility: Visibility,
+    pub physical: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum DiceOp {
+    Roll {
+        expr: Expr,
+        context: String,
+        character: Option<String>,
+        visibility: Visibility,
+    },
+    Physical {
+        expr: Expr,
+        results: Vec<u16>,
+        context: String,
+        character: Option<String>,
+        visibility: Visibility,
+    },
+}
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum Keep {
@@ -215,6 +255,34 @@ impl Expr {
         self
     }
 
+    pub fn validate(&self) -> Result<(), DiceError> {
+        let ok_term = |t: &Term| {
+            let kept = match t.keep {
+                Keep::All => t.count,
+                Keep::Highest(n) | Keep::Lowest(n) => n,
+            };
+            t.count > 0 && t.sides >= 2 && kept > 0 && kept <= t.count
+        };
+        if !self.terms.iter().all(ok_term) {
+            return Err(DiceError::Syntax);
+        }
+        let too_big = self.terms.len() > MAX_TERMS
+            || self.modifier.abs() > 10_000
+            || self
+                .terms
+                .iter()
+                .any(|t| t.count > MAX_DICE || t.sides > MAX_SIDES);
+        if too_big {
+            Err(DiceError::TooBig)
+        } else {
+            Ok(())
+        }
+    }
+
+    pub fn dice_count(&self) -> usize {
+        self.terms.iter().map(|t| usize::from(t.count)).sum()
+    }
+
     pub fn is_d20_test(&self) -> bool {
         self.terms
             .first()
@@ -287,6 +355,44 @@ pub fn roll(expr: &Expr, mut die: impl FnMut(u16) -> u16) -> Outcome {
     }
 }
 
+impl DiceOp {
+    pub fn check(&self) -> Result<(), DiceError> {
+        let (expr, context, character) = match self {
+            Self::Roll {
+                expr,
+                context,
+                character,
+                ..
+            }
+            | Self::Physical {
+                expr,
+                context,
+                character,
+                ..
+            } => (expr, context, character),
+        };
+        expr.validate()?;
+        let short = |s: &str| s.chars().count() <= MAX_CONTEXT;
+        if !short(context) || !character.as_deref().is_none_or(short) {
+            return Err(DiceError::TooBig);
+        }
+        if let Self::Physical { results, .. } = self {
+            let mut sides = expr
+                .terms
+                .iter()
+                .flat_map(|t| core::iter::repeat_n(t.sides, usize::from(t.count)));
+            if results.len() != expr.dice_count()
+                || !results
+                    .iter()
+                    .all(|r| sides.next().is_some_and(|s| (1..=s).contains(r)))
+            {
+                return Err(DiceError::Syntax);
+            }
+        }
+        Ok(())
+    }
+}
+
 impl Outcome {
     pub fn natural(&self) -> Option<u16> {
         let first = self.terms.first().filter(|t| t.term.sides == 20)?;
@@ -351,6 +457,32 @@ mod tests {
             roll(&Expr::parse("8d6").unwrap(), fixed(&[2])).natural(),
             None
         );
+    }
+
+    #[test]
+    fn ops_are_checked() {
+        let op = |expr: &str, results: Vec<u16>| DiceOp::Physical {
+            expr: Expr::parse(expr).unwrap(),
+            results,
+            context: "Stealth".into(),
+            character: None,
+            visibility: Visibility::Public,
+        };
+        assert!(op("2d6+1", vec![3, 6]).check().is_ok());
+        assert!(op("2d6+1", vec![3]).check().is_err(), "one result per die");
+        assert!(
+            op("1d6+1d20", vec![6, 21]).check().is_err(),
+            "within each die's sides"
+        );
+        let mut big = Expr::parse("1d6").unwrap();
+        big.terms[0].count = 200;
+        let roll = DiceOp::Roll {
+            expr: big,
+            context: String::new(),
+            character: None,
+            visibility: Visibility::ToDm,
+        };
+        assert_eq!(roll.check(), Err(DiceError::TooBig));
     }
 
     #[test]

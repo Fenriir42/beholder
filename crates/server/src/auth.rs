@@ -346,7 +346,10 @@ mod tests {
         user(&mut c, "Bob");
         create_session(&c, alice.id, UnixMillis(1)).unwrap();
         let list = accounts(&c).unwrap();
-        let names: Vec<(&str, u32)> = list.iter().map(|a| (a.username.as_str(), a.sessions)).collect();
+        let names: Vec<(&str, u32)> = list
+            .iter()
+            .map(|a| (a.username.as_str(), a.sessions))
+            .collect();
         assert_eq!(names, [("alice", 1), ("Bob", 0)]);
         let pw = random_password().unwrap();
         assert_eq!(pw.expose().len(), 16);
@@ -357,7 +360,11 @@ mod tests {
             .unwrap()
             .unwrap();
         assert!(verify_password(&pw, Some(&stored)).unwrap());
-        assert_eq!(accounts(&c).unwrap()[0].sessions, 0, "the user is signed out everywhere");
+        assert_eq!(
+            accounts(&c).unwrap()[0].sessions,
+            0,
+            "the user is signed out everywhere"
+        );
     }
 
     #[test]

@@ -111,6 +111,9 @@ mod tests {
         c.apply(&CampaignEvent::CharacterSaved {
             character: Box::new(character()),
         });
+        c.apply(&CampaignEvent::Rolled {
+            roll: Box::new(roll_record()),
+        });
         c.apply(&CampaignEvent::PartyMemberSaved {
             summary: beholder_core::character::Character {
                 id: beholder_core::CharacterId(Uuid::from_bytes([8; 16])),
@@ -119,6 +122,27 @@ mod tests {
             .summary(),
         });
         c
+    }
+
+    fn roll_record() -> beholder_core::dice::RollRecord {
+        use beholder_core::dice::{Expr, RollRecord, Visibility, roll};
+        let expr = Expr::parse("2d20kh1+5").unwrap();
+        let mut n = 0;
+        let outcome = roll(&expr, |_| {
+            n += 7;
+            n
+        });
+        RollRecord {
+            id: cmd_id(11),
+            roller: uid(1),
+            at: beholder_core::UnixMillis(1_700_000_000_000),
+            character: Some("Ilsa".into()),
+            context: "Stealth".into(),
+            expr,
+            outcome,
+            visibility: Visibility::ToDm,
+            physical: false,
+        }
     }
 
     fn character() -> beholder_core::character::Character {
@@ -242,6 +266,9 @@ mod tests {
             CampaignEvent::PartyMemberSaved {
                 summary: character().summary(),
             },
+            CampaignEvent::Rolled {
+                roll: Box::new(roll_record()),
+            },
         ]
     }
 
@@ -361,6 +388,30 @@ mod tests {
             beholder_core::character::CharacterOp::SetActive { id: character().id },
             beholder_core::character::CharacterOp::Delete { id: character().id },
         ];
+        let dice_ops = vec![
+            beholder_core::dice::DiceOp::Roll {
+                expr: beholder_core::dice::Expr::parse("1d20+4").unwrap(),
+                context: "Initiative".into(),
+                character: Some("Ilsa".into()),
+                visibility: beholder_core::dice::Visibility::Public,
+            },
+            beholder_core::dice::DiceOp::Physical {
+                expr: beholder_core::dice::Expr::parse("2d6").unwrap(),
+                results: vec![3, 5],
+                context: String::new(),
+                character: None,
+                visibility: beholder_core::dice::Visibility::ToDm,
+            },
+        ];
+        msgs.extend(dice_ops.into_iter().map(|op| {
+            ClientMsg::Command(Command {
+                id: cmd_id(12),
+                kind: CommandKind::Dice {
+                    campaign_id: cid(2),
+                    op,
+                },
+            })
+        }));
         msgs.extend(character_ops.into_iter().map(|op| {
             ClientMsg::Command(Command {
                 id: cmd_id(10),
@@ -457,7 +508,8 @@ mod tests {
             | CommandKind::Campaign { .. }
             | CommandKind::Note { .. }
             | CommandKind::Library { .. }
-            | CommandKind::Character { .. } => {}
+            | CommandKind::Character { .. }
+            | CommandKind::Dice { .. } => {}
         }
         match e {
             CampaignEvent::Created { .. }
@@ -474,7 +526,8 @@ mod tests {
             | CampaignEvent::EntryHidden { .. }
             | CampaignEvent::CharacterSaved { .. }
             | CampaignEvent::CharacterDeleted { .. }
-            | CampaignEvent::PartyMemberSaved { .. } => {}
+            | CampaignEvent::PartyMemberSaved { .. }
+            | CampaignEvent::Rolled { .. } => {}
         }
         match n {
             NoteOp::Create { .. }

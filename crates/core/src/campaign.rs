@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::character::{Character, CharacterSummary};
 use crate::compendium::{LIBRARY, SRD};
+use crate::dice::{LOG_SIZE, RollRecord};
 use crate::ids::{CampaignId, CharacterId, ImageHash, LibraryId, NoteId, UserId};
 use crate::note::{Audience, Note, NoteBody, NoteTitle};
 use crate::user::{DisplayName, ValidationError, clean_text};
@@ -241,6 +242,9 @@ pub enum CampaignEvent {
     PartyMemberSaved {
         summary: CharacterSummary,
     },
+    Rolled {
+        roll: Box<RollRecord>,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -256,6 +260,7 @@ pub struct Campaign {
     pub hidden: Vec<LibraryId>,
     pub characters: Vec<Character>,
     pub party: Vec<CharacterSummary>,
+    pub rolls: Vec<RollRecord>,
 }
 
 impl Campaign {
@@ -272,6 +277,7 @@ impl Campaign {
             hidden: Vec::new(),
             characters: Vec::new(),
             party: Vec::new(),
+            rolls: Vec::new(),
         }
     }
 
@@ -337,6 +343,13 @@ impl Campaign {
             CampaignEvent::CharacterDeleted { id } => {
                 self.characters.retain(|c| c.id != *id);
                 self.party.retain(|p| p.id != *id);
+            }
+            CampaignEvent::Rolled { roll } => {
+                if !self.rolls.iter().any(|r| r.id == roll.id) {
+                    self.rolls.push((**roll).clone());
+                }
+                let extra = self.rolls.len().saturating_sub(LOG_SIZE);
+                self.rolls.drain(..extra);
             }
             CampaignEvent::PartyMemberSaved { summary } => {
                 self.characters.retain(|c| c.id != summary.id);

@@ -161,7 +161,8 @@ pub(crate) fn project(
         | CampaignEvent::EntryHidden { .. }
         | CampaignEvent::CharacterSaved { .. }
         | CampaignEvent::CharacterDeleted { .. }
-        | CampaignEvent::PartyMemberSaved { .. } => {}
+        | CampaignEvent::PartyMemberSaved { .. }
+        | CampaignEvent::Rolled { .. } => {}
     }
     Ok(())
 }

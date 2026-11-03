@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 
 use beholder_core::character::Character;
+use beholder_core::dice::{RollRecord, Visibility};
 use beholder_core::{
     Audience, Campaign, CampaignEvent, CampaignId, CampaignOp, CampaignSettings, Note, NoteId,
     Role, Seq, UserId,
@@ -48,6 +49,10 @@ pub fn can_edit_character(viewer: Viewer, character: &Character) -> bool {
     character.owner == viewer.user || viewer.role == Role::Dm
 }
 
+pub fn can_see_roll(viewer: Viewer, roll: &RollRecord) -> bool {
+    roll.visibility == Visibility::Public || roll.roller == viewer.user || viewer.role == Role::Dm
+}
+
 pub struct Scope<'a> {
     pub settings: CampaignSettings,
     pub notes: &'a HashMap<NoteId, Note>,
@@ -70,6 +75,7 @@ pub fn event_for(
         | CampaignEvent::EntryHidden { .. }
         | CampaignEvent::CharacterDeleted { .. }
         | CampaignEvent::PartyMemberSaved { .. } => Some(event.clone()),
+        CampaignEvent::Rolled { roll } => can_see_roll(viewer, roll).then(|| event.clone()),
         CampaignEvent::CharacterSaved { character } => {
             if can_edit_character(viewer, character) {
                 Some(event.clone())
@@ -136,6 +142,12 @@ pub fn campaign_for(viewer: Viewer, campaign: &Campaign) -> Campaign {
             .iter()
             .filter(|c| !can_edit_character(viewer, c))
             .map(Character::summary)
+            .collect(),
+        rolls: campaign
+            .rolls
+            .iter()
+            .filter(|r| can_see_roll(viewer, r))
+            .cloned()
             .collect(),
     }
 }
@@ -351,6 +363,48 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn roll_matrix() {
+        use beholder_core::dice::{Expr, roll};
+        let record = |roller: u8, visibility: Visibility| {
+            let expr = Expr::parse("1d20").unwrap();
+            RollRecord {
+                id: beholder_core::CommandId(Uuid::from_bytes([roller; 16])),
+                roller: uid(roller),
+                at: UnixMillis(0),
+                character: None,
+                context: String::new(),
+                outcome: roll(&expr, |_| 10),
+                expr,
+                visibility,
+                physical: false,
+            }
+        };
+        // (roller, visibility, [DM sees, P1 sees, P2 sees])
+        let rows = [
+            (P1, Visibility::Public, [true, true, true]),
+            (P1, Visibility::ToDm, [true, true, false]),
+            (DM, Visibility::ToDm, [true, false, false]),
+        ];
+        for (roller, visibility, want) in rows {
+            let r = record(roller, visibility);
+            for (who, see) in [DM, P1, P2].into_iter().zip(want) {
+                assert_eq!(
+                    can_see_roll(v(who), &r),
+                    see,
+                    "{roller} {visibility:?} {who}"
+                );
+                let event = CampaignEvent::Rolled {
+                    roll: Box::new(r.clone()),
+                };
+                assert_eq!(
+                    event_for(v(who), &scope(&no_notes(), false), &event).is_some(),
+                    see
+                );
+            }
+        }
+    }
+
     #[test]
     fn character_matrix() {
         let mut ch = Character::new(

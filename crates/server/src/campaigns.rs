@@ -237,6 +237,21 @@ fn execute(
                 joined: None,
             }))
         }
+        CommandKind::Dice { campaign_id, op } => {
+            if role_of(tx, *campaign_id, actor.id)?.is_none() {
+                return Ok(Err(RejectReason::NotFound));
+            }
+            let event = match crate::dice::decide(actor.id, cmd_id, op, now)? {
+                Ok(e) => e,
+                Err(reason) => return Ok(Err(reason)),
+            };
+            Ok(Ok(Executed {
+                campaign_id: Some(*campaign_id),
+                events: vec![log.emit(*campaign_id, event)?],
+                library_seq: None,
+                joined: None,
+            }))
+        }
         CommandKind::Character { campaign_id, op } => {
             let Some(role) = role_of(tx, *campaign_id, actor.id)? else {
                 return Ok(Err(RejectReason::NotFound));
@@ -382,6 +397,7 @@ fn project(
             crate::characters::project(tx, campaign_id, event)?
         }
         CampaignEvent::PartyMemberSaved { .. } => {}
+        CampaignEvent::Rolled { roll } => crate::dice::project(tx, campaign_id, seq, roll)?,
         CampaignEvent::SourcesChanged { sources } => {
             tx.execute(
                 "UPDATE campaigns SET sources = ?2 WHERE id = ?1",
@@ -483,6 +499,7 @@ pub fn load_campaign(
             .unwrap_or_default(),
         characters: crate::characters::campaign_characters(conn, id)?,
         party: Vec::new(),
+        rolls: crate::dice::campaign_rolls(conn, id)?,
     };
     Ok(Some((Seq(head), campaign)))
 }
@@ -1163,6 +1180,63 @@ mod tests {
             .map(|e| e.name)
             .collect();
         assert!(names.contains(&"Replaced".to_owned()) && names.contains(&"Added".to_owned()));
+    }
+
+    #[test]
+    fn rolls_are_made_by_the_server_and_kept_short() {
+        use beholder_core::dice::{DiceOp, Expr, LOG_SIZE, Visibility};
+        let (mut c, dm, player) = setup();
+        let campaign = create(&mut c, &dm);
+        let dice = |op| CommandKind::Dice {
+            campaign_id: campaign,
+            op,
+        };
+        let roll = |expr: &str| {
+            dice(DiceOp::Roll {
+                expr: Expr::parse(expr).unwrap(),
+                context: "Stealth".into(),
+                character: None,
+                visibility: Visibility::Public,
+            })
+        };
+        assert_eq!(
+            run(&mut c, &player, roll("1d20")).reply,
+            Reply::Reject(RejectReason::NotFound),
+            "only members roll in a campaign"
+        );
+        for _ in 0..LOG_SIZE + 5 {
+            assert!(matches!(
+                run(&mut c, &dm, roll("2d20kh1+3")).reply,
+                Reply::Ack(Some(_))
+            ));
+        }
+        let physical = dice(DiceOp::Physical {
+            expr: Expr::parse("2d6").unwrap(),
+            results: vec![6, 6],
+            context: "Damage".into(),
+            character: Some("Ilsa".into()),
+            visibility: Visibility::ToDm,
+        });
+        assert!(matches!(
+            run(&mut c, &dm, physical).reply,
+            Reply::Ack(Some(_))
+        ));
+        let bad = dice(DiceOp::Physical {
+            expr: Expr::parse("2d6").unwrap(),
+            results: vec![7, 1],
+            context: String::new(),
+            character: None,
+            visibility: Visibility::Public,
+        });
+        assert!(matches!(
+            run(&mut c, &dm, bad).reply,
+            Reply::Reject(RejectReason::Invalid(_))
+        ));
+        let (_, loaded) = load_campaign(&c, campaign).unwrap().unwrap();
+        assert_eq!(loaded.rolls.len(), LOG_SIZE);
+        let last = loaded.rolls.last().unwrap();
+        assert!(last.physical && last.outcome.total == 12);
+        assert!(loaded.rolls[0].outcome.total >= 4 && loaded.rolls[0].outcome.total <= 23);
     }
 
     #[test]

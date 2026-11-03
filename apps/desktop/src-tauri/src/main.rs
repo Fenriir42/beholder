@@ -87,6 +87,7 @@ fn main() {
             commands::library_imports,
             commands::library_undo_import,
             commands::character_command,
+            commands::roll_dice,
             commands::character_create,
             commands::character_export,
             commands::character_import,

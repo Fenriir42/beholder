@@ -2,7 +2,8 @@ use std::collections::{HashMap, HashSet};
 
 use beholder_core::library::LibraryOp;
 use beholder_core::{
-    Campaign, CampaignId, CharacterId, LibraryId, Member, NoteId, Role, Seq, User, UserId,
+    Campaign, CampaignId, CharacterId, CommandId, LibraryId, Member, NoteId, Role, Seq, User,
+    UserId,
 };
 use beholder_protocol::{Command, CommandKind};
 
@@ -13,6 +14,7 @@ pub struct CampaignView {
     pub pending: bool,
     pub pending_notes: Vec<NoteId>,
     pub pending_characters: Vec<CharacterId>,
+    pub pending_rolls: Vec<CommandId>,
     pub online: Vec<UserId>,
 }
 
@@ -39,6 +41,7 @@ pub fn compute(
             pending: false,
             pending_notes: Vec::new(),
             pending_characters: Vec::new(),
+            pending_rolls: Vec::new(),
             online: Vec::new(),
         })
         .collect();
@@ -63,6 +66,7 @@ pub fn compute(
                     pending: true,
                     pending_notes: Vec::new(),
                     pending_characters: Vec::new(),
+                    pending_rolls: Vec::new(),
                     online: Vec::new(),
                 });
             }
@@ -99,6 +103,11 @@ pub fn compute(
                 }
                 if !view.pending_notes.contains(&id) {
                     view.pending_notes.push(id);
+                }
+            }
+            CommandKind::Dice { campaign_id, .. } => {
+                if let Some(view) = campaigns.iter_mut().find(|c| c.campaign.id == *campaign_id) {
+                    view.pending_rolls.push(cmd.id);
                 }
             }
             CommandKind::Character { campaign_id, op } => {

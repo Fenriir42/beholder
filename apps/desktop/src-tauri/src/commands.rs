@@ -985,3 +985,20 @@ pub fn sheet_details(
         })
         .collect()
 }
+
+#[tauri::command(rename_all = "snake_case")]
+pub fn roll_dice(
+    shell: State<'_, Shell>,
+    campaign_id: String,
+    op: beholder_core::dice::DiceOp,
+) -> Result<String, IpcError> {
+    op.check()
+        .map_err(|_| IpcError::Invalid(beholder_core::ValidationError::Character))?;
+    let campaign_id = self::campaign_id(&campaign_id)?;
+    shell
+        .session()?
+        .client
+        .submit(CommandKind::Dice { campaign_id, op })
+        .map(|id| id.to_string())
+        .map_err(|_| IpcError::Storage)
+}
