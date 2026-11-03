@@ -1,6 +1,7 @@
 use std::time::Duration;
 
-use beholder_core::ImageHash;
+use beholder_core::combat::Encounter;
+use beholder_core::{CampaignId, EncounterId, ImageHash, UserId};
 use beholder_protocol::http::{
     AuthError, AuthResponse, ImageError, ImageUploaded, ImportInfo, LibraryChanges, LoginRequest,
     MAX_BUNDLE_BYTES, MAX_IMAGE_BYTES, RegisterRequest, SourceInfo,
@@ -182,6 +183,21 @@ impl Http {
         after: u64,
     ) -> Result<LibraryChanges, HttpError> {
         let path = format!("/api/library/changes/{after}");
+        let (status, body) = self.get_authed(&path, token, 0, MAX_BUNDLE_BYTES as u64)?;
+        if status != 200 {
+            return Err(HttpError::Status(status));
+        }
+        postcard::from_bytes(&body).map_err(|_| HttpError::Decode)
+    }
+
+    pub fn encounter_as(
+        &self,
+        token: &SessionToken,
+        campaign: CampaignId,
+        encounter: EncounterId,
+        player: UserId,
+    ) -> Result<Option<Encounter>, HttpError> {
+        let path = format!("/api/campaigns/{campaign}/encounters/{encounter}/as/{player}");
         let (status, body) = self.get_authed(&path, token, 0, MAX_BUNDLE_BYTES as u64)?;
         if status != 200 {
             return Err(HttpError::Status(status));

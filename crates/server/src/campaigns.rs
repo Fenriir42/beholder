@@ -637,6 +637,25 @@ fn image_exists(tx: &Transaction<'_>, hash: ImageHash) -> Result<bool, DbError> 
         .is_some())
 }
 
+pub(crate) fn settings_of(
+    conn: &Connection,
+    id: CampaignId,
+) -> Result<Option<CampaignSettings>, DbError> {
+    conn.query_row(
+        "SELECT dm_can_read_private_notes, combat_visibility FROM campaigns WHERE id = ?1",
+        [id.as_bytes()],
+        |r| Ok((r.get::<_, bool>(0)?, r.get::<_, i64>(1)?)),
+    )
+    .optional()?
+    .map(|(dm_read, vis)| {
+        Ok(CampaignSettings {
+            dm_can_read_private_notes: dm_read,
+            combat_visibility: int_to_visibility(vis)?,
+        })
+    })
+    .transpose()
+}
+
 pub(crate) fn role_of(
     tx: &Transaction<'_>,
     campaign: CampaignId,
@@ -1357,6 +1376,27 @@ mod tests {
             run(&mut c, &player, mv(4)).reply,
             Reply::Reject(RejectReason::Forbidden),
             "locked"
+        );
+        use crate::combat::{AsPlayer, encounter_as};
+        assert!(
+            matches!(
+                encounter_as(&mut c, campaign, player.id, fight, player.id).unwrap(),
+                AsPlayer::Forbidden
+            ),
+            "only the DM previews"
+        );
+        let AsPlayer::View(Some(seen)) =
+            encounter_as(&mut c, campaign, dm.id, fight, player.id).unwrap()
+        else {
+            panic!("the DM sees the player's view");
+        };
+        assert_eq!(seen.shapes.len(), 1);
+        assert!(
+            matches!(
+                encounter_as(&mut c, campaign, dm.id, fight, dm.id).unwrap(),
+                AsPlayer::NotFound
+            ),
+            "only players can be previewed"
         );
         let (_, loaded) = load_campaign(&c, campaign).unwrap().unwrap();
         let e = &loaded.encounters[0];

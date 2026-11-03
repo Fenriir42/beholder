@@ -692,3 +692,7 @@ acting-no-actions = No attacks or saves found in this stat block.
 acting-half-on-save = half on a success
 acting-stat-block = Stat block
 acting-custom = No stat block for this combatant. Type any roll below.
+preview-as = View as
+preview-dm = Myself (DM)
+preview-banner = Read-only preview: this is exactly what the server sends this player. Pick "Myself (DM)" to go back.
+preview-loading = Loading the player's view…

@@ -69,6 +69,10 @@ pub fn can_move_shape(viewer: Viewer, e: &Encounter, shape: ShapeId) -> bool {
                 .any(|s| s.id == shape && s.owner == Some(viewer.user)))
 }
 
+pub fn can_preview_as(viewer: Viewer) -> bool {
+    viewer.role == Role::Dm
+}
+
 pub const MAX_PLAYER_TEMPLATES: usize = 10;
 
 fn player_template(viewer: Viewer, s: &Shape) -> bool {
@@ -650,6 +654,10 @@ mod tests {
         assert!(
             !can_put_shape(v(P2), &crowded, &template(40, Some(uid(P2)))),
             "a cap per player"
+        );
+        assert!(
+            can_preview_as(v(DM)) && !can_preview_as(v(P1)),
+            "only the DM previews a player's view"
         );
         let mut shut = with_template.clone();
         shut.locked = true;

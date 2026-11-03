@@ -692,3 +692,7 @@ acting-no-actions = Aucune attaque ni sauvegarde trouvée dans ce bloc de statis
 acting-half-on-save = moitié en cas de réussite
 acting-stat-block = Bloc de statistiques
 acting-custom = Pas de bloc de statistiques pour ce combattant. Tapez n'importe quel jet ci-dessous.
+preview-as = Voir comme
+preview-dm = Moi (MJ)
+preview-banner = Aperçu en lecture seule : c'est exactement ce que le serveur envoie à ce joueur. Choisissez « Moi (MJ) » pour revenir.
+preview-loading = Chargement de la vue du joueur…

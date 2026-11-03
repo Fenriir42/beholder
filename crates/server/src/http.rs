@@ -350,6 +350,31 @@ pub async fn compendium_index(State(state): State<AppState>, headers: HeaderMap)
     reply(StatusCode::OK, &index)
 }
 
+pub async fn encounter_as(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((campaign, encounter, player)): Path<(
+        beholder_core::CampaignId,
+        beholder_core::EncounterId,
+        beholder_core::UserId,
+    )>,
+) -> Response {
+    let me = match signed_in(&state, &headers).await {
+        Ok(u) => u.id,
+        Err(r) => return r,
+    };
+    match state
+        .db
+        .call(move |c| crate::combat::encounter_as(c, campaign, me, encounter, player))
+        .await
+    {
+        Ok(crate::combat::AsPlayer::View(e)) => reply(StatusCode::OK, &e),
+        Ok(crate::combat::AsPlayer::Forbidden) => StatusCode::FORBIDDEN.into_response(),
+        Ok(crate::combat::AsPlayer::NotFound) => StatusCode::NOT_FOUND.into_response(),
+        Err(e) => internal(e),
+    }
+}
+
 pub async fn library_changes(
     State(state): State<AppState>,
     headers: HeaderMap,

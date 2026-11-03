@@ -11,13 +11,16 @@ use std::path::Path;
 use std::sync::atomic::AtomicBool;
 use std::sync::{Arc, Mutex, MutexGuard};
 
+use beholder_core::combat::Encounter;
 use beholder_core::compendium::{
     Alternative, Entry, FacetOptions, Hit, LicenseText, SearchQuery, SourceMeta,
 };
 use beholder_core::compendium::{Kind, RulesVersion};
 use beholder_core::library::{ImportSummary, LibraryDraft, LibraryOp, MAX_BATCH};
 use beholder_core::paste::{self, Pasted};
-use beholder_core::{CampaignId, CommandId, ImportId, LibraryId, NoteBody, NoteTitle, UserId};
+use beholder_core::{
+    CampaignId, CommandId, EncounterId, ImportId, LibraryId, NoteBody, NoteTitle, UserId,
+};
 use beholder_protocol::http::ImportInfo;
 use beholder_protocol::{Command, CommandKind, RejectReason, ServerMsg, SessionToken};
 use library_file::{FileError, FileFormat, Parsed};
@@ -390,6 +393,20 @@ impl Client {
             (label, parsed)
         });
         self.upsert(items, replace)
+    }
+
+    pub fn encounter_as(
+        &self,
+        campaign: CampaignId,
+        encounter: EncounterId,
+        player: UserId,
+    ) -> Result<Option<Encounter>, ClientError> {
+        Ok(http::Http::new(&self.shared.server_url).encounter_as(
+            &self.shared.token,
+            campaign,
+            encounter,
+            player,
+        )?)
     }
 
     pub fn library_imports(&self) -> Result<Vec<ImportInfo>, ClientError> {

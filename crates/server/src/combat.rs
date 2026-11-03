@@ -183,6 +183,50 @@ pub fn campaign_encounters(
         .collect()
 }
 
+pub enum AsPlayer {
+    Forbidden,
+    NotFound,
+    View(Option<Encounter>),
+}
+
+pub fn encounter_as(
+    conn: &mut Connection,
+    campaign_id: CampaignId,
+    requester: beholder_core::UserId,
+    id: EncounterId,
+    player: beholder_core::UserId,
+) -> Result<AsPlayer, DbError> {
+    let tx = conn.transaction()?;
+    let Some(role) = crate::campaigns::role_of(&tx, campaign_id, requester)? else {
+        return Ok(AsPlayer::NotFound);
+    };
+    if !permissions::can_preview_as(Viewer {
+        user: requester,
+        role,
+    }) {
+        return Ok(AsPlayer::Forbidden);
+    }
+    let Some(Role::Player) = crate::campaigns::role_of(&tx, campaign_id, player)? else {
+        return Ok(AsPlayer::NotFound);
+    };
+    let Some(settings) = crate::campaigns::settings_of(&tx, campaign_id)? else {
+        return Ok(AsPlayer::NotFound);
+    };
+    let found = campaign_encounters(&tx, campaign_id)?
+        .into_iter()
+        .find(|e| e.id == id);
+    let Some(e) = found else {
+        return Ok(AsPlayer::NotFound);
+    };
+    let viewer = Viewer {
+        user: player,
+        role: Role::Player,
+    };
+    Ok(AsPlayer::View(permissions::encounter_for(
+        viewer, &settings, &e,
+    )))
+}
+
 pub fn encounter(conn: &Connection, id: EncounterId) -> Result<Option<Encounter>, DbError> {
     load(conn, id)
 }

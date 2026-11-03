@@ -253,6 +253,23 @@ async fn encounters_are_filtered_and_tokens_move() {
         Some((token, 7)),
         "the drag preview is relayed"
     );
+    let (d, b) = (dm.clone(), bran.clone());
+    let (as_dm, as_bran) = tokio::task::spawn_blocking(move || {
+        (
+            d.encounter_as(campaign, fight, bran_id),
+            b.encounter_as(campaign, fight, bran_id),
+        )
+    })
+    .await
+    .unwrap();
+    let previewed = as_dm.unwrap().expect("the running encounter reaches Bran");
+    let theirs = campaign_of(&bran).unwrap().encounters[0].clone();
+    assert_eq!(
+        (previewed.combatants.len(), previewed.shapes.len()),
+        (theirs.combatants.len(), theirs.shapes.len()),
+        "the DM's preview matches what Bran received"
+    );
+    assert!(as_bran.is_err(), "players can't preview others");
     for c in [&dm, &ilsa, &bran] {
         c.shutdown();
     }

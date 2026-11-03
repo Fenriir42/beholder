@@ -616,6 +616,21 @@ pub async fn library_imports(shell: State<'_, Shell>) -> Result<Vec<ImportInfo>,
 }
 
 #[tauri::command(rename_all = "snake_case")]
+pub async fn encounter_as(
+    shell: State<'_, Shell>,
+    campaign_id: String,
+    encounter: beholder_core::EncounterId,
+    player: beholder_core::UserId,
+) -> Result<Option<beholder_core::combat::Encounter>, IpcError> {
+    let campaign = self::campaign_id(&campaign_id)?;
+    let client = shell.session()?.client;
+    tauri::async_runtime::spawn_blocking(move || client.encounter_as(campaign, encounter, player))
+        .await
+        .map_err(|_| IpcError::Server)?
+        .map_err(client_error)
+}
+
+#[tauri::command(rename_all = "snake_case")]
 pub fn library_undo_import(shell: State<'_, Shell>, import: ImportId) -> Result<(), IpcError> {
     shell
         .session()?

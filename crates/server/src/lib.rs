@@ -100,6 +100,10 @@ pub fn router(state: AppState) -> Router {
         .route("/api/compendium/{sha256}", get(http::compendium_bundle))
         .route("/api/library/changes/{after}", get(http::library_changes))
         .route("/api/library/imports", get(http::library_imports))
+        .route(
+            "/api/campaigns/{campaign}/encounters/{encounter}/as/{player}",
+            get(http::encounter_as),
+        )
         .with_state(state)
 }
 

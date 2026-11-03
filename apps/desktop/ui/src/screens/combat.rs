@@ -3,7 +3,9 @@ use beholder_core::character::HitPoints;
 use beholder_core::combat::{Combatant, Condition, Encounter, EncounterOp, Health, Source};
 use beholder_core::compendium::{Hit, Kind, SearchQuery};
 use beholder_core::dice::{DiceOp, Expr, Visibility};
-use beholder_core::{CampaignId, CombatVisibility, CombatantId, CommandId, EncounterId, Role};
+use beholder_core::{
+    CampaignId, CombatVisibility, CombatantId, CommandId, EncounterId, Role, UserId,
+};
 use leptos::prelude::*;
 use leptos::task::spawn_local_scoped;
 use serde::de::DeserializeOwned;
@@ -19,6 +21,13 @@ use crate::{icons, ipc};
 struct OpArgs {
     campaign_id: String,
     op: EncounterOp,
+}
+
+#[derive(serde::Serialize)]
+struct AsArgs {
+    campaign_id: String,
+    encounter: EncounterId,
+    player: UserId,
 }
 
 #[derive(serde::Serialize)]
@@ -108,7 +117,10 @@ fn parse_num(ev: &leptos::ev::Event) -> Option<i16> {
 struct Tracker {
     campaign: CampaignId,
     encounter: EncounterId,
-    is_dm: Memo<bool>,
+    source: Signal<Option<Encounter>>,
+    is_dm: Signal<bool>,
+    me: Signal<Option<UserId>>,
+    interactive: bool,
     pending: RwSignal<Vec<(CommandId, EncounterId, CombatantId)>>,
     acting: RwSignal<Option<CombatantId>>,
     follow: RwSignal<bool>,
@@ -116,17 +128,19 @@ struct Tracker {
 
 impl Tracker {
     fn send(&self, op: EncounterOp) {
-        send(self.campaign, op);
+        if self.interactive {
+            send(self.campaign, op);
+        }
     }
 
     fn own(&self, ctx: AppCtx, c: &Combatant) -> bool {
         let Source::Character(ch) = c.source else {
             return false;
         };
+        let Some(me) = self.me.get_untracked() else {
+            return false;
+        };
         ctx.view.with_untracked(|v| {
-            let Some(me) = v.user.as_ref().map(|u| u.id) else {
-                return false;
-            };
             v.campaigns
                 .iter()
                 .find(|x| x.campaign.id == self.campaign)
@@ -141,6 +155,9 @@ impl Tracker {
     }
 
     fn roll_initiative(&self, c: Combatant, visibility: Visibility) {
+        if !self.interactive {
+            return;
+        }
         let ctx = use_app();
         let i18n = use_i18n();
         let t = *self;
@@ -220,6 +237,40 @@ pub fn Combat(id: CampaignId) -> impl IntoView {
         }
     });
     let acting = RwSignal::new(None::<CombatantId>);
+    let preview_as = RwSignal::new(None::<UserId>);
+    let previewed = RwSignal::new(None::<Option<Encounter>>);
+    let players = Memo::new(move |_| {
+        ctx.view.with(|v| {
+            v.campaigns
+                .iter()
+                .find(|c| c.campaign.id == id)
+                .map(|c| {
+                    c.campaign
+                        .members
+                        .iter()
+                        .filter(|m| m.role == Role::Player)
+                        .map(|m| (m.user_id, m.display_name.as_str().to_owned()))
+                        .collect::<Vec<_>>()
+                })
+                .unwrap_or_default()
+        })
+    });
+    let asked = StoredValue::new(0_u32);
+    let watched = Memo::new(move |_| {
+        ctx.view.with(|v| {
+            v.campaigns
+                .iter()
+                .find(|c| c.campaign.id == id)
+                .map(|c| (c.campaign.encounters.clone(), c.campaign.settings))
+        })
+    });
+    let preview_state = Memo::new(move |_| {
+        previewed.with(|p| match p {
+            None => 0_u8,
+            Some(None) => 1,
+            Some(Some(_)) => 2,
+        })
+    });
     let follow = RwSignal::new(false);
     let selected = RwSignal::new(None::<EncounterId>);
     let current = Memo::new(move |_| {
@@ -265,6 +316,53 @@ pub fn Combat(id: CampaignId) -> impl IntoView {
         }
     });
 
+    Effect::new(move |_| {
+        let (Some(player), Some(eid)) = (preview_as.get(), current.get()) else {
+            previewed.set(None);
+            return;
+        };
+        watched.track();
+        asked.update_value(|n| *n += 1);
+        let ticket = asked.get_value();
+        spawn_local_scoped(async move {
+            let args = AsArgs {
+                campaign_id: id.to_string(),
+                encounter: eid,
+                player,
+            };
+            let result = ipc::call::<Option<Encounter>>("encounter_as", args).await;
+            if asked.try_get_value() != Some(ticket) {
+                return;
+            }
+            match result {
+                Ok(e) => {
+                    previewed.try_set(Some(e));
+                }
+                Err(e) => {
+                    ctx.notify(error_key(e));
+                    preview_as.try_set(None);
+                }
+            }
+        });
+    });
+    let preview_picker = move || {
+        let list = players.get();
+        (!list.is_empty()).then(|| {
+            let options = list
+                .into_iter()
+                .map(|(uid, name)| view! { <option value=uid.to_string()>{name}</option> })
+                .collect_view();
+            view! {
+                <label class="filter"><span>{move || i18n.t("preview-as")}</span>
+                    <select prop:value=move || preview_as.get().map(|u| u.to_string()).unwrap_or_default()
+                        on:change=move |ev| preview_as.set(event_target_value(&ev).parse().ok().map(UserId))>
+                        <option value="">{move || i18n.t("preview-dm")}</option>
+                        {options}
+                    </select>
+                </label>
+            }
+        })
+    };
     let new_name = RwSignal::new(String::new());
     let create = move |ev: leptos::ev::SubmitEvent| {
         ev.prevent_default();
@@ -305,6 +403,7 @@ pub fn Combat(id: CampaignId) -> impl IntoView {
             {move || is_dm.get().then(|| view! {
                 <div class="toolbar">
                     {move || (!encounters.with(Vec::is_empty)).then(picker)}
+                    {preview_picker}
                     <form class="toolbar" on:submit=create>
                         <input type="text" required maxlength="80" bind:value=new_name
                             placeholder=move || i18n.t("combat-new-name") aria-label=move || i18n.t("combat-new-name")/>
@@ -312,9 +411,44 @@ pub fn Combat(id: CampaignId) -> impl IntoView {
                     </form>
                 </div>
             })}
-            {move || match current.get() {
-                Some(eid) => {
-                    let t = Tracker { campaign: id, encounter: eid, is_dm, pending, acting, follow };
+            {move || match (current.get(), preview_as.get()) {
+                (Some(eid), Some(player)) => {
+                    let source = Signal::derive(move || previewed.get().flatten());
+                    let t = Tracker {
+                        campaign: id,
+                        encounter: eid,
+                        source,
+                        is_dm: Signal::stored(false),
+                        me: Signal::stored(Some(player)),
+                        interactive: false,
+                        pending,
+                        acting,
+                        follow,
+                    };
+                    let m = MapCtx {
+                        campaign: id,
+                        encounter: source,
+                        is_dm: Signal::stored(false),
+                        me: Signal::stored(Some(player)),
+                        interactive: false,
+                        roller,
+                        acting: None,
+                    };
+                    view! {
+                        <p class="preview-banner" role="status">{move || i18n.t("preview-banner")}</p>
+                        {move || match preview_state.get() {
+                            0 => view! { <p class="muted">{move || i18n.t("preview-loading")}</p> }.into_any(),
+                            1 => view! { <p class="empty">{move || i18n.t("combat-none")}</p> }.into_any(),
+                            _ => view! {
+                                <div class="combat-layout">
+                                    <div class="tracker-col"><TrackerView t=t/></div>
+                                    <BattleMap m=m/>
+                                </div>
+                            }.into_any(),
+                        }}
+                    }.into_any()
+                }
+                (Some(eid), None) => {
                     let encounter = Memo::new(move |_| ctx.view.with(|v| {
                         v.campaigns
                             .iter()
@@ -322,6 +456,17 @@ pub fn Combat(id: CampaignId) -> impl IntoView {
                             .and_then(|c| c.campaign.encounters.iter().find(|e| e.id == eid))
                             .cloned()
                     }));
+                    let t = Tracker {
+                        campaign: id,
+                        encounter: eid,
+                        source: encounter.into(),
+                        is_dm: is_dm.into(),
+                        me: me.into(),
+                        interactive: true,
+                        pending,
+                        acting,
+                        follow,
+                    };
                     let m = MapCtx {
                         campaign: id,
                         encounter: encounter.into(),
@@ -345,7 +490,7 @@ pub fn Combat(id: CampaignId) -> impl IntoView {
                         {move || actor.with(Option::is_some).then(|| view! { <ActingPanel campaign=id combatant=actor on_close=close/> })}
                     }.into_any()
                 }
-                None => view! {
+                (None, _) => view! {
                     <p class="empty">{move || if is_dm.get() { i18n.t("combat-none-dm") } else { i18n.t("combat-none") }}</p>
                 }.into_any(),
             }}
@@ -358,15 +503,11 @@ fn TrackerView(t: Tracker) -> impl IntoView {
     let ctx = use_app();
     let i18n = use_i18n();
     let encounter = Memo::new(move |_| {
-        ctx.view.with(|v| {
-            v.campaigns
-                .iter()
-                .find(|c| c.campaign.id == t.campaign)
-                .and_then(|c| c.campaign.encounters.iter().find(|e| e.id == t.encounter))
-                .map(|e| Encounter {
-                    shapes: Vec::new(),
-                    ..e.clone()
-                })
+        t.source.with(|e| {
+            e.as_ref().map(|e| Encounter {
+                shapes: Vec::new(),
+                ..e.clone()
+            })
         })
     });
     let visibility = Memo::new(move |_| {

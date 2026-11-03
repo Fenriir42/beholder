@@ -415,3 +415,4 @@ button.ability-chip, button.stat { height: auto; padding: var(--space-2); flex-d
   .abilities-strip { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .play-panel { position: static; max-height: none; }
 }
+.preview-banner { margin: 0; padding: var(--space-2) var(--space-3); border: 1px dashed var(--accent); border-radius: var(--radius-card); color: var(--text); }

@@ -90,6 +90,7 @@ fn main() {
             commands::roll_dice,
             commands::encounter_command,
             commands::new_ids,
+            commands::encounter_as,
             commands::token_preview,
             commands::character_create,
             commands::character_export,
