@@ -29,6 +29,14 @@ Type an initiative value or click the die next to it. The roll goes through the 
 
 **Start combat** begins round 1 with the first combatant. **Next turn** and **Previous turn** move through the order, and **Reset rounds** goes back to before the fight. A condition with a number of rounds counts down at the end of its creature's turn and disappears at zero. The current turn is marked with ▶ and "their turn", not just a colour.
 
+### Playing a combatant
+
+Click a combatant's name in the turn order to open its panel on the right, or tick **Follow turn** to have the panel switch to whoever's turn it is. While the panel is open, clicking a linked token on the map switches to that combatant.
+
+- **Monster:** its HP and AC, a button per attack (**+N To hit**, then the damage dice), save DCs (with "half on a success" when the text says so), and the full stat block below. After a natural 20, **Roll critical damage** doubles the dice. Monster rolls are to the DM by default; untick the box to show them to the table.
+- **Character:** the character's play sheet: saves, skills, attacks, spells and slots. You can already edit every sheet.
+- **Custom combatant:** HP, AC and a box to type any roll.
+
 ### What players see
 
 The campaign rule chosen in **Settings** decides how much of the turn order players get:
@@ -41,7 +49,11 @@ The server applies this rule before sending anything, so the hidden values never
 
 ### The map
 
-- **Wall** and **Zone**: pick the tool, then click a cell to place one. The tool stays on until you pick **Select**.
+- **Wall**, **Zone** and **Hazard**, plus the **Terrain** and **Object** lists: pick one, then click a cell to place it. The tool stays on until you pick **Select**.
+  - Terrain: difficult terrain, water, half, three-quarters or total cover, lightly or heavily obscured. Each has its own pattern and its name written on it.
+  - Hazard: a striped zone with a warning sign. Write its effect in the note, for example `DC 13 Dex, 2d6 fire`: the DC shows as a chip and the dice become roll buttons. Hide it and it becomes a trap only you see.
+  - Objects: doors (closed, open or locked, with **Open the door** / **Close the door** in the editor), chests, levers, statues and light sources.
+- **Area template:** pick circle, cone, line or cube and click the origin cell. Set the size in feet and turn cones and lines with ⟲ and ⟳ (15° at a time). The covered cells light up and the panel lists the tokens inside. A cell counts when its centre is in the area.
 - **Place a token for…** lists the combatants without a token. Pick one and click a cell. A character's token gets its player's colour and belongs to that player.
 - **Select** a shape to change its label, width, height or colour, hide it from the players, or remove it. Drag any shape to move it.
 - **Width** and **Height** set the grid size, up to 200 by 200 cells.
@@ -49,8 +61,16 @@ The server applies this rule before sending anything, so the hidden values never
 
 Hidden shapes look faded with a dashed outline for the DM. Players never receive them.
 
+Every shape can carry a **note** that players can read when they click it.
+
+### Preview as a player
+
+In **View as**, pick a player to see the combat page exactly as the server sends it to them: only the running encounter, no hidden shapes or combatants, monster health according to the campaign rule. The preview is read-only and needs a connection. Pick **Myself (DM)** to go back.
+
 ## For players
 
-Once the DM runs an encounter, you see its turn order, if the campaign shows it, and its map. Your own token has a thick outline. Drag it to move it: by default the others see it when you let go, or as you drag if the DM turned on live moves. You can type or roll the initiative of your own character. Everything else is the DM's.
+Once the DM runs an encounter, you see its turn order, if the campaign shows it, and its map. Your own token has a thick outline. Drag it to move it: by default the others see it when you let go, or as you drag if the DM turned on live moves. You can type or roll the initiative of your own character, and click your character's name to open your sheet next to the map.
+
+Click any shape to read its name and note, and roll the dice in a hazard's note. To aim a spell, pick a shape in **Area template**, click the cell it starts from, then set its size and direction. You can move, change and remove your own templates (up to 10) while the map isn't locked. Everything else is the DM's.
 
 Your token shows your character's initials, so you can find it without relying on colour. Use **+** and **−** to zoom the map.

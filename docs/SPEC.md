@@ -196,7 +196,12 @@ The goal is a full compendium without typing everything by hand. The app bundles
 - **Each player has their own colour**, used for their character's token, so everyone recognises whose token is whose. Colours come from a fixed palette in the design tokens, and a token also shows a label (the character's initials or name), so colour is never the only cue.
 - Tokens can be linked to tracker combatants: adding a combatant can place its token, and hiding or revealing one does the same to the other.
 - Every change (add, move, hide, reveal, remove) is a command like any other: queued offline, deduplicated, and broadcast as events, so moves stay consistent on unstable connections.
-- Later: background images under the grid, fog of war, measuring and area templates, token images.
+- **Terrain and hazards:** difficult terrain, water, half, three-quarters and total cover, and lightly or heavily obscured areas, each drawn with its own pattern and a text tag. Hazard zones carry a note that players can read (for example "DC 13 Dex, 2d6 fire"), and the DC and dice in it become roll buttons. A hidden hazard is a trap only the DM sees.
+- **Objects:** doors (open, closed or locked, toggled by the DM), chests, levers, statues and light sources, each a distinct glyph with a label.
+- **Area templates:** circle, cone, line and cube, sized in feet and rotated in 15° steps. They highlight the cells they cover (a cell counts when its centre is inside) and list the tokens they touch. The DM places any template. Players may place, move, edit and remove their own (up to 10 each) while the encounter runs and the map isn't locked.
+- **Acting panel:** the DM opens any combatant, or follows the current turn, to play it. A monster shows its stat block with to-hit, damage and save buttons read from the text, a character shows its play sheet, and a custom combatant gets a free roll box. Monster rolls default to "to the DM".
+- **Player preview:** the DM can view the combat page as any player. The server builds that view with the same filter it uses for the player, so the preview never differs from what the player gets, and it is read-only.
+- Later: background images under the grid, fog of war, measuring, token images.
 
 ### 5.5 Dice
 

@@ -37,7 +37,7 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 
 - **Fiches de personnage (phase 4) :** personnages avec une fiche assistée (modificateurs, sauvegardes, compétences, CA et emplacements de sorts calculés, multiclassage et magie de pacte compris), liens vers le compendium, modifications par le propriétaire et le MJ, et résumés pour le reste du groupe. Export et import en fichiers JSON. Reste à venir : une montée de niveau guidée facultative.
 - **Dés (phase 5) :** jets faits par le serveur depuis la fiche (sauvegardes, compétences, tests, initiative, attaques, dégâts et soins à tout niveau d'emplacement, avantage, dégâts critiques) ou tapés à la main, journal partagé des 50 derniers jets, jets pour le MJ et jets secrets du MJ, et saisie de dés physiques.
-- **Suivi de combat et carte de combat (phase 6) :** rencontres préparées à l'avance et jouées une à la fois, combattants issus du groupe, du compendium ou tapés à la main, initiative tapée ou lancée via le journal des dés, tours et rounds, dégâts et soins, états qui se décomptent, concentration, et santé des monstres exacte, vague ou masquée pour les joueurs. Une carte à grille carrée avec murs, zones et pions : le MJ contrôle tout et peut cacher n'importe quelle forme, les joueurs font glisser leur propre pion, et le MJ peut verrouiller la carte ou montrer les déplacements en direct.
+- **Suivi de combat et carte de combat (phase 6) :** rencontres préparées à l'avance et jouées une à la fois, combattants issus du groupe, du compendium ou tapés à la main, initiative tapée ou lancée via le journal des dés, tours et rounds, dégâts et soins, états qui se décomptent, concentration, et santé des monstres exacte, vague ou masquée pour les joueurs. Une carte à grille carrée avec murs, zones et pions : le MJ contrôle tout et peut cacher n'importe quelle forme, les joueurs font glisser leur propre pion, et le MJ peut verrouiller la carte ou montrer les déplacements en direct. Terrains (difficile, eau, abri, visibilité), dangers avec des notes lisibles et des jets, portes et objets, et gabarits de zone (cercle, cône, ligne, cube) que les joueurs peuvent aussi poser pour leurs sorts. Un panneau permet au MJ de jouer n'importe quel monstre depuis son bloc de statistiques ou n'importe quel personnage depuis sa fiche, et le MJ peut voir la page de combat comme n'importe quel joueur.
 
 ## Prévu
 
@@ -46,7 +46,7 @@ Beholder est construit par phases (voir `docs/SPEC.md`). Cette page est mise à 
 
 
 ### Phase 6 : suivi de combat et carte de combat
-- Plus tard pour la carte : images de fond, brouillard de guerre, mesure et gabarits de zone, images de pions.
+- Plus tard pour la carte : images de fond, brouillard de guerre, mesure, images de pions.
 
 ### Phase 7 : connexion Discord
 - Se connecter avec Discord et le lier à un compte existant.

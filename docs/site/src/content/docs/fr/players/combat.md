@@ -29,6 +29,14 @@ Tapez une valeur d'initiative ou cliquez sur le dé à côté. Le jet passe par 
 
 **Commencer le combat** ouvre le round 1 avec le premier combattant. **Tour suivant** et **Tour précédent** parcourent l'ordre, et **Remettre à zéro** revient à avant le combat. Un état avec un nombre de rounds diminue à la fin du tour de sa créature et disparaît à zéro. Le tour en cours est marqué par ▶ et « son tour », pas seulement par une couleur.
 
+### Jouer un combattant
+
+Cliquez sur le nom d'un combattant dans l'ordre des tours pour ouvrir son panneau à droite, ou cochez **Suivre le tour** pour que le panneau passe à celui dont c'est le tour. Tant que le panneau est ouvert, cliquer sur un pion lié sur la carte passe à ce combattant.
+
+- **Monstre :** ses PV et sa CA, un bouton par attaque (**+N Toucher**, puis les dés de dégâts), les DD de sauvegarde (avec « moitié en cas de réussite » quand le texte le dit), et le bloc de statistiques complet en dessous. Après un 20 naturel, **Lancer les dégâts critiques** double les dés. Les jets de monstre sont pour le MJ par défaut ; décochez la case pour les montrer à la table.
+- **Personnage :** la fiche de jeu du personnage : sauvegardes, compétences, attaques, sorts et emplacements. Vous pouvez déjà modifier toutes les fiches.
+- **Combattant personnalisé :** PV, CA et une case pour taper n'importe quel jet.
+
 ### Ce que voient les joueurs
 
 La règle de campagne choisie dans **Réglages** décide de ce que les joueurs reçoivent de l'ordre des tours :
@@ -41,7 +49,11 @@ Le serveur applique cette règle avant d'envoyer quoi que ce soit : les valeurs 
 
 ### La carte
 
-- **Mur** et **Zone** : choisissez l'outil, puis cliquez sur une case pour en poser un. L'outil reste actif jusqu'à ce que vous choisissiez **Sélection**.
+- **Mur**, **Zone** et **Danger**, plus les listes **Terrain** et **Objet** : choisissez-en un, puis cliquez sur une case pour le poser. L'outil reste actif jusqu'à ce que vous choisissiez **Sélection**.
+  - Terrain : terrain difficile, eau, abri partiel, important ou total, visibilité réduite ou nulle. Chacun a son motif et son nom écrit dessus.
+  - Danger : une zone rayée avec un panneau d'avertissement. Écrivez son effet dans la note, par exemple `DD 13 Dex, 2d6 feu` : le DD s'affiche en pastille et les dés deviennent des boutons de jet. Cachez-le et il devient un piège que vous seul voyez.
+  - Objets : portes (fermée, ouverte ou verrouillée, avec **Ouvrir la porte** / **Fermer la porte** dans l'éditeur), coffres, leviers, statues et sources de lumière.
+- **Gabarit de zone :** choisissez cercle, cône, ligne ou cube et cliquez sur la case d'origine. Réglez la taille en pieds et tournez cônes et lignes avec ⟲ et ⟳ (15° à la fois). Les cases touchées s'éclairent et le panneau liste les pions à l'intérieur. Une case compte quand son centre est dans la zone.
 - **Placer un pion pour…** liste les combattants sans pion. Choisissez-en un et cliquez sur une case. Le pion d'un personnage prend la couleur de son joueur et lui appartient.
 - **Sélection** : choisissez une forme pour changer son étiquette, sa largeur, sa hauteur ou sa couleur, la cacher aux joueurs ou la retirer. Faites glisser n'importe quelle forme pour la déplacer.
 - **Largeur** et **Hauteur** fixent la taille de la grille, jusqu'à 200 cases sur 200.
@@ -49,8 +61,16 @@ Le serveur applique cette règle avant d'envoyer quoi que ce soit : les valeurs 
 
 Les formes cachées apparaissent pâles et en pointillés pour le MJ. Les joueurs ne les reçoivent jamais.
 
+Chaque forme peut porter une **note** que les joueurs lisent en cliquant dessus.
+
+### Aperçu en tant que joueur
+
+Dans **Voir comme**, choisissez un joueur pour voir la page de combat exactement comme le serveur la lui envoie : seulement la rencontre en cours, sans formes ni combattants cachés, avec la santé des monstres selon la règle de la campagne. L'aperçu est en lecture seule et demande une connexion. Choisissez **Moi (MJ)** pour revenir.
+
 ## Pour les joueurs
 
-Quand le MJ lance une rencontre, vous voyez son ordre des tours, si la campagne le montre, et sa carte. Votre pion a un contour épais. Faites-le glisser pour le déplacer : par défaut les autres le voient quand vous le lâchez, ou pendant le glisser si le MJ a activé les déplacements en direct. Vous pouvez taper ou lancer l'initiative de votre personnage. Tout le reste appartient au MJ.
+Quand le MJ lance une rencontre, vous voyez son ordre des tours, si la campagne le montre, et sa carte. Votre pion a un contour épais. Faites-le glisser pour le déplacer : par défaut les autres le voient quand vous le lâchez, ou pendant le glisser si le MJ a activé les déplacements en direct. Vous pouvez taper ou lancer l'initiative de votre personnage, et cliquer sur son nom pour ouvrir votre fiche à côté de la carte.
+
+Cliquez sur n'importe quelle forme pour lire son nom et sa note, et lancer les dés de la note d'un danger. Pour viser un sort, choisissez une forme dans **Gabarit de zone**, cliquez sur la case de départ, puis réglez sa taille et sa direction. Vous pouvez déplacer, modifier et retirer vos propres gabarits (jusqu'à 10) tant que la carte n'est pas verrouillée. Tout le reste appartient au MJ.
 
 Votre pion porte les initiales de votre personnage, pour le retrouver sans compter sur la couleur. Utilisez **+** et **−** pour zoomer sur la carte.
