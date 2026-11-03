@@ -37,7 +37,7 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 
 - **Character sheets (Phase 4):** characters with an assisted sheet (computed modifiers, saves, skills, AC, spell slots including multiclass and pact magic), compendium links, edits by the owner and the DM, and summaries for the rest of the party. Export and import as JSON files. Still to come: an optional guided level-up.
 - **Dice (Phase 5):** rolls made on the server from the sheet (saves, skills, checks, initiative, attacks, damage and healing at any slot level, advantage, critical damage) or typed by hand, a shared log of the last 50 rolls, rolls to the DM and secret DM rolls, and physical dice entry.
-- **Combat tracker and battle map (Phase 6):** encounters prepared ahead and run one at a time, combatants from the party, the compendium or typed in, initiative typed or rolled through the dice log, turns and rounds, damage and healing, conditions that count down, concentration, and exact, vague or hidden monster health for players. A square-grid map with walls, zones and tokens: the DM controls everything and can hide any shape, players drag their own token, and the DM can lock the map or show moves live while dragging. Terrain (difficult, water, cover, obscured), hazards with readable, rollable notes, doors and objects, and area templates (circle, cone, line, cube) that players can also place for their spells. An acting panel lets the DM play any monster from its stat block or any character from its sheet, and the DM can preview the combat page as any player.
+- **Combat tracker and battle map (Phase 6):** encounters prepared ahead and run one at a time, combatants from the party, the compendium or typed in, initiative typed or rolled through the dice log, turns and rounds, damage and healing, conditions that count down, concentration, and exact, vague or hidden monster health for players. A square-grid map with walls, zones and tokens: the DM controls everything and can hide any shape, players drag their own token, and the DM can lock the map or show moves live while dragging. Terrain (difficult, water, cover, obscured), hazards with readable, rollable notes, doors and objects, and area templates (circle, cone, line, cube) that players can also place for their spells. An acting panel lets the DM play any monster from its stat block or any character from its sheet, and the DM can preview the combat page as any player. Spells and attacks are aimed at targets and roll only the caster's side, the DM applies damage or healing (full, half or double) with one click, characters' HP stays in sync with their sheets, and each combatant's action, bonus action, reaction and movement are tracked, with movement counted from token drags.
 
 ## Planned
 
@@ -71,7 +71,7 @@ Beholder is built in phases (see `docs/SPEC.md`). This page is updated whenever 
 - Converted `dnd-data` descriptions get their tables, headings and lists back where the layout is recognised; the rest stays flattened text. Monster stat blocks in those files have no AC, hit points or ability scores.
 - The `dnd-data` files hold almost no subclass rules: only the 12 Free Basic Rules subclasses become subclass entries.
 - Hiding single entries works for the server library only, not for the SRD or Open5e books.
-- A character's combatant copies the sheet's HP when added; damage in the combat tracker doesn't change the sheet.
+- After the protocol 10 update, rolls stored in the older format drop out of the dice log once.
 
 ## Sizes
 

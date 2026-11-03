@@ -37,6 +37,16 @@ Cliquez sur le nom d'un combattant dans l'ordre des tours pour ouvrir son pannea
 - **Personnage :** la fiche de jeu du personnage : sauvegardes, compétences, attaques, sorts et emplacements. Vous pouvez déjà modifier toutes les fiches.
 - **Combattant personnalisé :** PV, CA et une case pour taper n'importe quel jet.
 
+### Cibles et dégâts
+
+Quand vous lancez un sort ou attaquez, choisissez d'abord les **Cibles** (n'importe quel combattant de la rencontre en cours). Seul votre côté est lancé : un jet d'attaque par cible, puis **Lancer les dégâts** sur le résultat (ou **Lancer les dégâts critiques** après un 20 naturel), ou les dégâts une seule fois pour un sort à jet de sauvegarde, avec le DD dans l'intitulé. Les cibles lancent leurs propres sauvegardes.
+
+Le MJ voit **Appliquer…** sur chaque jet de dégâts ou de soins, dans la carte du résultat et dans le journal des dés. Les cibles du jet sont déjà cochées ; choisissez **Entier**, **Moitié** ou **Double** pour chaque combattant (sauvegarde, résistance ou vulnérabilité), puis **Appliquer N dégâts** ou **Soigner N**. Rien n'est appliqué avant que le MJ clique. Les dégâts d'un personnage vont sur sa fiche, et l'ordre des tours affiche toujours les PV d'un personnage depuis sa fiche.
+
+### Économie d'action
+
+Chaque ligne affiche **Action**, **Action bonus** et **Réaction** (✓ quand elles sont utilisées) et la distance parcourue face à la vitesse de la créature. Elles se réinitialisent au début du tour de la créature : une réaction reste dépensée jusque-là. Déplacer le pion de la créature dont c'est le tour ajoute la distance automatiquement (1,5 m, soit 5 ft, par case, diagonales comprises) ; corrigez avec **−5** et **+5**. Les joueurs marquent leur personnage, le MJ marque n'importe qui, et lancer un sort ou attaquer depuis la fiche marque l'action correspondante selon le temps d'incantation.
+
 ### Ce que voient les joueurs
 
 La règle de campagne choisie dans **Réglages** décide de ce que les joueurs reçoivent de l'ordre des tours :

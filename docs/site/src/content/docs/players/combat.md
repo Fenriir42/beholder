@@ -37,6 +37,16 @@ Click a combatant's name in the turn order to open its panel on the right, or ti
 - **Character:** the character's play sheet: saves, skills, attacks, spells and slots. You can already edit every sheet.
 - **Custom combatant:** HP, AC and a box to type any roll.
 
+### Targets and damage
+
+When you cast a spell or attack, pick the **Targets** first (any combatant in the running encounter). Only your side is rolled: an attack roll for each target, then **Roll damage** on the result (or **Roll critical damage** after a natural 20), or the damage once for a spell with a saving throw, with the DC in the label. Targets roll their own saves.
+
+The DM sees **Apply…** on every damage or healing roll, in the result card and in the dice log. The roll's targets are already ticked; choose **Full**, **Half** or **Double** per combatant (for a save, resistance or vulnerability), then **Apply N damage** or **Heal N**. Nothing is applied until the DM clicks. Damage to a character goes to its sheet, and the turn order always shows a character's HP from the sheet.
+
+### Turn economy
+
+Each row shows **Action**, **Bonus action** and **Reaction** (✓ when used) and the feet moved against the creature's speed. They reset at the start of the creature's turn, so a reaction stays spent until then. Moving the token of the creature whose turn it is adds the distance automatically (5 ft per square, diagonals too); use **−5** and **+5** to correct it. Players mark their own character, the DM marks anyone, and casting or attacking from the sheet marks the matching action by the spell's casting time.
+
 ### What players see
 
 The campaign rule chosen in **Settings** decides how much of the turn order players get:
