@@ -38,7 +38,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: server
-          image: ghcr.io/fenriir42/beholder-server:0.1.4
+          image: ghcr.io/fenriir42/beholder-server:0.1.5
           ports:
             - name: http
               containerPort: 8080
@@ -116,7 +116,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: backup
-              image: ghcr.io/fenriir42/beholder-server:0.1.4
+              image: ghcr.io/fenriir42/beholder-server:0.1.5
               args: ["backup", "14"]
               resources:
                 requests:

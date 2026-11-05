@@ -275,7 +275,7 @@ dependencies = [
 
 [[package]]
 name = "beholder-desktop"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "beholder-client-core",
  "beholder-core",
@@ -341,7 +341,7 @@ dependencies = [
 
 [[package]]
 name = "beholder-server"
-version = "0.1.4"
+version = "0.1.5"
 dependencies = [
  "anyhow",
  "argon2",

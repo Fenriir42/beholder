@@ -51,7 +51,7 @@ This is what runs in the `julien` sandbox of the cluster repo (split there into 
 
 ## Update
 
-Change the image tag (`0.1.4`) in both places in `beholder.yml` and merge. The release workflow tags images without the `v`.
+Change the image tag (`0.1.5`) in both places in `beholder.yml` and merge. The release workflow tags images without the `v`.
 
 ## Admin commands
 
