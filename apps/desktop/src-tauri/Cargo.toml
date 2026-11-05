@@ -1,7 +1,7 @@
 [package]
 name = "beholder-desktop"
 description = "Beholder desktop shell: bridges the UI to client-core through Tauri commands and events."
-version = "0.1.3"
+version = "0.1.4"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
