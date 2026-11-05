@@ -42,7 +42,7 @@ It uses at most 384 Mi of memory and 0.7 CPU of the namespace quota, and only 38
 
 ## Update
 
-Change the image tag (`0.1.0`) in both places in `beholder.yml` and merge. The release workflow tags images without the `v`.
+Change the image tag (`0.1.1`) in both places in `beholder.yml` and merge. The release workflow tags images without the `v`.
 
 ## Admin commands
 
