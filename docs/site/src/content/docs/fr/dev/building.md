@@ -84,6 +84,6 @@ La documentation est un site [Astro Starlight](https://starlight.astro.build/) d
 ```sh
 cd docs/site
 npm install
-npm run dev      # http://localhost:4321
+npm run dev      # http://localhost:4321/docs/
 npm run build    # site statique dans docs/site/dist, avec recherche hors ligne
 ```

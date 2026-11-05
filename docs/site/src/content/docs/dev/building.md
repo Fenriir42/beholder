@@ -84,6 +84,6 @@ The docs are an [Astro Starlight](https://starlight.astro.build/) site in `docs/
 ```sh
 cd docs/site
 npm install
-npm run dev      # http://localhost:4321
+npm run dev      # http://localhost:4321/docs/
 npm run build    # static site in docs/site/dist, with offline search
 ```
