@@ -1,7 +1,7 @@
 [package]
 name = "beholder-server"
 description = "Beholder server: auth, campaigns, event log, sync, images."
-version = "0.1.1"
+version = "0.1.2"
 edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
@@ -37,6 +37,7 @@ ureq = { version = "3.4.2", default-features = false, features = ["rustls"] }
 futures-util.workspace = true
 tokio-tungstenite.workspace = true
 tempfile.workspace = true
+tower = { version = "0.5.3", default-features = false, features = ["util"] }
 
 [lints]
 workspace = true

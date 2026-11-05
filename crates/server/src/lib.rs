@@ -102,6 +102,8 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/", get(docs::home))
         .route("/docs", get(docs::page))
+        // A catch-all never matches an empty rest, so /docs/ needs its own route.
+        .route("/docs/", get(docs::page))
         .route("/docs/{*rest}", get(docs::page))
         .route("/ws", get(ws_upgrade))
         .route("/api/register", post(http::register).layer(small))

@@ -119,6 +119,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn the_router_serves_every_docs_path() {
+        use tower::ServiceExt;
+        let data = tempfile::tempdir().unwrap();
+        let docs = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(docs.path().join("players")).unwrap();
+        std::fs::write(docs.path().join("index.html"), "home").unwrap();
+        std::fs::write(docs.path().join("players/index.html"), "players").unwrap();
+        let state = crate::Server::open(data.path().to_path_buf(), Some(docs.path().to_path_buf()))
+            .unwrap();
+        for (path, status) in [
+            ("/", StatusCode::TEMPORARY_REDIRECT),
+            ("/docs", StatusCode::PERMANENT_REDIRECT),
+            ("/docs/", StatusCode::OK),
+            ("/docs/players/", StatusCode::OK),
+        ] {
+            let request = axum::http::Request::get(path)
+                .body(axum::body::Body::empty())
+                .unwrap();
+            let response = crate::router(std::sync::Arc::clone(&state))
+                .oneshot(request)
+                .await
+                .unwrap();
+            assert_eq!(response.status(), status, "{path}");
+        }
+    }
+
+    #[tokio::test]
     async fn pages_redirects_and_missing_files() {
         let data = tempfile::tempdir().unwrap();
         let docs = tempfile::tempdir().unwrap();
