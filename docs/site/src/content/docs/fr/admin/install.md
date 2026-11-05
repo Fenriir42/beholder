@@ -11,7 +11,7 @@ Un serveur héberge un groupe. Il est conçu pour un VPS Linux avec **1 Go de RA
 |---|---|
 | Mémoire du serveur au repos | environ 6 Mo |
 | Mémoire du serveur au pic (réencodage d'une photo de 40 mégapixels) | environ 157 Mo |
-| Binaire du serveur | environ 6 Mo |
+| Binaire du serveur | environ 10 Mo |
 
 Le VPS ne compile jamais rien. L'image est construite par GitHub Actions et le VPS se contente de la télécharger.
 

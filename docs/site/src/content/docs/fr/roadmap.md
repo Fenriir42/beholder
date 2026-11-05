@@ -77,8 +77,9 @@ Mesurées sous Linux, compilations de production.
 
 | Élément | Taille |
 |---|---:|
-| Interface (WASM, après `wasm-opt -Oz`) | 1,05 Mo (426 Ko compressé) |
-| Application de bureau (binaire Linux) | 6,1 Mo |
+| Interface (WASM, après `wasm-opt -Oz`) | 2,47 Mo (973 Ko compressé) |
+| Application de bureau (binaire Linux, mesuré à la phase 3) | 6,1 Mo |
+| Binaire du serveur | 10,2 Mo |
 | Téléchargement du SRD 5.2 | 200 Ko |
 | Les 20 livres Open5e | 1,6 Mo |
 | RAM du serveur, au repos / en pointe (envoi d'une image de 40 MP) | 6 Mo / 157 Mo |

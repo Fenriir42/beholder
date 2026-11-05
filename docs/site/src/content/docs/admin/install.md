@@ -11,7 +11,7 @@ One server hosts one group. It's designed for a **1 GB RAM** Linux VPS and uses 
 |---|---|
 | Server memory when idle | about 6 MB |
 | Server memory at peak (re-encoding a 40-megapixel photo) | about 157 MB |
-| Server binary | about 6 MB |
+| Server binary | about 10 MB |
 
 The VPS never compiles anything. The image is built by GitHub Actions and the VPS only downloads it.
 

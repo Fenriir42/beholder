@@ -77,8 +77,9 @@ Measured on Linux, release builds.
 
 | Artifact | Size |
 |---|---:|
-| Interface (WASM, after `wasm-opt -Oz`) | 1.05 MB (426 KB gzipped) |
-| Desktop app binary (Linux) | 6.1 MB |
+| Interface (WASM, after `wasm-opt -Oz`) | 2.47 MB (973 KB gzipped) |
+| Desktop app binary (Linux, measured at Phase 3) | 6.1 MB |
+| Server binary | 10.2 MB |
 | SRD 5.2 download | 200 KB |
 | All 20 Open5e books | 1.6 MB |
 | Server RAM, idle / peak (40 MP image upload) | 6 MB / 157 MB |
