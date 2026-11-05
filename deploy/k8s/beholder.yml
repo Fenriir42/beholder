@@ -1,0 +1,144 @@
+# Beholder server for a namespace managed by ArgoCD (Pod Security "baseline").
+# Copy this directory into the cluster repo's sandbox; see README.md.
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: beholder-data
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 2Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beholder
+  labels:
+    app: beholder
+spec:
+  replicas: 1
+  # One SQLite file: never run two servers on it, even during an update.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: beholder
+  template:
+    metadata:
+      labels:
+        app: beholder
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: server
+          image: ghcr.io/fenriir42/beholder-server:0.1.0
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: BEHOLDER_LOG
+              value: info
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          readinessProbe:
+            tcpSocket:
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      terminationGracePeriodSeconds: 10
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: beholder-data
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: beholder
+spec:
+  selector:
+    app: beholder
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: beholder-backup
+spec:
+  schedule: "30 4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 2
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 1
+      template:
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 10001
+            runAsGroup: 10001
+            fsGroup: 10001
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: backup
+              image: ghcr.io/fenriir42/beholder-server:0.1.0
+              args: ["backup", "14"]
+              resources:
+                requests:
+                  cpu: 20m
+                  memory: 32Mi
+                limits:
+                  cpu: 200m
+                  memory: 128Mi
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: ["ALL"]
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            - name: data
+              persistentVolumeClaim:
+                claimName: beholder-data
+            - name: tmp
+              emptyDir:
+                sizeLimit: 64Mi

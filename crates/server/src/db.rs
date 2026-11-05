@@ -97,9 +97,58 @@ fn migrate(conn: &mut Connection) -> Result<(), DbError> {
     Ok(())
 }
 
+pub fn backup(
+    conn: &Connection,
+    dir: &Path,
+    stamp: u64,
+    keep: usize,
+) -> Result<std::path::PathBuf, DbError> {
+    std::fs::create_dir_all(dir)?;
+    let target = dir.join(format!("beholder-{stamp:020}.db"));
+    let path = target.to_str().ok_or(DbError::Corrupt("backup path"))?;
+    conn.execute("VACUUM INTO ?1", [path])?;
+    let mut old: Vec<std::path::PathBuf> = std::fs::read_dir(dir)?
+        .filter_map(|e| e.ok().map(|e| e.path()))
+        .filter(|p| {
+            p.file_name()
+                .and_then(|n| n.to_str())
+                .is_some_and(|n| n.starts_with("beholder-") && n.ends_with(".db"))
+        })
+        .collect();
+    old.sort();
+    let extra = old.len().saturating_sub(keep.max(1));
+    for p in old.drain(..extra) {
+        std::fs::remove_file(p)?;
+    }
+    Ok(target)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn backups_are_consistent_copies_and_old_ones_are_pruned() {
+        let dir = tempfile::tempdir().unwrap();
+        let db = Db::open(&dir.path().join("beholder.db")).unwrap();
+        let conn = db.conn.lock().unwrap();
+        let backups = dir.path().join("backups");
+        for stamp in 1..=4 {
+            backup(&conn, &backups, stamp, 3).unwrap();
+        }
+        let mut names: Vec<String> = std::fs::read_dir(&backups)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().into_string().unwrap())
+            .collect();
+        names.sort();
+        assert_eq!(names.len(), 3, "the oldest backup is pruned");
+        assert!(names[0].ends_with("02.db"));
+        let copy = Connection::open(backups.join(&names[2])).unwrap();
+        let v: usize = copy
+            .pragma_query_value(None, "user_version", |r| r.get(0))
+            .unwrap();
+        assert_eq!(v, MIGRATIONS.len(), "the copy is a full database");
+    }
 
     #[test]
     fn migrations_run_once_and_are_idempotent() {

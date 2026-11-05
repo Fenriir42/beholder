@@ -17,7 +17,7 @@ GitHub Container Registry; the VPS only pulls it.
    ```sh
    BEHOLDER_DOMAIN=dnd.example.org
    GHCR_OWNER=your-github-user-lowercase
-   # BEHOLDER_TAG=v0.1.0   # pin a release instead of latest
+   # BEHOLDER_TAG=0.1.0   # pin a release instead of latest (tags have no "v")
    ```
    If the image is private, log in once: `docker login ghcr.io -u <user>` with a
    token that has `read:packages`.

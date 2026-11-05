@@ -28,7 +28,7 @@ When two of these conflict, name the tradeoff and propose an option instead of c
 | `apps/desktop/ui` | `beholder-ui` | Leptos CSR app (wasm32) |
 | `data/srd-5.2` | n/a | Vendored SRD JSON (pinned commit), attribution text, and the generated `srd.bundle` |
 | `data/open5e` | n/a | Generated Open5e bundles, one per book (raw data fetched from a pinned commit, not vendored) |
-| `deploy/` | n/a | Dockerfile, Caddyfile, docker-compose |
+| `deploy/` | n/a | Dockerfile, Caddyfile, docker-compose, and `k8s/` manifests for an ArgoCD sandbox |
 | `docs/site` | n/a | Documentation (Astro Starlight, EN + FR), local only |
 
 Update this map whenever a crate is added, renamed or moved.

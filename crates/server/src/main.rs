@@ -88,7 +88,22 @@ async fn admin(data_dir: &std::path::Path, args: &[String]) -> anyhow::Result<()
             println!("All of {name}'s sessions were signed out.");
             Ok(())
         }
-        _ => anyhow::bail!("usage: beholder-server [users | reset-password <username>]"),
+        ["backup", rest @ ..] => {
+            let keep = rest
+                .first()
+                .map_or(Ok(14), |k| k.parse::<usize>())
+                .context("keep")?;
+            let dir = data_dir.join("backups");
+            let stamp = u64::try_from(now().0 / 1000).unwrap_or(0);
+            let path = db
+                .call(move |c| beholder_server::db::backup(c, &dir, stamp, keep))
+                .await?;
+            println!("Backed up to {}", path.display());
+            Ok(())
+        }
+        _ => anyhow::bail!(
+            "usage: beholder-server [users | reset-password <username> | backup [keep]]"
+        ),
     }
 }
 

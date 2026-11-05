@@ -15,6 +15,8 @@ Un serveur héberge un groupe. Il est conçu pour un VPS Linux avec **1 Go de RA
 
 Le VPS ne compile jamais rien. L'image est construite par GitHub Actions et le VPS se contente de la télécharger.
 
+Si le VPS fait déjà tourner un cluster Kubernetes avec son propre ingress sur les ports 80 et 443, utilisez les manifestes de `deploy/k8s/` à la place des étapes ci-dessous : ils lancent la même image derrière l'ingress existant, avec une sauvegarde chaque nuit.
+
 ## Prérequis
 
 - Un VPS Linux avec Docker et le plugin Docker Compose.

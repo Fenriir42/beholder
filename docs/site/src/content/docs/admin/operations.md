@@ -42,6 +42,16 @@ docker compose start server
 
 The volume name is `<folder>_beholder-data`; check it with `docker volume ls`. To restore, stop the server, extract the archive into the volume the same way, and start it again.
 
+Without stopping anything, `beholder-server backup [keep]` writes a consistent copy of the database to `backups/beholder-<time>.db` in the data folder and keeps the newest `keep` copies (14 by default). Images aren't included, since they rarely change and the archive above covers them:
+
+```sh
+docker compose exec server /beholder-server backup
+```
+
+To restore one, stop the server, put the copy in place of `beholder.db` (and delete `beholder.db-wal` and `beholder.db-shm`), and start it again.
+
+On Kubernetes, `deploy/k8s/` runs this command every night from a CronJob; its README shows how to copy backups off the cluster.
+
 ## Import from an external repository
 
 To fill the server library from a repository of JSON files laid out like [`nick-aschenbach/dnd-data`](https://github.com/nick-aschenbach/dnd-data) (one file per category: `spells.json`, `monsters.json`, `items.json`, `classes.json`, `species.json`, `backgrounds.json`), set these in `.env` and run `docker compose up -d`:
