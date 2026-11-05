@@ -246,3 +246,25 @@ fn decode_or_error<T: DeserializeOwned, E: DeserializeOwned>(
         Err(_) => Err(HttpError::Status(status)),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn https_servers_get_a_tls_error_not_a_panic() {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let port = listener.local_addr().unwrap().port();
+        std::thread::spawn(move || {
+            if let Ok((stream, _)) = listener.accept() {
+                drop(stream);
+            }
+        });
+        let req = LoginRequest {
+            username: beholder_core::Username::new("ilsa".into()).unwrap(),
+            password: beholder_core::Password::new("correct horse".into()).unwrap(),
+        };
+        let result = Http::new(&format!("https://127.0.0.1:{port}")).login(&req);
+        assert!(result.is_err());
+    }
+}
