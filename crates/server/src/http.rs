@@ -56,13 +56,64 @@ fn decode<T: DeserializeOwned>(body: &[u8]) -> Result<T, Response> {
     postcard::from_bytes(body).map_err(|_| StatusCode::BAD_REQUEST.into_response())
 }
 
+// https://www.cloudflare.com/ips/ (fetched 2026-11-05).
+const CLOUDFLARE_V4: [([u8; 4], u8); 15] = [
+    ([173, 245, 48, 0], 20),
+    ([103, 21, 244, 0], 22),
+    ([103, 22, 200, 0], 22),
+    ([103, 31, 4, 0], 22),
+    ([141, 101, 64, 0], 18),
+    ([108, 162, 192, 0], 18),
+    ([190, 93, 240, 0], 20),
+    ([188, 114, 96, 0], 20),
+    ([197, 234, 240, 0], 22),
+    ([198, 41, 128, 0], 17),
+    ([162, 158, 0, 0], 15),
+    ([104, 16, 0, 0], 13),
+    ([104, 24, 0, 0], 14),
+    ([172, 64, 0, 0], 13),
+    ([131, 0, 72, 0], 22),
+];
+
+const CLOUDFLARE_V6: [([u16; 8], u8); 7] = [
+    ([0x2400, 0xcb00, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0], 32),
+    ([0x2606, 0x4700, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0], 32),
+    ([0x2803, 0xf800, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0], 32),
+    ([0x2405, 0xb500, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0], 32),
+    ([0x2405, 0x8100, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0], 32),
+    ([0x2a06, 0x98c0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0], 29),
+    ([0x2c0f, 0xf248, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0], 32),
+];
+
+fn cloudflare(ip: IpAddr) -> bool {
+    match ip {
+        IpAddr::V4(ip) => CLOUDFLARE_V4.iter().any(|(net, len)| {
+            let mask = u32::MAX.checked_shl(32 - u32::from(*len)).unwrap_or(0);
+            u32::from(ip) & mask == u32::from_be_bytes(*net) & mask
+        }),
+        IpAddr::V6(ip) => CLOUDFLARE_V6.iter().any(|(net, len)| {
+            let mask = u128::MAX.checked_shl(128 - u32::from(*len)).unwrap_or(0);
+            u128::from(ip) & mask == u128::from(std::net::Ipv6Addr::from(*net)) & mask
+        }),
+    }
+}
+
+// Rate limits key on this: CF-Connecting-IP counts only when Cloudflare is the hop the proxy saw.
 fn client_ip(headers: &HeaderMap, peer: SocketAddr) -> IpAddr {
-    headers
+    let hop = headers
         .get("x-forwarded-for")
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.rsplit(',').next())
         .and_then(|v| v.trim().parse().ok())
-        .unwrap_or(peer.ip())
+        .unwrap_or(peer.ip());
+    if !cloudflare(hop) {
+        return hop;
+    }
+    headers
+        .get("cf-connecting-ip")
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(hop)
 }
 
 fn bearer(headers: &HeaderMap) -> Option<SessionToken> {
@@ -462,4 +513,62 @@ pub async fn compendium_bundle(
         h.insert(header::CONTENT_RANGE, v);
     }
     resp
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn real_client_ips_behind_cloudflare_and_a_proxy() {
+        let peer: SocketAddr = "10.244.0.7:40000".parse().unwrap();
+        let headers = |pairs: &[(&'static str, &'static str)]| {
+            let mut h = HeaderMap::new();
+            for (k, v) in pairs {
+                h.insert(*k, HeaderValue::from_static(v));
+            }
+            h
+        };
+        let ip = |s: &str| s.parse::<IpAddr>().unwrap();
+        assert_eq!(client_ip(&headers(&[]), peer), ip("10.244.0.7"));
+        assert_eq!(
+            client_ip(&headers(&[("x-forwarded-for", "203.0.113.9")]), peer),
+            ip("203.0.113.9"),
+            "a direct client behind the proxy"
+        );
+        assert_eq!(
+            client_ip(
+                &headers(&[
+                    ("x-forwarded-for", "172.68.10.20"),
+                    ("cf-connecting-ip", "198.51.100.4")
+                ]),
+                peer
+            ),
+            ip("198.51.100.4"),
+            "through a Cloudflare edge, the player's own address"
+        );
+        assert_eq!(
+            client_ip(
+                &headers(&[
+                    ("x-forwarded-for", "2606:4700:3030::ac43:9b6c"),
+                    ("cf-connecting-ip", "2001:db8::1")
+                ]),
+                peer
+            ),
+            ip("2001:db8::1")
+        );
+        assert_eq!(
+            client_ip(
+                &headers(&[
+                    ("x-forwarded-for", "203.0.113.9"),
+                    ("cf-connecting-ip", "198.51.100.4")
+                ]),
+                peer
+            ),
+            ip("203.0.113.9"),
+            "a forged header from outside Cloudflare is ignored"
+        );
+        assert!(cloudflare(ip("104.16.0.1")) && cloudflare(ip("131.0.75.255")));
+        assert!(!cloudflare(ip("131.0.76.0")) && !cloudflare(ip("45.88.180.140")));
+    }
 }
