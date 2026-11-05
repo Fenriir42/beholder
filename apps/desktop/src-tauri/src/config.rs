@@ -74,6 +74,26 @@ mod tests {
     use super::*;
 
     #[test]
+    fn the_shipped_csp_lets_the_interface_load() {
+        let conf: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.conf.json")).unwrap();
+        let csp = conf["app"]["security"]["csp"].as_str().unwrap();
+        let directive = |name: &str| {
+            csp.split(';')
+                .map(str::trim)
+                .find_map(|d| d.strip_prefix(name))
+                .map(|rest| rest.split_whitespace().collect::<Vec<_>>())
+                .unwrap_or_default()
+        };
+        assert!(
+            directive("connect-src").contains(&"'self'"),
+            "the WASM is fetched from the app's own origin"
+        );
+        assert!(directive("script-src").contains(&"'wasm-unsafe-eval'"));
+        assert!(directive("connect-src").contains(&"ipc:"));
+    }
+
+    #[test]
     fn server_urls_are_normalized() {
         assert_eq!(
             normalize_server_url(" dnd.example.org/ ").as_deref(),
