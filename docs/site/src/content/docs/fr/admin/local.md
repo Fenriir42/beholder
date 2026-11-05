@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-Vous pouvez lancer le serveur directement depuis le code source, sans Docker. Voir [Compiler et lancer](/fr/dev/building/) pour la chaîne d'outils.
+Vous pouvez lancer le serveur directement depuis le code source, sans Docker. Voir [Compiler et lancer](/docs/fr/dev/building/) pour la chaîne d'outils.
 
 ```sh
 BEHOLDER_DATA_DIR=./data-dev cargo run -p beholder-server

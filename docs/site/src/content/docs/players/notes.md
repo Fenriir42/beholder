@@ -52,4 +52,4 @@ If you're typing while someone else changes the note, a warning tells you so bef
 
 ## Offline
 
-Notes work offline like everything else: you can create and edit them, and they're sent when the connection returns. See [Bad connections and offline play](/players/offline/).
+Notes work offline like everything else: you can create and edit them, and they're sent when the connection returns. See [Bad connections and offline play](/docs/players/offline/).

@@ -52,4 +52,4 @@ Si vous tapez pendant que quelqu'un d'autre modifie la note, un avertissement vo
 
 ## Hors ligne
 
-Les notes fonctionnent hors ligne comme le reste : vous pouvez les créer et les modifier, et elles sont envoyées au retour de la connexion. Voir [Mauvaise connexion et jeu hors ligne](/fr/players/offline/).
+Les notes fonctionnent hors ligne comme le reste : vous pouvez les créer et les modifier, et elles sont envoyées au retour de la connexion. Voir [Mauvaise connexion et jeu hors ligne](/docs/fr/players/offline/).

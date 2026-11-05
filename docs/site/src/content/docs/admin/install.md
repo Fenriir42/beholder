@@ -15,6 +15,8 @@ One server hosts one group. It's designed for a **1 GB RAM** Linux VPS and uses 
 
 The VPS never compiles anything. The image is built by GitHub Actions and the VPS only downloads it.
 
+The server also serves this documentation at `https://<your domain>/docs/`, and its home page redirects there.
+
 If the VPS already runs a Kubernetes cluster with its own ingress on ports 80 and 443, use the manifests in `deploy/k8s/` instead of the steps below: they run the same image behind the existing ingress, with a nightly backup.
 
 ## What you need

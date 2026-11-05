@@ -30,7 +30,10 @@ fn main() -> anyhow::Result<()> {
         return rt.block_on(admin(&data_dir, &args));
     }
     rt.block_on(async {
-        let state = Server::open(data_dir).context("starting server")?;
+        let docs_dir = std::env::var_os("BEHOLDER_DOCS_DIR")
+            .map(PathBuf::from)
+            .filter(|p| p.is_dir());
+        let state = Server::open(data_dir, docs_dir).context("starting server")?;
         let listener = tokio::net::TcpListener::bind(bind)
             .await
             .context("binding")?;

@@ -8,7 +8,7 @@ sidebar:
 Cette page est la norme des **fichiers de bibliothèque Beholder, version 1** : le seul format que la bibliothèque du serveur importe et exporte. Un fichier d'une autre structure (par exemple les fichiers JSON de `dnd-data`) est refusé avec « Ce fichier n'est pas un fichier de bibliothèque Beholder » tant qu'il n'est pas converti ; voir [Convertir les fichiers dnd-data](#convertir-les-fichiers-dnd-data).
 
 - **Encodage :** UTF-8, JSON ou YAML. L'application choisit selon l'extension : `.yaml` ou `.yml` pour YAML, tout le reste en JSON.
-- **Schéma lisible par machine :** [`beholder-library-1.schema.json`](/schemas/beholder-library-1.schema.json) (JSON Schema 2020-12). Des éditeurs comme VS Code peuvent valider un fichier avec.
+- **Schéma lisible par machine :** [`beholder-library-1.schema.json`](/docs/schemas/beholder-library-1.schema.json) (JSON Schema 2020-12). Des éditeurs comme VS Code peuvent valider un fichier avec.
 - **Implémentation de référence :** `crates/client-core/src/library_file.rs`.
 
 ## Versions

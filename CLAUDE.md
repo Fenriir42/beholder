@@ -29,7 +29,7 @@ When two of these conflict, name the tradeoff and propose an option instead of c
 | `data/srd-5.2` | n/a | Vendored SRD JSON (pinned commit), attribution text, and the generated `srd.bundle` |
 | `data/open5e` | n/a | Generated Open5e bundles, one per book (raw data fetched from a pinned commit, not vendored) |
 | `deploy/` | n/a | Dockerfile, Caddyfile, docker-compose, and `k8s/` manifests for an ArgoCD sandbox |
-| `docs/site` | n/a | Documentation (Astro Starlight, EN + FR), local only |
+| `docs/site` | n/a | Documentation (Astro Starlight, EN + FR), built into the server image and served at `/docs/` |
 
 Update this map whenever a crate is added, renamed or moved.
 
@@ -50,7 +50,7 @@ The laptop is slow, so always run the narrowest command that verifies the change
 - Bundle the desktop app: `cd apps/desktop/src-tauri && cargo tauri build --bundles deb,rpm` (Linux) or `--bundles nsis` (Windows)
 - Server image: `docker build -f deploy/Dockerfile -t beholder-server .`; deployment is in `deploy/README.md`
 - Tools: `trunk` 0.21.14 and `tauri-cli` 2.12.2, prebuilt via `cargo binstall`
-- Docs: `cd docs/site && npm run dev` (system Node ≥ 22.12; English and French pages must stay in sync)
+- Docs: `cd docs/site && npm run dev`, then open `/docs/` (system Node ≥ 22.12; English and French pages must stay in sync)
 
 Don't run any of the following unless asked: release builds, `cargo tauri build` or other bundling, `cargo clean`, `cargo update`, or long-running processes (`cargo tauri dev`, `trunk serve`, the server). The user runs the app himself.
 

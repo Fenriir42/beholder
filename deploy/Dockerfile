@@ -2,6 +2,13 @@
 # Server image: a static musl binary on `scratch`. Built in CI only; the VPS
 # just pulls it (SPEC §2: never compile on the VPS).
 
+FROM node:22.12.0-alpine3.21 AS docs
+WORKDIR /site
+COPY docs/site/package.json docs/site/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY docs/site ./
+RUN npm run build
+
 FROM rust:1.99.0-alpine3.22 AS build
 # C toolchain for the bundled SQLite, zstd and libwebp.
 RUN apk add --no-cache build-base
@@ -18,11 +25,13 @@ RUN --mount=type=cache,target=/usr/local/cargo/registry \
 
 FROM scratch
 COPY --from=build /beholder-server /beholder-server
+COPY --from=docs /site/dist /docs
 # A named volume copies this directory's ownership on first use.
 COPY --from=build --chown=10001:10001 /data /data
 USER 10001:10001
 ENV BEHOLDER_BIND=0.0.0.0:8080 \
     BEHOLDER_DATA_DIR=/data \
+    BEHOLDER_DOCS_DIR=/docs \
     BEHOLDER_LOG=info
 VOLUME /data
 EXPOSE 8080

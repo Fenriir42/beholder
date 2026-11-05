@@ -1,8 +1,9 @@
-// Beholder documentation (Starlight). Local only for now: `npm run dev`.
+// Beholder documentation (Starlight), served by the server under /docs/ (`npm run dev` locally).
 import { defineConfig, passthroughImageService } from 'astro/config';
 import starlight from '@astrojs/starlight';
 
 export default defineConfig({
+  base: '/docs',
   // No image processing, so no native `sharp` binary to download.
   image: { service: passthroughImageService() },
   integrations: [

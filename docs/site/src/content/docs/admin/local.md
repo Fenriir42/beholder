@@ -5,7 +5,7 @@ sidebar:
   order: 3
 ---
 
-You can run the server straight from the source code, without Docker. See [Building and running](/dev/building/) for the toolchain.
+You can run the server straight from the source code, without Docker. See [Building and running](/docs/dev/building/) for the toolchain.
 
 ```sh
 BEHOLDER_DATA_DIR=./data-dev cargo run -p beholder-server

@@ -8,3 +8,6 @@ data-dev
 apps/desktop/ui/dist
 apps/desktop/src-tauri/gen
 **/*.sqlite
+docs/site/node_modules
+docs/site/dist
+docs/site/.astro

@@ -5,6 +5,7 @@ pub mod combat;
 pub mod compendium;
 pub mod db;
 pub mod dice;
+pub mod docs;
 pub mod http;
 pub mod hub;
 pub mod images;
@@ -51,6 +52,7 @@ pub struct Server {
     pub library_cache: tokio::sync::Mutex<Option<compendium::CachedBundle>>,
     pub hub: Hub,
     pub data_dir: PathBuf,
+    pub docs_dir: Option<PathBuf>,
     pub hashing: Semaphore,
     pub uploads: Semaphore,
     pub encoding: Semaphore,
@@ -62,19 +64,27 @@ pub struct Server {
 }
 
 impl Server {
-    pub fn open(data_dir: PathBuf) -> Result<AppState, StartError> {
+    pub fn open(data_dir: PathBuf, docs_dir: Option<PathBuf>) -> Result<AppState, StartError> {
         let db = Db::open(&data_dir.join("beholder.db"))?;
-        Ok(Self::with_db(db, data_dir, Library::builtin()?))
+        Ok(Arc::new(Self {
+            docs_dir,
+            ..Self::build(db, data_dir, Library::builtin()?)
+        }))
     }
 
     pub fn with_db(db: Db, data_dir: PathBuf, compendium: Library) -> AppState {
+        Arc::new(Self::build(db, data_dir, compendium))
+    }
+
+    fn build(db: Db, data_dir: PathBuf, compendium: Library) -> Self {
         let minute = Duration::from_secs(60);
-        Arc::new(Self {
+        Self {
             db,
             compendium,
             library_cache: tokio::sync::Mutex::new(None),
             hub: Hub::default(),
             data_dir,
+            docs_dir: None,
             hashing: Semaphore::new(2),
             uploads: Semaphore::new(2),
             encoding: Semaphore::new(1),
@@ -83,13 +93,16 @@ impl Server {
             register_limit: RateLimiter::new(5, Duration::from_secs(3600)),
             join_limit: RateLimiter::new(10, minute),
             upload_limit: RateLimiter::new(20, Duration::from_secs(3600)),
-        })
+        }
     }
 }
 
 pub fn router(state: AppState) -> Router {
     let small = DefaultBodyLimit::max(4096);
     Router::new()
+        .route("/", get(docs::home))
+        .route("/docs", get(docs::page))
+        .route("/docs/{*rest}", get(docs::page))
         .route("/ws", get(ws_upgrade))
         .route("/api/register", post(http::register).layer(small))
         .route("/api/login", post(http::login).layer(small))

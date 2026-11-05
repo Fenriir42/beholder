@@ -38,7 +38,7 @@ It uses at most 384 Mi of memory and 0.7 CPU of the namespace quota, and only 38
    ```
 
    `sslip.io` names resolve to the IP in them, so no DNS record is needed. Traefik passes WebSocket connections through as they are.
-3. In the app, the server address is `https://<hostname>`.
+3. In the app, the server address is `https://<hostname>`. The documentation is at `https://<hostname>/docs/`.
 
 ## Update
 
