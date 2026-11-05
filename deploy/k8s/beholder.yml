@@ -89,7 +89,7 @@ spec:
     app: beholder
   ports:
     - name: http
-      port: 80
+      port: 8080
       targetPort: http
 ---
 apiVersion: batch/v1

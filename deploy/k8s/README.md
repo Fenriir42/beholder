@@ -4,41 +4,50 @@
 
 - **`beholder-data`**, a 2 Gi volume for `beholder.db`, `images/` and `backups/`;
 - **`beholder`**, one server pod with `Recreate` updates, because two servers must never share the SQLite file;
-- **`beholder`**, a ClusterIP Service on port 80;
+- **`beholder`**, a ClusterIP Service on port 8080;
 - **`beholder-backup`**, a CronJob that runs `beholder-server backup 14` at 04:30 every day. It keeps the last 14 copies in `/data/backups`.
 
 It uses at most 384 Mi of memory and 0.7 CPU of the namespace quota, and only 384 Mi while the backup job runs.
 
 ## Install
 
-1. Copy `beholder.yml` into `kubernetes/sandbox/julien/` in the cluster repo and open a PR. ArgoCD syncs it once it's merged.
-2. Ask the cluster admin for a public hostname. They need to add a Traefik route in front of the Service, which the sandbox can't create itself. For example, for Traefik with a Let's Encrypt resolver:
+This is what runs in the `julien` sandbox of the cluster repo (split there into one file per resource, the repo's convention).
 
-   ```yaml
-   apiVersion: networking.k8s.io/v1
-   kind: Ingress
-   metadata:
-     name: beholder
-     namespace: julien
-     annotations:
-       traefik.ingress.kubernetes.io/router.entrypoints: websecure
-       traefik.ingress.kubernetes.io/router.tls.certresolver: <resolver>
-   spec:
-     rules:
-       - host: beholder.45-88-180-140.sslip.io
-         http:
-           paths:
-             - path: /
-               pathType: Prefix
-               backend:
-                 service:
-                   name: beholder
-                   port:
-                     name: http
-   ```
+1. Add the manifests to `kubernetes/sandbox/julien/` in the cluster repo and list them in its `kustomization.yml`. ArgoCD syncs them once the PR is merged.
+2. The cluster owner adds what the sandbox can't create:
+   - a Cloudflare DNS record in `ansible/roles/cloudflare_dns/files/dns_records.toml`, proxied like the other public apps with their own accounts:
 
-   `sslip.io` names resolve to the IP in them, so no DNS record is needed. Traefik passes WebSocket connections through as they are.
-3. In the app, the server address is `https://<hostname>`. The documentation is at `https://<hostname>/docs/`.
+     ```toml
+     ["beholder.hosquet.com"]
+     type = "A"
+     content = "45.88.180.140"
+     proxied = true
+     ```
+
+   - a Traefik `IngressRoute` in `kubernetes/overlays/vps/sandbox-julien/`, not gated by Authelia (the desktop client can't follow a browser login redirect):
+
+     ```yaml
+     apiVersion: traefik.io/v1alpha1
+     kind: IngressRoute
+     metadata:
+       name: beholder
+       namespace: julien
+     spec:
+       entryPoints:
+         - web
+         - websecure
+       tls:
+         certResolver: letsencrypt
+       routes:
+         - match: Host(`beholder.hosquet.com`)
+           kind: Rule
+           services:
+             - name: beholder
+               port: 8080
+     ```
+
+   WebSockets go through Cloudflare's proxy; the client pings every 15 s, under its 100 s idle limit.
+3. In the app, the server address is `https://beholder.hosquet.com`. The documentation is at `https://beholder.hosquet.com/docs/`.
 
 ## Update
 
