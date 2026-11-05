@@ -10,8 +10,9 @@ sidebar:
 Beholder runs on **Windows** and **Linux**.
 
 - **Windows:** run the `Beholder_x.y.z_x64-setup.exe` installer. If your PC doesn't have Microsoft WebView2 yet, the installer downloads it (most Windows 10 and 11 PCs already have it).
-- **Debian, Ubuntu, Mint:** install the `.deb` package (`sudo apt install ./beholder_x.y.z_amd64.deb`).
-- **Fedora, openSUSE:** install the `.rpm` package (`sudo dnf install ./beholder-x.y.z-1.x86_64.rpm`).
+- **Debian, Ubuntu, Mint:** install the `.deb` package (`sudo apt install ./Beholder_x.y.z_amd64.deb`).
+- **Fedora, openSUSE:** install the `.rpm` package (`sudo dnf install ./Beholder-x.y.z-1.x86_64.rpm`).
+- **Arch, Manjaro, CachyOS:** install `beholder-bin` from the AUR (`yay -S beholder-bin`). Besides the menu entry, the `beholder` command starts the app without keeping the terminal busy.
 
 Your DM or whoever runs the server will tell you where to get these files.
 

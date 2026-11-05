@@ -10,8 +10,9 @@ sidebar:
 Beholder fonctionne sous **Windows** et **Linux**.
 
 - **Windows :** lancez l'installateur `Beholder_x.y.z_x64-setup.exe`. Si votre PC n'a pas encore Microsoft WebView2, l'installateur le télécharge (la plupart des PC sous Windows 10 et 11 l'ont déjà).
-- **Debian, Ubuntu, Mint :** installez le paquet `.deb` (`sudo apt install ./beholder_x.y.z_amd64.deb`).
-- **Fedora, openSUSE :** installez le paquet `.rpm` (`sudo dnf install ./beholder-x.y.z-1.x86_64.rpm`).
+- **Debian, Ubuntu, Mint :** installez le paquet `.deb` (`sudo apt install ./Beholder_x.y.z_amd64.deb`).
+- **Fedora, openSUSE :** installez le paquet `.rpm` (`sudo dnf install ./Beholder-x.y.z-1.x86_64.rpm`).
+- **Arch, Manjaro, CachyOS :** installez `beholder-bin` depuis l'AUR (`yay -S beholder-bin`). En plus de l'entrée du menu, la commande `beholder` lance l'application sans occuper le terminal.
 
 Votre MJ, ou la personne qui gère le serveur, vous dira où trouver ces fichiers.
 
