@@ -17,7 +17,9 @@ Les joueurs connectés se reconnectent automatiquement au bout de quelques secon
 
 Si le nouveau serveur utilise un protocole plus récent, les anciennes applications affichent *Mettez Beholder à jour* et continuent de fonctionner hors ligne jusqu'à leur mise à jour.
 
-Pour rester sur une version donnée, mettez `BEHOLDER_TAG=0.1.0` dans `.env`.
+`latest` est la dernière version publiée ; il ne bouge que lorsqu'une version sort (un tag `v…`). Les pushs sur `main` construisent une image `main` séparée, pour les tests. Pour rester sur une version donnée, mettez `BEHOLDER_TAG=0.1.0` dans `.env`.
+
+Sur Kubernetes avec le tag `latest`, le pod ne télécharge une nouvelle image qu'au redémarrage : lancez `kubectl rollout restart deploy/beholder -n <namespace>` après une version.
 
 ## Où sont les données
 

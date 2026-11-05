@@ -25,9 +25,13 @@ jobs:
         uses: docker/metadata-action@v6.2.0
         with:
           images: ghcr.io/${{ github.repository_owner }}/beholder-server
+          # `latest` is the newest release only; pushes to main are tagged `main`.
+          flavor: |
+            latest=false
           tags: |
-            type=raw,value=latest,enable={{is_default_branch}}
             type=semver,pattern={{version}}
+            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
+            type=ref,event=branch
             type=sha
       - uses: docker/build-push-action@v7.4.0
         with:

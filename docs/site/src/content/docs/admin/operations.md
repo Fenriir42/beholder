@@ -17,7 +17,9 @@ Connected players reconnect automatically after a few seconds. Changes they made
 
 If the new server speaks a newer protocol, older apps show *Please update Beholder* and keep working offline until they're updated.
 
-To stay on a given version, set `BEHOLDER_TAG=0.1.0` in `.env`.
+`latest` is the newest release; it only moves when a version is published (a `v…` tag). Pushes to `main` build a separate `main` image for testing. To stay on a given version, set `BEHOLDER_TAG=0.1.0` in `.env`.
+
+On Kubernetes with the `latest` tag, the pod only downloads a new image when it restarts: run `kubectl rollout restart deploy/beholder -n <namespace>` after a release.
 
 ## Where the data lives
 
